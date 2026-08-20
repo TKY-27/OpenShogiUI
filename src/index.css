@@ -965,6 +965,12 @@ td {
   padding: 1rem;
   border: 2px solid var(--ink);
   background: var(--paper);
+  color: var(--ink);
+  margin: 0;
+}
+
+.promotion-choice::backdrop {
+  background: rgb(35 31 27 / 45%);
 }
 
 .promotion-choice p {

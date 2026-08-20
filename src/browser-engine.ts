@@ -1248,6 +1248,17 @@ export function parseAnalysisResponse(value: unknown): AnalysisResponse {
   };
 }
 
+export function parseAnalysisUpdate(value: unknown): AnalysisUpdate {
+  const response = parseAnalysisResponse({
+    schema: ANALYSIS_SCHEMA,
+    event: "updates",
+    updates: [value],
+  });
+  const update = response.updates[0];
+  if (update === undefined) throw new Error("analysis update is missing");
+  return update;
+}
+
 export function parseSearchResponse(value: unknown): SearchResponse {
   const parsed = record(value, "search");
   const hasOpeningBookMove = Object.hasOwn(parsed, "openingBookMove");

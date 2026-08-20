@@ -1,9 +1,15 @@
-import type { AnalysisStart, AnalysisUpdate } from "./browser-engine";
+import {
+  parseAnalysisUpdate,
+  type AnalysisStart,
+  type AnalysisUpdate,
+} from "./browser-engine";
 
 const DATABASE_NAME = "open-shogi-ui";
 const DATABASE_VERSION = 1;
 const STORE_NAME = "analysis-summaries";
 const MAX_PERSISTED_SUMMARIES = 128;
+const ENGINE_SNAPSHOT_SHA256 =
+  "49034d4d1cff1e004eceaf1e62b309d9882516e039457c09a758904217fd3805";
 
 export interface CachedAnalysisSummary {
   key: string;
@@ -22,6 +28,7 @@ export function analysisCacheIdentity(request: AnalysisStart): string {
     request.searchOptionsHash,
     request.openingProfileHash,
     String(request.multiPv),
+    ENGINE_SNAPSHOT_SHA256,
   ].join("|");
 }
 
@@ -51,22 +58,22 @@ export class AnalysisSummaryStore {
     if (memory !== undefined) return memory;
     const database = await this.database();
     if (database === null) return null;
-    let value: CachedAnalysisSummary | undefined;
     try {
-      value = await requestValue<CachedAnalysisSummary | undefined>(
+      const value = await requestValue<unknown>(
         database
           .transaction(STORE_NAME, "readonly")
           .objectStore(STORE_NAME)
           .get(key),
       );
+      const parsed = parseCachedSummary(value, key);
+      if (parsed === null || !updateMatchesRequest(parsed.update, request)) {
+        return null;
+      }
+      this.memory.set(key, parsed);
+      return parsed;
     } catch {
       return null;
     }
-    if (value === undefined || !updateMatchesRequest(value.update, request)) {
-      return null;
-    }
-    this.memory.set(key, value);
-    return value;
   }
 
   async put(request: AnalysisStart, update: AnalysisUpdate): Promise<void> {
@@ -102,13 +109,57 @@ export class AnalysisSummaryStore {
   private async prune(database: IDBDatabase): Promise<void> {
     const transaction = database.transaction(STORE_NAME, "readwrite");
     const store = transaction.objectStore(STORE_NAME);
-    const entries = await requestValue<CachedAnalysisSummary[]>(store.getAll());
+    const [values, keys] = await Promise.all([
+      requestValue<unknown[]>(store.getAll()),
+      requestValue<IDBValidKey[]>(store.getAllKeys()),
+    ]);
+    const entries: CachedAnalysisSummary[] = [];
+    values.forEach((value, index) => {
+      const key = keys[index];
+      if (key === undefined) return;
+      let parsed: CachedAnalysisSummary | null = null;
+      if (typeof key === "string") {
+        try {
+          parsed = parseCachedSummary(value, key);
+        } catch {
+          parsed = null;
+        }
+      }
+      if (parsed === null) store.delete(key);
+      else entries.push(parsed);
+    });
     entries
       .sort((left, right) => right.savedAtMs - left.savedAtMs)
       .slice(MAX_PERSISTED_SUMMARIES)
       .forEach(({ key }) => store.delete(key));
     await transactionDone(transaction);
   }
+}
+
+function parseCachedSummary(
+  value: unknown,
+  expectedKey: string,
+): CachedAnalysisSummary | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    return null;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  if (
+    keys.length !== 3 ||
+    keys[0] !== "key" ||
+    keys[1] !== "savedAtMs" ||
+    keys[2] !== "update" ||
+    record.key !== expectedKey ||
+    typeof record.savedAtMs !== "number" ||
+    !Number.isSafeInteger(record.savedAtMs) ||
+    record.savedAtMs < 0
+  )
+    return null;
+  return {
+    key: expectedKey,
+    savedAtMs: record.savedAtMs,
+    update: parseAnalysisUpdate(record.update),
+  };
 }
 
 function openDatabase(): Promise<IDBDatabase | null> {

@@ -28,6 +28,7 @@ type RequestPayload = WorkerRequest extends infer Request
   : never;
 
 interface PendingRequest {
+  kind: WorkerRequest["kind"];
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
 }
@@ -221,13 +222,20 @@ export class EngineWorkerClient {
       try {
         response = parseWorkerResponse(event.data);
       } catch (error) {
-        this.terminatePending(
-          error instanceof Error ? error.message : "invalid worker response",
-        );
+        const message =
+          error instanceof Error ? error.message : "invalid worker response";
+        this.terminatePending(message);
+        this.onCrash?.(message);
         return;
       }
       const pending = this.pending.get(response.id);
       if (pending === undefined) return;
+      if (response.kind !== pending.kind) {
+        const message = `worker response kind mismatch: expected ${pending.kind}, received ${response.kind}`;
+        this.terminatePending(message);
+        this.onCrash?.(message);
+        return;
+      }
       this.pending.delete(response.id);
       if (response.ok) {
         pending.resolve(response.data);
@@ -256,7 +264,7 @@ export class EngineWorkerClient {
     }
     const request = { ...payload, id } as WorkerRequest;
     return new Promise<unknown>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      this.pending.set(id, { kind: request.kind, resolve, reject });
       this.worker.postMessage(request, transfer);
     });
   }

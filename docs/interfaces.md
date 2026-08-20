@@ -20,9 +20,10 @@ The browser-facing engine supports:
 - initialization and immutable engine identity;
 - canonical game snapshots and legal moves;
 - bounded move application and reset;
-- engine-backed casual, fixed-movetime, match-clock, and node time controls using
-  `open_shogi_time_control/v1`; the UI maintains per-side remaining clock values while the engine
-  alone allocates each search budget;
+- engine-backed casual, fixed-movetime, match-clock, and profile-bounded node time controls using
+  `open_shogi_time_control/v1`; the UI maintains per-side and per-history remaining clock values,
+  rejects expired human moves before changing the Worker position, and leaves every AI search
+  budget allocation to the engine;
 - bounded search profiles and one to ten continuous MultiPV lines;
 - `open_shogi_analysis/v1` start, slice, stop, failure, and restart lifecycle messages;
 - strict, preferred, or disabled opening policy plus local opening-book load/removal;
@@ -35,10 +36,10 @@ coordinates.
 
 `src/analysis-cache.ts` keys summaries by schema, canonical position SFEN, model hash, evaluator
 configuration hash, feature-schema hash, evaluation-semantics hash, search-options hash,
-opening-profile hash, and MultiPV count. A cached or live update is publishable only when every
-identity field still matches. IndexedDB retains at most 128 bounded summaries; memory remains the
-fallback when storage is unavailable. Model bytes, book bytes, and internal search state are not
-cached.
+opening-profile hash, MultiPV count, and frozen Wasm SHA-256. A cached or live update is publishable
+only when every identity field still matches. IndexedDB values are closed-parsed before use and it
+retains at most 128 bounded summaries; memory remains the fallback when storage is unavailable.
+Model bytes, book bytes, and internal search state are not cached.
 
 ## Generated WebAssembly snapshot
 

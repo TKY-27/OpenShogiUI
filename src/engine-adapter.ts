@@ -88,6 +88,7 @@ export class WasmEngineAdapter implements EngineAdapter {
   }
 
   async initialize(session?: EngineSession): Promise<BrowserSnapshot> {
+    this.assertNotDisposed();
     this.transition("initializing");
     try {
       const snapshot = await this.client.initialize(session);
@@ -105,6 +106,7 @@ export class WasmEngineAdapter implements EngineAdapter {
     model: RestorableModel | null = null,
     openingBook: RestorableOpeningBook | null = null,
   ): Promise<BrowserSnapshot> {
+    this.assertNotDisposed();
     this.transition("initializing");
     try {
       const snapshot = await this.client.cancelAndRestore(
@@ -200,8 +202,9 @@ export class WasmEngineAdapter implements EngineAdapter {
   }
 
   private async run<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.state === "disposed") {
-      throw new Error(`${this.role} adapter is disposed`);
+    this.assertNotDisposed();
+    if (this.state === "crashed") {
+      throw new Error(`${this.role} adapter has crashed`);
     }
     this.transition("busy");
     try {
@@ -209,14 +212,21 @@ export class WasmEngineAdapter implements EngineAdapter {
       if (!this.isDisposed()) this.transition("ready");
       return result;
     } catch (error) {
-      if (this.state !== "crashed" && !this.isDisposed())
-        this.transition("ready");
+      if (!this.isCrashed() && !this.isDisposed()) this.transition("ready");
       throw error;
     }
   }
 
   private isDisposed(): boolean {
     return this.state === "disposed";
+  }
+
+  private isCrashed(): boolean {
+    return this.state === "crashed";
+  }
+
+  private assertNotDisposed(): void {
+    if (this.isDisposed()) throw new Error(`${this.role} adapter is disposed`);
   }
 
   private transition(state: EngineReadyState, message?: string): void {

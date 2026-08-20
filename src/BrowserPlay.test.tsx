@@ -207,6 +207,9 @@ describe("browser shogi board", () => {
 
     expect(source).toContain("const [failed, setFailed] = useState(false);");
     expect(source).toContain("onError={() => setFailed(true)}");
+    expect(source).toContain(
+      "useEffect(() => setFailed(false), [kind, setId, side]);",
+    );
     expect(source).toContain("className={`shogi-piece shogi-piece--${side}`}");
     expect(styles).toMatch(
       /\.analysis-layout\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(13\.5rem, 18rem\)/s,

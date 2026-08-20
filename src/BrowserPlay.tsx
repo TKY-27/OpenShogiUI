@@ -40,12 +40,15 @@ import {
 } from "./pieces/catalog";
 import {
   type BoardOrientation,
+  browserProfileHashMegabytes,
+  browserProfileNodeLimit,
   consumeMatchClock,
   DEFAULT_TIME_CONTROL,
   flippedOrientation,
   humanControlsSide,
   initialMatchClock,
   lastMoveHighlight,
+  matchClockExpired,
   type MoveHighlight,
   type MatchClock,
   parseUsiMoveShape,
@@ -110,6 +113,11 @@ interface AnalysisView {
   elapsedNs: number | null;
 }
 
+interface MoveSource {
+  response: SearchResponse;
+  openingProfile: OpeningProfile;
+}
+
 interface AdapterPair {
   play: WasmEngineAdapter;
   analysis: WasmEngineAdapter;
@@ -166,6 +174,9 @@ function text(locale: Locale) {
     nodes: ja ? "ノード指定" : "Node limit",
     configuredMaximum: ja ? "設定上限" : "Configured maximum",
     actualThinking: ja ? "実消費思考時間" : "Actual thinking time",
+    timeLocked: ja
+      ? "時間設定は棋譜と時計の整合性を保つため、対局開始後は固定されます。"
+      : "Time settings lock after the first move to preserve clock history.",
     mainMinutes: ja ? "持ち時間（分）" : "Main time (minutes)",
     byoyomi: ja ? "秒読み（秒）" : "Byoyomi (seconds)",
     increment: ja ? "加算（秒）" : "Increment (seconds)",
@@ -173,6 +184,9 @@ function text(locale: Locale) {
     threads: ja ? "スレッド" : "Threads",
     hash: ja ? "ハッシュ (MB)" : "Hash (MB)",
     analysisHash: ja ? "解析ハッシュ (MB)" : "Analysis hash (MB)",
+    hashManaged: ja
+      ? "Hash は Wasm 探索プロファイルで固定されます。"
+      : "Hash is fixed by the Wasm search profile.",
     pauseAnalysis: ja
       ? "AI思考中は解析を一時停止"
       : "Pause analysis during AI turn",
@@ -198,6 +212,9 @@ function text(locale: Locale) {
         ? `${side === "black" ? "先手" : "後手"}AIが考えています…`
         : `${side === "black" ? "Sente" : "Gote"} AI is thinking…`,
     workerCrashed: ja ? "ワーカー障害" : "Worker failure",
+    timeExpired: ja
+      ? "持ち時間と秒読みを超過しました。対局を停止しました。"
+      : "Main time and byoyomi expired. Play has been stopped.",
   };
 }
 
@@ -236,6 +253,16 @@ function configuredMaximum(settings: TimeControlSettings): string {
     case "nodes":
       return `${settings.nodes.toLocaleString()} nodes`;
   }
+}
+
+function boundedInputInteger(
+  value: number,
+  minimum: number,
+  maximum: number,
+): number | null {
+  return Number.isSafeInteger(value) && value >= minimum && value <= maximum
+    ? value
+    : null;
 }
 
 function selectedMoves(
@@ -306,6 +333,7 @@ function PieceView({
 }) {
   const [failed, setFailed] = useState(false);
   const glyph = pieceFallbackGlyph(kind, side);
+  useEffect(() => setFailed(false), [kind, setId, side]);
   return (
     <span
       className={`piece-frame ${flipped ? "piece-frame--flipped" : ""}`}
@@ -587,7 +615,6 @@ function AnalysisPanel({
   enabled,
   view,
   profile,
-  openingProfile,
   evaluator,
   lastSearch,
   onToggle,
@@ -597,14 +624,14 @@ function AnalysisPanel({
   enabled: boolean;
   view: AnalysisView;
   profile: SearchProfile;
-  openingProfile: OpeningProfile;
   evaluator: EvaluatorChoice;
-  lastSearch: SearchResponse | null;
+  lastSearch: MoveSource | null;
   onToggle: (enabled: boolean) => void;
   children: ReactNode;
 }) {
   const labels = text(locale);
   const update = view.update;
+  const search = lastSearch?.response ?? null;
   const statusLabel =
     view.status === "live"
       ? labels.liveAnalysis
@@ -689,23 +716,22 @@ function AnalysisPanel({
             </ol>
           </>
         )}
-        {lastSearch === null ? null : (
+        {search === null ? null : (
           <div
-            className={`last-search-source last-search-source--${lastSearch.source}`}
+            className={`last-search-source last-search-source--${search.source}`}
           >
             <strong>
-              {lastSearch.source === "book" ? labels.book : labels.search}
+              {search.source === "book" ? labels.book : labels.search}
             </strong>
-            <span>{lastSearch.bestMove ?? "—"}</span>
-            {lastSearch.source === "book" ? (
+            <span>{search.bestMove ?? "—"}</span>
+            {search.source === "book" ? (
               <small>
-                {lastSearch.openingBookMove?.openingClassification} ·{" "}
-                {openingProfile}
+                {search.openingBookMove?.openingClassification} ·{" "}
+                {lastSearch?.openingProfile ?? "—"}
               </small>
             ) : (
               <small>
-                d{lastSearch.depth} · {formatNumber(lastSearch.nodes, locale)}{" "}
-                nodes
+                d{search.depth} · {formatNumber(search.nodes, locale)} nodes
               </small>
             )}
           </div>
@@ -726,7 +752,7 @@ function MoveHistory({
   locale: Locale;
   snapshots: BrowserSnapshot[];
   displayedIndex: number;
-  moveSources: Array<SearchResponse | null>;
+  moveSources: Array<MoveSource | null>;
   onSelect: (index: number) => void;
 }) {
   const labels = text(locale);
@@ -752,7 +778,7 @@ function MoveHistory({
               >
                 <span>{index === 0 ? "#" : index}</span>
                 <strong>{movement}</strong>
-                {moveSources[index]?.source === "book" ? (
+                {moveSources[index]?.response.source === "book" ? (
                   <em>{labels.book}</em>
                 ) : null}
               </button>
@@ -921,10 +947,10 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   const analysisRequestRef = useRef(0);
   const aiRequestRef = useRef(false);
   const turnStartedAtRef = useRef(Date.now());
+  const promotionDialogRef = useRef<HTMLDialogElement | null>(null);
+  const promotionFocusRef = useRef<HTMLElement | null>(null);
   const [history, setHistory] = useState<BrowserSnapshot[]>([]);
-  const [moveSources, setMoveSources] = useState<Array<SearchResponse | null>>(
-    [],
-  );
+  const [moveSources, setMoveSources] = useState<Array<MoveSource | null>>([]);
   const [displayedIndex, setDisplayedIndex] = useState(0);
   const [busy, setBusy] = useState<BusyState | null>("initializing");
   const [selection, setSelection] = useState<BoardSelection>(null);
@@ -938,11 +964,16 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   const [humanRole, setHumanRole] = useState<HumanRole>("sente");
   const [orientation, setOrientation] =
     useState<BoardOrientation>("sente-bottom");
-  const [timeSettings, setTimeSettings] =
-    useState<TimeControlSettings>(DEFAULT_TIME_CONTROL);
+  const [timeSettings, setTimeSettings] = useState<TimeControlSettings>({
+    ...DEFAULT_TIME_CONTROL,
+    nodes: browserProfileNodeLimit(profile),
+  });
   const [matchClock, setMatchClock] = useState<MatchClock>(() =>
     initialMatchClock(DEFAULT_TIME_CONTROL),
   );
+  const [clockHistory, setClockHistory] = useState<MatchClock[]>(() => [
+    initialMatchClock(DEFAULT_TIME_CONTROL),
+  ]);
   const [openingProfile, setOpeningProfile] =
     useState<OpeningProfile>("ibisha_strict");
   const [analysisEnabled, setAnalysisEnabled] = useState(true);
@@ -953,7 +984,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   });
   const [analysisEpoch, setAnalysisEpoch] = useState(0);
   const [playThinking, setPlayThinking] = useState(false);
-  const [lastSearch, setLastSearch] = useState<SearchResponse | null>(null);
+  const [lastSearch, setLastSearch] = useState<MoveSource | null>(null);
   const [model, setModel] = useState<RestorableModel | null>(null);
   const [modelSummary, setModelSummary] = useState<ModelSummary | null>(null);
   const [modelFileName, setModelFileName] = useState<string | null>(null);
@@ -967,8 +998,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   );
   const [pieceSet, setPieceSet] = useState<PieceSetId>(persistedPieceSet);
   const [pieceCreditsOpen, setPieceCreditsOpen] = useState(false);
-  const [playHash, setPlayHash] = useState(8);
-  const [analysisHash, setAnalysisHash] = useState(8);
   const [pauseAnalysisDuringAiTurn, setPauseAnalysisDuringAiTurn] =
     useState(true);
   const [notice, setNotice] = useState<string | null>(null);
@@ -976,15 +1005,21 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     useState<EngineReadyState>("new");
   const [analysisWorkerState, setAnalysisWorkerState] =
     useState<EngineReadyState>("new");
+  const appliedOpeningProfileRef = useRef<OpeningProfile | null>(null);
 
   const liveSnapshot = history.at(-1) ?? null;
   const displayedSnapshot = history[displayedIndex] ?? liveSnapshot;
   const isLivePosition = displayedIndex === history.length - 1;
   const currentMoveSource = moveSources[displayedIndex] ?? null;
+  const displayedClock = clockHistory[displayedIndex] ?? matchClock;
+  const playHash = browserProfileHashMegabytes(profile);
+  const analysisHash = playHash;
+  const timeLocked = history.length > 1;
   const budget = resourceBudget(
     playHash,
     analysisHash,
     pauseAnalysisDuringAiTurn,
+    analysisEnabled,
   );
 
   useEffect(() => {
@@ -1005,6 +1040,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         if (!active) return;
         setHistory([initial]);
         setMoveSources([null]);
+        setClockHistory([initialMatchClock(DEFAULT_TIME_CONTROL)]);
         setDisplayedIndex(0);
         turnStartedAtRef.current = Date.now();
         setBusy(null);
@@ -1032,19 +1068,47 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   }, [pieceSet]);
 
   useEffect(() => {
-    setMatchClock(initialMatchClock(timeSettings));
+    const dialog = promotionDialogRef.current;
+    if (dialog === null) return;
+    if (promotionMoves !== null && !dialog.open) dialog.showModal();
+    if (promotionMoves === null && dialog.open) dialog.close();
+  }, [promotionMoves]);
+
+  useEffect(() => {
+    if (timeLocked) return;
+    const initial = initialMatchClock(timeSettings);
+    setMatchClock(initial);
+    setClockHistory((current) => current.map(() => initial));
     turnStartedAtRef.current = Date.now();
-  }, [timeSettings.mainMinutes]);
+  }, [
+    timeLocked,
+    timeSettings.byoyomiSeconds,
+    timeSettings.incrementSeconds,
+    timeSettings.mainMinutes,
+    timeSettings.mode,
+  ]);
 
   useEffect(() => {
     const play = adaptersRef.current?.play;
-    if (play === undefined || play.readyState !== "ready") return;
-    void play.configureOpening(openingProfile).catch((error: unknown) => {
-      setNotice(
-        error instanceof Error ? error.message : errorMessageRef.current,
-      );
-    });
-  }, [openingProfile]);
+    if (
+      play === undefined ||
+      play.readyState !== "ready" ||
+      appliedOpeningProfileRef.current === openingProfile
+    )
+      return;
+    const requestedProfile = openingProfile;
+    void play
+      .configureOpening(requestedProfile)
+      .then(() => {
+        if (adaptersRef.current?.play === play)
+          appliedOpeningProfileRef.current = requestedProfile;
+      })
+      .catch((error: unknown) => {
+        setNotice(
+          error instanceof Error ? error.message : errorMessageRef.current,
+        );
+      });
+  }, [openingProfile, playWorkerState]);
 
   useEffect(() => {
     const adapter = adaptersRef.current?.play;
@@ -1056,6 +1120,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
       return;
     const operation = ++operationRef.current;
     setBusy("initializing");
+    appliedOpeningProfileRef.current = null;
     void adapter
       .restart(
         { initialSfen: liveSnapshot.initialSfen, moves: liveSnapshot.moves },
@@ -1064,6 +1129,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
       )
       .then(async (restored) => {
         await adapter.configureOpening(openingProfile);
+        appliedOpeningProfileRef.current = openingProfile;
         if (operationRef.current !== operation) return;
         setHistory((current) => [...current.slice(0, -1), restored]);
         setNotice(null);
@@ -1186,39 +1252,51 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     void startLoop().catch(async (error: unknown) => {
       if (cancelled || analysisRequestRef.current !== requestId) return;
       setAnalysisView((current) => ({ ...current, status: "restarting" }));
-      try {
-        const failed = await analysisAdapter.analysisWorkerFailed();
-        const restarted = await analysisAdapter.analysisRestart();
-        const request = await buildAnalysisStart(
-          displayedSnapshot,
-          profile,
-          evaluator,
-          modelSummary,
-          openingProfile,
-          multiPv,
-          playHash,
-          analysisHash,
-        );
-        for (const update of [...failed.updates, ...restarted.updates])
-          await publish(update, request, "cached");
-        setAnalysisEpoch((value) => value + 1);
-      } catch {
+      if (analysisAdapter.readyState !== "crashed") {
         try {
-          await analysisAdapter.restart(
-            { initialSfen: displayedSnapshot.initialSfen, moves: [] },
-            model,
+          const failed = await analysisAdapter.analysisWorkerFailed();
+          const restarted = await analysisAdapter.analysisRestart();
+          const request = await buildAnalysisStart(
+            displayedSnapshot,
+            profile,
+            evaluator,
+            modelSummary,
+            openingProfile,
+            multiPv,
+            playHash,
+            analysisHash,
           );
+          for (const update of [...failed.updates, ...restarted.updates])
+            await publish(update, request, "cached");
+          setNotice(null);
           setAnalysisEpoch((value) => value + 1);
-        } catch (restartError) {
-          setNotice(
-            restartError instanceof Error
-              ? restartError.message
-              : error instanceof Error
-                ? error.message
-                : errorMessageRef.current,
-          );
-          setAnalysisView((current) => ({ ...current, status: "stopped" }));
+          return;
+        } catch {
+          // A protocol-level recovery failure falls through to physical restart.
         }
+      }
+      try {
+        await analysisAdapter.restart(
+          {
+            initialSfen: displayedSnapshot.initialSfen,
+            moves: displayedSnapshot.moves,
+          },
+          model,
+        );
+        if (!cancelled && analysisRequestRef.current === requestId) {
+          setNotice(null);
+          setAnalysisEpoch((value) => value + 1);
+        }
+      } catch (restartError) {
+        if (cancelled || analysisRequestRef.current !== requestId) return;
+        setNotice(
+          restartError instanceof Error
+            ? restartError.message
+            : error instanceof Error
+              ? error.message
+              : errorMessageRef.current,
+        );
+        setAnalysisView((current) => ({ ...current, status: "stopped" }));
       }
     });
     return () => {
@@ -1246,6 +1324,8 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     const adapter = adaptersRef.current?.play;
     if (
       adapter === undefined ||
+      adapter.readyState !== "ready" ||
+      appliedOpeningProfileRef.current !== openingProfile ||
       liveSnapshot === null ||
       busy !== null ||
       aiRequestRef.current ||
@@ -1263,26 +1343,32 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         profile,
         evaluator,
         Math.min(multiPv, 3),
-        serializeTimeControl(timeSettings, matchClock),
+        serializeTimeControl(
+          timeSettings,
+          matchClock,
+          browserProfileNodeLimit(profile),
+        ),
       )
       .then(async (response) => {
         if (operationRef.current !== operation || response.bestMove === null)
           return;
-        if (timeSettings.mode === "clock") {
-          setMatchClock((current) =>
-            consumeMatchClock(
-              current,
-              liveSnapshot.sideToMove,
-              response.elapsedNs / 1_000_000,
-              timeSettings.incrementSeconds,
-            ),
-          );
-        }
-        setLastSearch(response);
+        const updatedClock =
+          timeSettings.mode === "clock"
+            ? consumeMatchClock(
+                matchClock,
+                liveSnapshot.sideToMove,
+                response.elapsedNs / 1_000_000,
+                timeSettings.incrementSeconds,
+              )
+            : null;
+        const source = { response, openingProfile } satisfies MoveSource;
         const next = await adapter.playMove(response.bestMove);
         if (operationRef.current !== operation) return;
+        if (updatedClock !== null) setMatchClock(updatedClock);
+        setLastSearch(source);
         setHistory((current) => [...current, next]);
-        setMoveSources((current) => [...current, response]);
+        setMoveSources((current) => [...current, source]);
+        setClockHistory((current) => [...current, updatedClock ?? matchClock]);
         setDisplayedIndex(next.moves.length);
         turnStartedAtRef.current = Date.now();
       })
@@ -1304,6 +1390,8 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     liveSnapshot,
     matchClock,
     multiPv,
+    openingProfile,
+    playWorkerState,
     profile,
     timeSettings,
   ]);
@@ -1342,9 +1430,31 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   async function applyMove(movement: string) {
     const adapter = adaptersRef.current?.play;
     if (adapter === undefined || !humanCanMove) return;
-    const operation = ++operationRef.current;
     const movingSide = displayedSnapshot?.sideToMove ?? "black";
     const elapsedMs = Date.now() - turnStartedAtRef.current;
+    if (
+      timeSettings.mode === "clock" &&
+      matchClockExpired(
+        matchClock,
+        movingSide,
+        elapsedMs,
+        timeSettings.byoyomiSeconds,
+      )
+    ) {
+      setNotice(labels.timeExpired);
+      setHumanRole("analysis-only");
+      return;
+    }
+    const operation = ++operationRef.current;
+    const updatedClock =
+      timeSettings.mode === "clock"
+        ? consumeMatchClock(
+            matchClock,
+            movingSide,
+            elapsedMs,
+            timeSettings.incrementSeconds,
+          )
+        : null;
     setBusy("moving");
     setSelection(null);
     setPromotionMoves(null);
@@ -1352,18 +1462,10 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     try {
       const next = await adapter.playMove(movement);
       if (operationRef.current !== operation) return;
-      if (timeSettings.mode === "clock") {
-        setMatchClock((current) =>
-          consumeMatchClock(
-            current,
-            movingSide,
-            elapsedMs,
-            timeSettings.incrementSeconds,
-          ),
-        );
-      }
+      if (updatedClock !== null) setMatchClock(updatedClock);
       setHistory((current) => [...current, next]);
       setMoveSources((current) => [...current, null]);
+      setClockHistory((current) => [...current, updatedClock ?? matchClock]);
       setDisplayedIndex(next.moves.length);
       setLastSearch(null);
       turnStartedAtRef.current = Date.now();
@@ -1377,7 +1479,14 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
 
   function chooseMove(candidates: MoveSummary[]) {
     if (candidates.length === 1) void applyMove(candidates[0].usi);
-    else if (candidates.length > 1) setPromotionMoves(candidates);
+    else if (candidates.length > 1) {
+      promotionFocusRef.current =
+        typeof document !== "undefined" &&
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      setPromotionMoves(candidates);
+    }
   }
 
   function selectSquare(index: number) {
@@ -1409,7 +1518,9 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
       setDisplayedIndex(0);
       setLastSearch(null);
       setSelection(null);
-      setMatchClock(initialMatchClock(timeSettings));
+      const initial = initialMatchClock(timeSettings);
+      setMatchClock(initial);
+      setClockHistory([initial]);
       turnStartedAtRef.current = Date.now();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : messages.play.error);
@@ -1515,14 +1626,15 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     }
   }
 
-  async function stopAiPlay() {
+  async function restartPlayAs(nextRole: HumanRole) {
     const adapter = adaptersRef.current?.play;
-    setHumanRole("analysis-only");
+    setHumanRole(nextRole);
     if (adapter === undefined || liveSnapshot === null) return;
     const operation = ++operationRef.current;
     aiRequestRef.current = false;
     setPlayThinking(false);
     setBusy("initializing");
+    appliedOpeningProfileRef.current = null;
     try {
       const restored = await adapter.restart(
         { initialSfen: liveSnapshot.initialSfen, moves: liveSnapshot.moves },
@@ -1530,6 +1642,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         openingBook,
       );
       await adapter.configureOpening(openingProfile);
+      appliedOpeningProfileRef.current = openingProfile;
       if (operationRef.current !== operation) return;
       setHistory((current) => [...current.slice(0, -1), restored]);
       setNotice(null);
@@ -1541,6 +1654,16 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
       }
     } finally {
       if (operationRef.current === operation) setBusy(null);
+    }
+  }
+
+  async function takeOverCurrentSide() {
+    if (displayedSnapshot === null || !isLivePosition) return;
+    const nextRole = takeOverSide(displayedSnapshot.sideToMove);
+    if (busy === "engine") {
+      await restartPlayAs(nextRole);
+    } else if (busy === null) {
+      setHumanRole(nextRole);
     }
   }
 
@@ -1571,7 +1694,10 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
             {labels.newGame}
           </button>
           {humanRole === "ai-vs-ai" ? (
-            <button onClick={() => void stopAiPlay()} type="button">
+            <button
+              onClick={() => void restartPlayAs("analysis-only")}
+              type="button"
+            >
               {labels.stopAi}
             </button>
           ) : null}
@@ -1670,18 +1796,20 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                   <strong>
                     {currentMoveSource === null
                       ? "—"
-                      : formatSecondsFromNs(currentMoveSource.elapsedNs)}
+                      : formatSecondsFromNs(
+                          currentMoveSource.response.elapsedNs,
+                        )}
                   </strong>
                 </p>
                 {timeSettings.mode === "clock" ? (
                   <>
                     <p>
                       <span>{labels.sente}</span>
-                      <strong>{formatClock(matchClock.blackTimeMs)}</strong>
+                      <strong>{formatClock(displayedClock.blackTimeMs)}</strong>
                     </p>
                     <p>
                       <span>{labels.gote}</span>
-                      <strong>{formatClock(matchClock.whiteTimeMs)}</strong>
+                      <strong>{formatClock(displayedClock.whiteTimeMs)}</strong>
                     </p>
                   </>
                 ) : null}
@@ -1695,11 +1823,23 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
             <span className="legend-check">Check</span>
             <span className="legend-pv">PV</span>
           </div>
-          {promotionMoves === null ? null : (
-            <div aria-modal="true" className="promotion-choice" role="dialog">
-              <p>{messages.play.promoteQuestion}</p>
-              {promotionMoves.map((movement) => (
+          <dialog
+            aria-labelledby="promotion-choice-title"
+            aria-modal="true"
+            className="promotion-choice"
+            onCancel={() => setPromotionMoves(null)}
+            onClose={() => {
+              setPromotionMoves(null);
+              promotionFocusRef.current?.focus();
+              promotionFocusRef.current = null;
+            }}
+            ref={promotionDialogRef}
+          >
+            <p id="promotion-choice-title">{messages.play.promoteQuestion}</p>
+            <div>
+              {promotionMoves?.map((movement, index) => (
                 <button
+                  autoFocus={index === 0}
                   key={movement.usi}
                   onClick={() => void applyMove(movement.usi)}
                   type="button"
@@ -1713,7 +1853,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                 {messages.play.cancel}
               </button>
             </div>
-          )}
+          </dialog>
         </section>
         <AnalysisPanel
           enabled={analysisEnabled}
@@ -1721,7 +1861,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
           lastSearch={currentMoveSource ?? (isLivePosition ? lastSearch : null)}
           locale={locale}
           onToggle={setAnalysisEnabled}
-          openingProfile={openingProfile}
           profile={profile}
           view={analysisView}
         >
@@ -1756,11 +1895,12 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                 {labels.flip}
               </button>
               <button
-                disabled={!isLivePosition || displayedSnapshot === null}
-                onClick={() => {
-                  if (displayedSnapshot !== null)
-                    setHumanRole(takeOverSide(displayedSnapshot.sideToMove));
-                }}
+                disabled={
+                  !isLivePosition ||
+                  displayedSnapshot === null ||
+                  (busy !== null && busy !== "engine")
+                }
+                onClick={() => void takeOverCurrentSide()}
                 type="button"
               >
                 {labels.takeover}
@@ -1770,7 +1910,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
             <label className="select-field">
               <span>{labels.timeControl}</span>
               <select
-                disabled={busy !== null}
+                disabled={busy !== null || timeLocked}
                 onChange={(event) => {
                   const mode = event.currentTarget
                     .value as TimeControlSettings["mode"];
@@ -1787,9 +1927,10 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                 <option value="nodes">{labels.nodes}</option>
               </select>
             </label>
+            {timeLocked ? <small>{labels.timeLocked}</small> : null}
             {timeSettings.mode === "fixed" ? (
               <SegmentedControl
-                disabled={busy !== null}
+                disabled={busy !== null || timeLocked}
                 label={labels.fixed}
                 onSelect={(fixedSeconds) =>
                   setTimeSettings((current) => ({ ...current, fixedSeconds }))
@@ -1813,10 +1954,16 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                   <label key={key}>
                     <span>{label}</span>
                     <input
-                      disabled={busy !== null}
+                      disabled={busy !== null || timeLocked}
                       min="0"
                       onChange={(event) => {
-                        const value = Number(event.currentTarget.value);
+                        const maximum = key === "mainMinutes" ? 10_080 : 3_600;
+                        const value = boundedInputInteger(
+                          event.currentTarget.valueAsNumber,
+                          0,
+                          maximum,
+                        );
+                        if (value === null) return;
                         setTimeSettings((current) => ({
                           ...current,
                           [key]: value,
@@ -1833,10 +1980,16 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
               <label className="number-field">
                 <span>{labels.nodes}</span>
                 <input
-                  disabled={busy !== null}
+                  disabled={busy !== null || timeLocked}
+                  max={browserProfileNodeLimit(profile)}
                   min="1"
                   onChange={(event) => {
-                    const nodes = Number(event.currentTarget.value);
+                    const nodes = boundedInputInteger(
+                      event.currentTarget.valueAsNumber,
+                      1,
+                      browserProfileNodeLimit(profile),
+                    );
+                    if (nodes === null) return;
                     setTimeSettings((current) => ({
                       ...current,
                       nodes,
@@ -1850,6 +2003,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
             <label className="select-field">
               <span>{labels.openingProfile}</span>
               <select
+                disabled={busy !== null}
                 onChange={(event) =>
                   setOpeningProfile(event.currentTarget.value as OpeningProfile)
                 }
@@ -1868,9 +2022,22 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
               <label className="select-field">
                 <span>{messages.play.searchProfile}</span>
                 <select
-                  onChange={(event) =>
-                    setProfile(event.currentTarget.value as SearchProfile)
+                  disabled={
+                    busy !== null ||
+                    (timeLocked && timeSettings.mode === "nodes")
                   }
+                  onChange={(event) => {
+                    const nextProfile = event.currentTarget
+                      .value as SearchProfile;
+                    setProfile(nextProfile);
+                    setTimeSettings((current) => ({
+                      ...current,
+                      nodes: Math.min(
+                        current.nodes,
+                        browserProfileNodeLimit(nextProfile),
+                      ),
+                    }));
+                  }}
                   value={profile}
                 >
                   <option value="eco">Eco</option>
@@ -1881,11 +2048,17 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
               <label className="number-field">
                 <span>MultiPV</span>
                 <input
+                  disabled={busy !== null}
                   max="10"
                   min="1"
-                  onChange={(event) =>
-                    setMultiPv(Number(event.currentTarget.value))
-                  }
+                  onChange={(event) => {
+                    const value = boundedInputInteger(
+                      event.currentTarget.valueAsNumber,
+                      1,
+                      10,
+                    );
+                    if (value !== null) setMultiPv(value);
+                  }}
                   type="number"
                   value={multiPv}
                 />
@@ -1896,26 +2069,13 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
               </label>
               <label className="number-field">
                 <span>{labels.hash}</span>
-                <input
-                  min="1"
-                  onChange={(event) =>
-                    setPlayHash(Number(event.currentTarget.value))
-                  }
-                  type="number"
-                  value={playHash}
-                />
+                <input disabled type="number" value={playHash} />
               </label>
               <label className="number-field">
                 <span>{labels.analysisHash}</span>
-                <input
-                  min="0"
-                  onChange={(event) =>
-                    setAnalysisHash(Number(event.currentTarget.value))
-                  }
-                  type="number"
-                  value={analysisHash}
-                />
+                <input disabled type="number" value={analysisHash} />
               </label>
+              <small>{labels.hashManaged}</small>
               <label className="check-field">
                 <input
                   checked={pauseAnalysisDuringAiTurn}

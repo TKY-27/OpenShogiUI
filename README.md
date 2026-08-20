@@ -35,7 +35,9 @@ Browser Play includes independent Sente/Gote role and board-orientation controls
 navigation, takeover without position mutation, bounded time controls, MultiPV analysis, opening
 profiles, local opening-book/model loading, and 13 selectable CC BY 4.0 piece sets. The default
 casual time control delegates to the engine's adaptive policy with its documented 20-second cap;
-fixed, clock, and node limits are serialized through `open_shogi_time_control/v1`.
+fixed, clock, and profile-bounded node limits are serialized through
+`open_shogi_time_control/v1`. Thread and hash values reflect the frozen single-threaded Wasm
+profile instead of presenting ineffective memory controls.
 
 ## AI integration contract
 

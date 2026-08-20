@@ -3,6 +3,7 @@ import {
   TIME_CONTROL_SCHEMA,
   type BrowserSnapshot,
   type ResourceBudget,
+  type SearchProfile,
   type Side,
   type SquareSummary,
   type TimeControl,
@@ -55,6 +56,7 @@ export function flippedOrientation(
 export function serializeTimeControl(
   settings: TimeControlSettings,
   remainingClock: MatchClock = initialMatchClock(settings),
+  maximumNodes = 1_000_000_000,
 ): TimeControl {
   switch (settings.mode) {
     case "casual":
@@ -86,7 +88,7 @@ export function serializeTimeControl(
     case "nodes":
       return {
         schema: TIME_CONTROL_SCHEMA,
-        nodes: boundedInteger(settings.nodes, 1, 1_000_000_000),
+        nodes: boundedInteger(settings.nodes, 1, maximumNodes),
         safetyMarginMs: 50,
       };
   }
@@ -105,7 +107,7 @@ export function consumeMatchClock(
   elapsedMs: number,
   incrementSeconds: number,
 ): MatchClock {
-  const consumed = boundedInteger(elapsedMs, 0, 604_800_000);
+  const consumed = clampedInteger(elapsedMs, 0, 604_800_000);
   const increment = boundedInteger(incrementSeconds, 0, 3_600) * 1_000;
   const key = side === "black" ? "blackTimeMs" : "whiteTimeMs";
   return {
@@ -117,17 +119,38 @@ export function consumeMatchClock(
   };
 }
 
+export function matchClockExpired(
+  clock: MatchClock,
+  side: Side,
+  elapsedMs: number,
+  byoyomiSeconds: number,
+): boolean {
+  const key = side === "black" ? "blackTimeMs" : "whiteTimeMs";
+  const byoyomi = boundedInteger(byoyomiSeconds, 0, 3_600) * 1_000;
+  if (!Number.isFinite(elapsedMs)) return true;
+  return Math.max(0, Math.round(elapsedMs)) > clock[key] + byoyomi;
+}
+
+export function browserProfileNodeLimit(profile: SearchProfile): number {
+  return profile === "eco" ? 1_500 : profile === "balanced" ? 4_000 : 12_000;
+}
+
+export function browserProfileHashMegabytes(profile: SearchProfile): number {
+  return profile === "eco" ? 2 : profile === "balanced" ? 4 : 8;
+}
+
 export function resourceBudget(
   playHashMegabytes: number,
   analysisHashMegabytes: number,
   pauseAnalysisDuringAiTurn: boolean,
+  analysisActive = analysisHashMegabytes > 0,
 ): ResourceBudget {
   const playHash = boundedInteger(playHashMegabytes, 1, 1_048_576);
   const analysisHash = boundedInteger(analysisHashMegabytes, 0, 1_048_576);
   return {
     schema: RESOURCE_BUDGET_SCHEMA,
     playThreads: 1,
-    analysisThreads: analysisHash === 0 ? 0 : 1,
+    analysisThreads: analysisActive ? 1 : 0,
     playHashMegabytes: playHash,
     analysisHashMegabytes: analysisHash,
     analysisPauseDuringAiTurn: pauseAnalysisDuringAiTurn,
@@ -200,4 +223,13 @@ function boundedInteger(
     throw new Error(`value must be between ${minimum} and ${maximum}`);
   }
   return result;
+}
+
+function clampedInteger(
+  value: number,
+  minimum: number,
+  maximum: number,
+): number {
+  if (!Number.isFinite(value)) return minimum;
+  return Math.min(maximum, Math.max(minimum, Math.round(value)));
 }

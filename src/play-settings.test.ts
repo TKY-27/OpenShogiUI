@@ -8,12 +8,15 @@ import type {
 } from "./browser-engine";
 import {
   boardIndex,
+  browserProfileHashMegabytes,
+  browserProfileNodeLimit,
   consumeMatchClock,
   DEFAULT_TIME_CONTROL,
   flippedOrientation,
   humanControlsSide,
   initialMatchClock,
   lastMoveHighlight,
+  matchClockExpired,
   parseUsiMoveShape,
   resourceBudget,
   serializeTimeControl,
@@ -158,6 +161,45 @@ describe("play settings", () => {
         1,
       ),
     ).toEqual({ blackTimeMs: 0, whiteTimeMs: 1_000 });
+    expect(
+      matchClockExpired(
+        { blackTimeMs: 1_000, whiteTimeMs: 0 },
+        "black",
+        31_000,
+        30,
+      ),
+    ).toBe(false);
+    expect(
+      matchClockExpired(
+        { blackTimeMs: 1_000, whiteTimeMs: 0 },
+        "black",
+        31_001,
+        30,
+      ),
+    ).toBe(true);
+    expect(
+      matchClockExpired(
+        { blackTimeMs: 604_800_000, whiteTimeMs: 0 },
+        "black",
+        604_800_001,
+        0,
+      ),
+    ).toBe(true);
+  });
+
+  it("uses the frozen browser profile node and hash bounds", () => {
+    const profiles = ["eco", "balanced", "quality"] as const;
+    expect(profiles.map(browserProfileNodeLimit)).toEqual([
+      1_500, 4_000, 12_000,
+    ]);
+    expect(profiles.map(browserProfileHashMegabytes)).toEqual([2, 4, 8]);
+    expect(() =>
+      serializeTimeControl(
+        timeSettings({ mode: "nodes", nodes: 1_501 }),
+        undefined,
+        browserProfileNodeLimit("eco"),
+      ),
+    ).toThrow("value must be between 1 and 1500");
   });
 
   it("keeps play and analysis memory budgets explicit and bounded", () => {
@@ -171,6 +213,10 @@ describe("play settings", () => {
       maximumAggregateMemoryMegabytes: 448,
     });
     expect(resourceBudget(256, 0, false).analysisThreads).toBe(0);
+    expect(resourceBudget(8, 8, true, false)).toMatchObject({
+      analysisThreads: 0,
+      analysisHashMegabytes: 8,
+    });
   });
 });
 
