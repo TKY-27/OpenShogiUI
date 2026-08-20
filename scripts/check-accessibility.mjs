@@ -4,19 +4,30 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const browserPlay = readFileSync(join(root, "src/BrowserPlay.tsx"), "utf8");
+const boardView = readFileSync(join(root, "src/ShogiBoardView.tsx"), "utf8");
 const app = readFileSync(join(root, "src/App.tsx"), "utf8");
 const styles = readFileSync(join(root, "src/index.css"), "utf8");
 const failures = [];
 
-const requiredBrowserEvidence = [
+const requiredBoardEvidence = [
   'role="grid"',
   'role="gridcell"',
+  'role="row"',
+  "aria-selected={isSelected}",
+  "alt={glyph}",
+  'type="button"',
+];
+for (const marker of requiredBoardEvidence) {
+  if (!boardView.includes(marker))
+    failures.push(`ShogiBoardView is missing ${marker}`);
+}
+
+const requiredBrowserEvidence = [
   'role="status"',
   'aria-live="polite"',
   'aria-modal="true"',
   "aria-label={labels.realtime}",
   'aria-current={index === displayedIndex ? "step" : undefined}',
-  "alt={glyph}",
   'type="button"',
 ];
 for (const marker of requiredBrowserEvidence) {

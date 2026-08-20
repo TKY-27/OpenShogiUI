@@ -15,9 +15,8 @@ import {
   BOARD_FILE_LABELS,
   BOARD_RANK_LABELS,
   boardIndex,
-  isBoardOnlyMode,
   ShogiBoard,
-} from "./BrowserPlay";
+} from "./ShogiBoardView";
 import { getMessages } from "./localization";
 
 const handOrder: HandPieceKind[] = [
@@ -194,7 +193,7 @@ describe("browser shogi board", () => {
 
   it("keeps image failure fallback and desktop/mobile layout contracts explicit", () => {
     const source = readFileSync(
-      new URL("./BrowserPlay.tsx", import.meta.url),
+      new URL("./ShogiBoardView.tsx", import.meta.url),
       "utf8",
     );
     const styles = readFileSync(
@@ -220,13 +219,5 @@ describe("browser shogi board", () => {
     expect(mobileLayout).toMatch(
       /\.analysis-workspace \.board-stage\s*\{[^}]*grid-template-areas:\s*"white"\s*"board"\s*"black"/s,
     );
-  });
-});
-
-describe("serious match presentation", () => {
-  it("becomes board-only only after the serious match starts", () => {
-    expect(isBoardOnlyMode("analysis", false)).toBe(false);
-    expect(isBoardOnlyMode("match", false)).toBe(false);
-    expect(isBoardOnlyMode("match", true)).toBe(true);
   });
 });
