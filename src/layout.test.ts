@@ -23,18 +23,16 @@ describe("application shell layout contract", () => {
   });
 
   it("confines vertical scrolling to panes on desktop", () => {
-    expect(styles).toMatch(
-      /\.app-shell--fixed\s*\{[^}]*overflow:\s*hidden/s,
-    );
+    expect(styles).toMatch(/\.app-shell--fixed\s*\{[^}]*overflow:\s*hidden/s);
     expect(styles).toMatch(/\.app-main\s*\{[^}]*min-height:\s*0/s);
   });
 
   it("sizes the board from the smaller of available width and height", () => {
-    const boardFit = styles.slice(styles.indexOf(".board-fit"));
-    expect(boardFit).toMatch(/container-type:\s*size/);
-    expect(styles).toMatch(/\.board-square-frame\s*\{[^}]*aspect-ratio:\s*1/s);
-    // A height-derived term is what the Phase 1 stylesheet was missing.
-    expect(styles).toMatch(/\bcqh\b/);
+    expect(styles).toMatch(/\.board-fit\s*\{[^}]*container-type:\s*size/s);
+    expect(styles).toMatch(/\.shogi-board\s*\{[^}]*aspect-ratio:\s*1/s);
+    // A height-derived term is what the Phase 1 stylesheet was missing: the
+    // board could only ever shrink to fit the available width.
+    expect(styles).toMatch(/--board-size:\s*min\([^;]*100cqh/s);
   });
 
   it("no longer stretches the history rail to a fixed 48rem", () => {
@@ -43,8 +41,9 @@ describe("application shell layout contract", () => {
 
   it("uses a single ascending min-width breakpoint ladder", () => {
     expect(styles.match(/@media \(max-width:/g)).toBeNull();
-    const widths = [...styles.matchAll(/@media \(min-width:\s*([\d.]+)rem\)/g)]
-      .map((match) => Number(match[1]));
+    const widths = [
+      ...styles.matchAll(/@media \(min-width:\s*([\d.]+)rem\)/g),
+    ].map((match) => Number(match[1]));
     expect(widths.length).toBeGreaterThanOrEqual(2);
     expect([...widths].sort((a, b) => a - b)).toEqual(widths);
     expect(new Set(widths).size).toBe(widths.length);
@@ -53,7 +52,10 @@ describe("application shell layout contract", () => {
   it("keeps only one layout system by removing the superseded play-page rules", () => {
     expect(styles).not.toMatch(/\.play-page\b/);
     expect(styles).not.toMatch(/\.play-workspace\b/);
-    expect(styles).not.toMatch(/\.board-stage\b/);
+    expect(styles).not.toMatch(/\.play-heading\b/);
+    expect(styles).not.toMatch(/\.primary-actions\b/);
+    // The board stage survives, but only one definition of it may exist.
+    expect(styles.match(/^\.board-stage \{$/gm)).toHaveLength(1);
   });
 
   it("reserves 44px targets for coarse pointers rather than every control", () => {

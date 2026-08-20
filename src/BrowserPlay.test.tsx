@@ -200,8 +200,8 @@ describe("browser shogi board", () => {
       new URL("./index.css", import.meta.url),
       "utf8",
     );
-    const mobileLayout = styles.slice(
-      styles.lastIndexOf("@media (max-width: 48rem)"),
+    const desktopLayout = styles.slice(
+      styles.lastIndexOf("@media (min-width: 80rem)"),
     );
 
     expect(source).toContain("const [failed, setFailed] = useState(false);");
@@ -210,14 +210,20 @@ describe("browser shogi board", () => {
       "useEffect(() => setFailed(false), [kind, setId, side]);",
     );
     expect(source).toContain("className={`shogi-piece shogi-piece--${side}`}");
+    // Mobile-first: a single stacked column is the base rule, and the rail /
+    // board / analysis columns only appear from the desktop breakpoint up.
     expect(styles).toMatch(
-      /\.analysis-layout\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(13\.5rem, 18rem\)/s,
+      /\.analysis-layout\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s,
     );
-    expect(mobileLayout).toMatch(
-      /\.analysis-layout\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column/s,
+    expect(styles).toMatch(
+      /\.board-stage\s*\{[^}]*grid-template-areas:\s*\n?\s*"gote"\s*"board"\s*"sente"/s,
     );
-    expect(mobileLayout).toMatch(
-      /\.analysis-workspace \.board-stage\s*\{[^}]*grid-template-areas:\s*"white"\s*"board"\s*"black"/s,
+    expect(desktopLayout).toMatch(
+      /\.analysis-layout\s*\{[^}]*grid-template-columns:\s*\n?\s*minmax\(0, var\(--rail-width\)\) minmax\(0, 1fr\)/s,
+    );
+    // Hand stands flank the board once there is width for them.
+    expect(styles).toMatch(
+      /\.board-stage\s*\{[^}]*grid-template-areas:\s*"gote board sente"/s,
     );
   });
 });

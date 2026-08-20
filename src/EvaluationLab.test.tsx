@@ -49,7 +49,7 @@ describe("scrollable table region", () => {
       "games-title",
     ]);
     expect(styles).toMatch(
-      /\.table-scroll:focus-visible\s*\{[^}]*outline:\s*3px solid #3684dc;[^}]*outline-offset:\s*4px;/s,
+      /\.table-scroll:focus-visible\s*\{[^}]*outline:\s*3px solid var\(--focus\);[^}]*outline-offset:\s*2px;/s,
     );
   });
 });
@@ -270,7 +270,7 @@ describe("game pagination", () => {
     expect(markup).toContain("Page 1 of 100");
     expect(markup).not.toContain(">100</th>");
     expect(styles).toMatch(
-      /button:focus-visible,[^{]*\{[^}]*outline:\s*3px solid #3684dc;[^}]*outline-offset:\s*3px;/s,
+      /button:focus-visible,[^{]*\{[^}]*outline:\s*3px solid var\(--focus\);[^}]*outline-offset:\s*2px;/s,
     );
   });
 

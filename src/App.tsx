@@ -185,6 +185,9 @@ function App() {
   const [noticeView, setNoticeView] = useState<NoticeView | null>(null);
   const isEvaluationLab = route === "evaluation-lab";
   const isBrowserPlay = route === "browser-play";
+  // App routes own a fixed-height shell whose panes scroll; document routes
+  // keep normal page flow because their content is genuinely long.
+  const isAppRoute = isBrowserPlay;
   const selectedMessages = getMessages(locale);
 
   useEffect(() => {
@@ -201,50 +204,55 @@ function App() {
   }, [locale]);
 
   return (
-    <div className="site-shell">
-      <header className="site-header">
-        <div className="site-nav">
-          <a className="wordmark" href="#/workspace">
-            Open<span>ShogiUI</span>
-          </a>
-          <nav aria-label={selectedMessages.header.primaryNavigation}>
-            <a
-              aria-current={
-                !isEvaluationLab && !isBrowserPlay ? "page" : undefined
-              }
-              href="#/workspace"
-            >
-              {selectedMessages.header.workspace}
-            </a>
-            <a
-              aria-current={isBrowserPlay ? "page" : undefined}
-              href="#/browser-play"
-            >
-              {selectedMessages.header.browserPlay}
-            </a>
-            <a
-              aria-current={isEvaluationLab ? "page" : undefined}
-              href="#/evaluation-lab"
-            >
-              {selectedMessages.header.evaluationLab}
-            </a>
-          </nav>
-          <LanguageSwitcher
-            locale={locale}
-            onSelect={(selectedLocale) =>
-              dispatchLocale({ type: "select", locale: selectedLocale })
+    <div
+      className={`app-shell ${isAppRoute ? "app-shell--fixed" : "app-shell--document"}`}
+    >
+      <header className="app-bar">
+        <a className="wordmark" href="#/workspace">
+          Open<span>ShogiUI</span>
+        </a>
+        <nav
+          className="app-nav"
+          aria-label={selectedMessages.header.primaryNavigation}
+        >
+          <a
+            aria-current={
+              !isEvaluationLab && !isBrowserPlay ? "page" : undefined
             }
-          />
-        </div>
+            href="#/workspace"
+          >
+            {selectedMessages.header.workspace}
+          </a>
+          <a
+            aria-current={isBrowserPlay ? "page" : undefined}
+            href="#/browser-play"
+          >
+            {selectedMessages.header.browserPlay}
+          </a>
+          <a
+            aria-current={isEvaluationLab ? "page" : undefined}
+            href="#/evaluation-lab"
+          >
+            {selectedMessages.header.evaluationLab}
+          </a>
+        </nav>
+        <LanguageSwitcher
+          locale={locale}
+          onSelect={(selectedLocale) =>
+            dispatchLocale({ type: "select", locale: selectedLocale })
+          }
+        />
       </header>
 
-      {isBrowserPlay ? (
-        <BrowserPlay locale={locale} />
-      ) : isEvaluationLab ? (
-        <EvaluationLab locale={locale} />
-      ) : (
-        <WorkspaceHome locale={locale} />
-      )}
+      <div className="app-main">
+        {isBrowserPlay ? (
+          <BrowserPlay locale={locale} />
+        ) : isEvaluationLab ? (
+          <EvaluationLab locale={locale} />
+        ) : (
+          <WorkspaceHome locale={locale} />
+        )}
+      </div>
 
       <footer className="site-footer">
         <nav

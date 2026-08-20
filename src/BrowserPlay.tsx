@@ -1383,68 +1383,63 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         </p>
       )}
       <div className="analysis-layout">
-        <MoveHistory
-          displayedIndex={displayedIndex}
-          locale={locale}
-          moveSources={moveSources}
-          onSelect={selectHistory}
-          snapshots={history}
-        />
         <section className="board-area" aria-label={messages.play.title}>
           {displayedSnapshot === null ? (
             <div className="board-loading">{messages.play.initialization}</div>
           ) : (
             <>
-              <div className={`board-stage board-stage--${orientation}`}>
-                <HandStand
-                  disabled={
-                    !humanCanMove || displayedSnapshot.sideToMove !== "white"
-                  }
-                  entries={displayedSnapshot.hands.white}
-                  legalDrops={legalDrops}
-                  messages={messages}
-                  onSelect={(piece) =>
-                    setSelection((current) =>
-                      current?.kind === "hand" && current.piece === piece
-                        ? null
-                        : { kind: "hand", piece },
-                    )
-                  }
-                  orientation={orientation}
-                  pieceSet={pieceSet}
-                  selection={selection}
-                  side="white"
-                />
-                <ShogiBoard
-                  disabled={!humanCanMove}
-                  lastMove={lastMove}
-                  messages={messages}
-                  onSquare={selectSquare}
-                  orientation={orientation}
-                  pieceSet={pieceSet}
-                  pv={pv}
-                  selection={selection}
-                  snapshot={displayedSnapshot}
-                />
-                <HandStand
-                  disabled={
-                    !humanCanMove || displayedSnapshot.sideToMove !== "black"
-                  }
-                  entries={displayedSnapshot.hands.black}
-                  legalDrops={legalDrops}
-                  messages={messages}
-                  onSelect={(piece) =>
-                    setSelection((current) =>
-                      current?.kind === "hand" && current.piece === piece
-                        ? null
-                        : { kind: "hand", piece },
-                    )
-                  }
-                  orientation={orientation}
-                  pieceSet={pieceSet}
-                  selection={selection}
-                  side="black"
-                />
+              <div className="board-fit">
+                <div className={`board-stage board-stage--${orientation}`}>
+                  <HandStand
+                    disabled={
+                      !humanCanMove || displayedSnapshot.sideToMove !== "white"
+                    }
+                    entries={displayedSnapshot.hands.white}
+                    legalDrops={legalDrops}
+                    messages={messages}
+                    onSelect={(piece) =>
+                      setSelection((current) =>
+                        current?.kind === "hand" && current.piece === piece
+                          ? null
+                          : { kind: "hand", piece },
+                      )
+                    }
+                    orientation={orientation}
+                    pieceSet={pieceSet}
+                    selection={selection}
+                    side="white"
+                  />
+                  <ShogiBoard
+                    disabled={!humanCanMove}
+                    lastMove={lastMove}
+                    messages={messages}
+                    onSquare={selectSquare}
+                    orientation={orientation}
+                    pieceSet={pieceSet}
+                    pv={pv}
+                    selection={selection}
+                    snapshot={displayedSnapshot}
+                  />
+                  <HandStand
+                    disabled={
+                      !humanCanMove || displayedSnapshot.sideToMove !== "black"
+                    }
+                    entries={displayedSnapshot.hands.black}
+                    legalDrops={legalDrops}
+                    messages={messages}
+                    onSelect={(piece) =>
+                      setSelection((current) =>
+                        current?.kind === "hand" && current.piece === piece
+                          ? null
+                          : { kind: "hand", piece },
+                      )
+                    }
+                    orientation={orientation}
+                    pieceSet={pieceSet}
+                    selection={selection}
+                    side="black"
+                  />
+                </div>
               </div>
               <div className="board-meta">
                 <p>
@@ -1529,6 +1524,13 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
             </div>
           </dialog>
         </section>
+        <MoveHistory
+          displayedIndex={displayedIndex}
+          locale={locale}
+          moveSources={moveSources}
+          onSelect={selectHistory}
+          snapshots={history}
+        />
         <AnalysisPanel
           enabled={analysisEnabled}
           evaluator={evaluator}
