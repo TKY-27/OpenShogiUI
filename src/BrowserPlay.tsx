@@ -31,6 +31,7 @@ import { type EngineReadyState, WasmEngineAdapter } from "./engine-adapter";
 import type { RestorableModel, RestorableOpeningBook } from "./engine-client";
 import { resolveShortcut } from "./keyboard";
 import { downloadText, kifuFileName, toKif, toUsi } from "./kifu";
+import { PublishGate } from "./publish-throttle";
 import { getMessages, type Locale } from "./localization";
 import {
   PIECE_ASSET_CATALOG,
@@ -653,6 +654,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   const [openingProfile, setOpeningProfile] =
     useState<OpeningProfile>("ibisha_strict");
   const [analysisEnabled, setAnalysisEnabled] = useState(true);
+  const analysisGateRef = useRef(new PublishGate<AnalysisView>());
   const [analysisView, setAnalysisView] = useState<AnalysisView>({
     status: "idle",
     update: null,
@@ -841,7 +843,12 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         // Stop before the first start is a harmless closed-protocol error.
       }
       if (!cancelled && analysisRequestRef.current === requestId) {
-        setAnalysisView((current) => ({ ...current, status: "stopped" }));
+        const due = analysisGateRef.current.flush(Date.now());
+        setAnalysisView((current) => ({
+          status: "stopped",
+          update: due?.update ?? current.update,
+          elapsedNs: due?.elapsedNs ?? current.elapsedNs,
+        }));
       }
     }
 
@@ -856,11 +863,20 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
       };
     }
 
+    analysisGateRef.current.reset();
     setAnalysisView((current) => ({
       status: current.update === null ? "idle" : "invalidated",
       update: current.update,
       elapsedNs: null,
     }));
+
+    /*
+     * Live slices arrive every few tens of milliseconds. The display is gated
+     * to one update per second so the evaluation stays readable; the search
+     * and the summary store are unaffected, and non-live states bypass the
+     * gate so a cached or final result is never delayed.
+     */
+    const gate = analysisGateRef.current;
 
     async function publish(
       update: AnalysisUpdate,
@@ -874,11 +890,20 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         !updateMatchesRequest(update, request)
       )
         return;
-      setAnalysisView((current) => ({
-        status,
-        update,
-        elapsedNs: elapsedNs ?? current.elapsedNs,
-      }));
+      const apply = (view: AnalysisView) =>
+        setAnalysisView((current) => ({
+          status: view.status,
+          update: view.update,
+          elapsedNs: view.elapsedNs ?? current.elapsedNs,
+        }));
+      const next: AnalysisView = { status, update, elapsedNs };
+      if (status === "live") {
+        const due = gate.offer(next, Date.now());
+        if (due !== null) apply(due);
+      } else {
+        gate.reset();
+        apply(next);
+      }
       await analysisStore.put(request, update);
     }
 
