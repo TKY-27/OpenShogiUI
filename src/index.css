@@ -2057,19 +2057,6 @@ td {
     overflow-y: auto;
   }
 
-  .analysis-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(18rem, var(--panel-width));
-  }
-
-  .history-rail {
-    grid-column: 1 / -1;
-  }
-
-  .analysis-panel {
-    border-top: 0;
-    border-left: 1px solid var(--rule);
-  }
-
   .board-meta {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -2104,6 +2091,26 @@ td {
 
   .player-identity dl {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/*
+ * Wide tablet: the analysis panel moves beside the board. Splitting earlier
+ * squeezed the board to 167px at 768px wide, which defeats the point of the
+ * route.
+ */
+@media (min-width: 64rem) {
+  .analysis-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, var(--panel-width));
+  }
+
+  .history-rail {
+    grid-column: 1 / -1;
+  }
+
+  .analysis-panel {
+    border-top: 0;
+    border-left: 1px solid var(--rule);
   }
 }
 
