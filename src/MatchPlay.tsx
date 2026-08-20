@@ -30,6 +30,7 @@ import {
   type MoveHighlight,
 } from "./play-settings";
 import { resolveShortcut } from "./keyboard";
+import { downloadText, kifuFileName, toKif, toUsi } from "./kifu";
 import {
   destinationIndex,
   HandStand,
@@ -38,6 +39,13 @@ import {
   ShogiBoard,
   type BoardSelection,
 } from "./ShogiBoardView";
+
+/** One ply removed by a takeback, kept whole so redo can restore the record. */
+interface UndoneStep {
+  movement: string;
+  position: BrowserSnapshot;
+  timeMs: number;
+}
 
 type Phase = "setup" | "playing" | "finished";
 type Busy = "preparing" | "moving" | "engine" | null;
@@ -118,7 +126,10 @@ export function MatchPlay({ locale }: { locale: Locale }) {
   const [now, setNow] = useState(() => Date.now());
   const [outcome, setOutcome] = useState<MatchOutcome | null>(null);
   const [confirmingResign, setConfirmingResign] = useState(false);
-  const [undone, setUndone] = useState<string[]>([]);
+  const [undone, setUndone] = useState<UndoneStep[]>([]);
+  const [positions, setPositions] = useState<BrowserSnapshot[]>([]);
+  const [moveTimesMs, setMoveTimesMs] = useState<number[]>([]);
+  const [matchStartedAt, setMatchStartedAt] = useState<Date | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const clocked = presetIsClocked(preset);
@@ -240,6 +251,8 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     const replied = await adapter.playMove(response.bestMove);
     if (operationRef.current !== operation) return;
     setSnapshot(replied);
+    setPositions((current) => [...current, replied]);
+    setMoveTimesMs((current) => [...current, Date.now() - startedAt]);
     setClock(afterEngine);
     setTurnStartedAt(Date.now());
     setNow(Date.now());
@@ -278,6 +291,8 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       const next = await adapter.playMove(movement);
       if (operationRef.current !== operation) return;
       setSnapshot(next);
+      setPositions((current) => [...current, next]);
+      setMoveTimesMs((current) => [...current, movedAt - turnStartedAt]);
       setUndone([]);
       setClock(afterHuman);
       setTurnStartedAt(Date.now());
@@ -346,6 +361,9 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       if (operationRef.current !== operation) return;
       const startingClock = initialClockFor(preset);
       setSnapshot(fresh);
+      setPositions([fresh]);
+      setMoveTimesMs([]);
+      setMatchStartedAt(new Date());
       setUndone([]);
       setClock(startingClock);
       setOrientation(humanSide === "black" ? "sente-bottom" : "gote-bottom");
@@ -373,10 +391,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
    * Spent time is deliberately not returned. Rewinding a sudden-death clock
    * would make the flag-fall rule meaningless.
    */
-  async function rewind(
-    count: number,
-    nextUndone: (moves: string[]) => string[],
-  ) {
+  async function rewind(count: number) {
     const adapter = adapterRef.current;
     if (adapter === null || snapshot === null || busy !== null) return;
     if (snapshot.moves.length < count) return;
@@ -394,9 +409,18 @@ export function MatchPlay({ locale }: { locale: Locale }) {
         null,
       );
       if (operationRef.current !== operation) return;
+      const removed: UndoneStep[] = snapshot.moves
+        .slice(-count)
+        .map((movement, offset) => ({
+          movement,
+          position: positions[positions.length - count + offset],
+          timeMs: moveTimesMs[moveTimesMs.length - count + offset] ?? 0,
+        }));
       setSnapshot(restored);
       setPrevious(null);
-      setUndone(nextUndone(snapshot.moves));
+      setPositions((current) => current.slice(0, current.length - count));
+      setMoveTimesMs((current) => current.slice(0, current.length - count));
+      setUndone((current) => [...current, ...removed]);
       setOutcome(null);
       setPhase("playing");
       setTurnStartedAt(Date.now());
@@ -410,7 +434,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
   }
 
   function takeback() {
-    void rewind(2, (moves) => [...undone, ...moves.slice(-2)]);
+    void rewind(2);
   }
 
   async function redo() {
@@ -426,7 +450,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       const restored = await adapter.restart(
         {
           initialSfen: snapshot.initialSfen,
-          moves: [...snapshot.moves, ...replay],
+          moves: [...snapshot.moves, ...replay.map((step) => step.movement)],
         },
         null,
         null,
@@ -434,6 +458,10 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       if (operationRef.current !== operation) return;
       setSnapshot(restored);
       setPrevious(null);
+      // Restore the exact positions and times the takeback removed, so the
+      // exported record stays byte-identical to the game as it was played.
+      setPositions((current) => [...current, ...replay.map((s) => s.position)]);
+      setMoveTimesMs((current) => [...current, ...replay.map((s) => s.timeMs)]);
       setUndone(undone.slice(0, -2));
       setTurnStartedAt(Date.now());
       setNow(Date.now());
@@ -475,6 +503,24 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   });
+
+  function exportRecord(format: "kif" | "usi") {
+    if (positions.length === 0) return;
+    const record = {
+      snapshots: positions,
+      blackName: humanSide === "black" ? match.you : match.engine,
+      whiteName: humanSide === "white" ? match.you : match.engine,
+      timeControl: match.preset[preset],
+      moveTimesMs,
+      terminationLabel:
+        outcome === null ? undefined : match.reason[outcome.kind],
+      startedAt: matchStartedAt ?? undefined,
+    };
+    downloadText(
+      kifuFileName("shogi-match", format),
+      format === "kif" ? toKif(record) : toUsi(record),
+    );
+  }
 
   function resign() {
     setConfirmingResign(false);
@@ -702,6 +748,20 @@ export function MatchPlay({ locale }: { locale: Locale }) {
             type="button"
           >
             {match.takeback}
+          </button>
+          <button
+            disabled={(snapshot?.moves.length ?? 0) === 0}
+            onClick={() => exportRecord("kif")}
+            type="button"
+          >
+            {match.exportKif}
+          </button>
+          <button
+            disabled={(snapshot?.moves.length ?? 0) === 0}
+            onClick={() => exportRecord("usi")}
+            type="button"
+          >
+            {match.exportUsi}
           </button>
           {phase === "playing" ? (
             <button

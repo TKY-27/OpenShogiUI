@@ -30,6 +30,7 @@ import {
 import { type EngineReadyState, WasmEngineAdapter } from "./engine-adapter";
 import type { RestorableModel, RestorableOpeningBook } from "./engine-client";
 import { resolveShortcut } from "./keyboard";
+import { downloadText, kifuFileName, toKif, toUsi } from "./kifu";
 import { getMessages, type Locale } from "./localization";
 import {
   PIECE_ASSET_CATALOG,
@@ -1096,6 +1097,20 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   const lastMove = lastMoveHighlight(history, displayedIndex);
   const pv = analysisView.update?.lines[0]?.pv ?? [];
 
+  function exportRecord(format: "kif" | "usi") {
+    if (history.length === 0) return;
+    const record = {
+      snapshots: history,
+      blackName: labels.sente,
+      whiteName: labels.gote,
+      timeControl: labels[timeSettings.mode],
+    };
+    downloadText(
+      kifuFileName("shogi-analysis", format),
+      format === "kif" ? toKif(record) : toUsi(record),
+    );
+  }
+
   function selectHistory(index: number) {
     setDisplayedIndex(Math.max(0, Math.min(index, history.length - 1)));
     setSelection(null);
@@ -1410,6 +1425,20 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
             type="button"
           >
             {labels.newGame}
+          </button>
+          <button
+            disabled={history.length < 2}
+            onClick={() => exportRecord("kif")}
+            type="button"
+          >
+            {messages.match.exportKif}
+          </button>
+          <button
+            disabled={history.length < 2}
+            onClick={() => exportRecord("usi")}
+            type="button"
+          >
+            {messages.match.exportUsi}
           </button>
           {humanRole === "ai-vs-ai" ? (
             <button

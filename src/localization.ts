@@ -108,6 +108,8 @@ export interface Messages {
     result: Record<"win" | "loss", string>;
     reason: Record<"checkmate" | "timeout" | "resignation", string>;
     remainingTime: (clock: string) => string;
+    exportKif: string;
+    exportUsi: string;
   };
   workspace: {
     headline: string;
@@ -440,6 +442,8 @@ const messages: Record<Locale, Messages> = {
         resignation: "投了",
       },
       remainingTime: (clock) => `残り ${clock}`,
+      exportKif: "KIFを保存",
+      exportUsi: "USIを保存",
     },
     play: {
       title: "局面解析",
@@ -688,6 +692,8 @@ const messages: Record<Locale, Messages> = {
         resignation: "Resignation",
       },
       remainingTime: (clock) => `${clock} left`,
+      exportKif: "Save KIF",
+      exportUsi: "Save USI",
     },
     play: {
       title: "Position analysis",
