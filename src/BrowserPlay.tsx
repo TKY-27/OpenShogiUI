@@ -174,6 +174,9 @@ function text(locale: Locale) {
     stopAi: ja ? "AI対局を停止" : "Stop AI play",
     analysisUnavailable: ja ? "解析結果はまだありません" : "No analysis yet",
     workerReady: ja ? "準備完了" : "Ready",
+    applyingMove: ja ? "指し手を反映しています…" : "Applying move…",
+    loadingModel: ja ? "モデルを読み込んでいます…" : "Loading model…",
+    loadingBook: ja ? "定跡を読み込んでいます…" : "Loading opening book…",
     aiThinking: (side: Side) =>
       ja
         ? `${side === "black" ? "先手" : "後手"}AIが考えています…`
@@ -1425,14 +1428,24 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     }
   }
 
-  const status =
-    busy === "initializing"
-      ? messages.play.initialization
-      : busy === "engine"
-        ? labels.aiThinking(liveSnapshot?.sideToMove ?? "white")
-        : busy === "moving" || busy === "model" || busy === "book"
-          ? messages.play.searching
-          : labels.workerReady;
+  // Each busy state gets its own label. Reporting "Searching" while a model or
+  // opening book loads describes work the engine is not doing.
+  const status = (() => {
+    switch (busy) {
+      case "initializing":
+        return messages.play.initialization;
+      case "engine":
+        return labels.aiThinking(liveSnapshot?.sideToMove ?? "white");
+      case "moving":
+        return labels.applyingMove;
+      case "model":
+        return labels.loadingModel;
+      case "book":
+        return labels.loadingBook;
+      default:
+        return labels.workerReady;
+    }
+  })();
 
   return (
     <main className="analysis-workspace" aria-labelledby="browser-play-title">
@@ -1602,23 +1615,25 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
             }}
             ref={promotionDialogRef}
           >
-            <p id="promotion-choice-title">{messages.play.promoteQuestion}</p>
             <div>
-              {promotionMoves?.map((movement, index) => (
-                <button
-                  autoFocus={index === 0}
-                  key={movement.usi}
-                  onClick={() => void applyMove(movement.usi)}
-                  type="button"
-                >
-                  {movement.promote
-                    ? messages.play.promote
-                    : messages.play.doNotPromote}
+              <p id="promotion-choice-title">{messages.play.promoteQuestion}</p>
+              <div className="dialog-actions">
+                {promotionMoves?.map((movement, index) => (
+                  <button
+                    autoFocus={index === 0}
+                    key={movement.usi}
+                    onClick={() => void applyMove(movement.usi)}
+                    type="button"
+                  >
+                    {movement.promote
+                      ? messages.play.promote
+                      : messages.play.doNotPromote}
+                  </button>
+                ))}
+                <button onClick={() => setPromotionMoves(null)} type="button">
+                  {messages.play.cancel}
                 </button>
-              ))}
-              <button onClick={() => setPromotionMoves(null)} type="button">
-                {messages.play.cancel}
-              </button>
+              </div>
             </div>
           </dialog>
         </section>
