@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60">
+    <defs>
+        <filter id="1OU_svg__a" color-interpolation-filters="sRGB">
+            <feFlood flood-color="#000" flood-opacity=".498" result="flood"/>
+            <feComposite in="flood" in2="SourceGraphic" operator="in" result="composite1"/>
+            <feGaussianBlur in="composite1" result="blur" stdDeviation="1"/>
+            <feOffset dx="5" dy="3" result="offset"/>
+            <feComposite in="SourceGraphic" in2="offset" result="composite2"/>
+        </filter>
+    </defs>
+    <g fill-opacity=".992" filter="url(#1OU_svg__a)" opacity=".99" transform="matrix(.6 0 0 .6 6.557 -106.143)">
+        <path fill="#f9f9f9" d="m39.027 262.222 22.856-7.656L72.14 187.81H5.998l10.263 66.785z" opacity="1"/>
+        <path fill="#b2b2b2" d="M16.264 258.374v-3.78l22.764 7.626 22.856-7.654v3.78L39.028 266Z" opacity="1"/>
+    </g>
+    <path stroke="#000" stroke-linejoin="round" stroke-width=".514" d="M28.506 37.551v-8.699h-6.269l-1-2.666h7.27v-9.822H16.468l-1-3.086H44.53l-1 3.086h-11.9v9.822h7.458l-1 2.666H31.63v8.7h8.533l1 3.086H18.925l1-3.087z" opacity=".99"/>
+</svg>

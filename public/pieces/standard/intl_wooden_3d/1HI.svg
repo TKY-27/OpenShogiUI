@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 60 60">
+    <defs>
+        <linearGradient id="1HI_svg__a">
+            <stop offset="0" stop-color="#dfb459"/>
+            <stop offset=".041" stop-color="#dead54"/>
+            <stop offset=".082" stop-color="#e1b85f"/>
+            <stop offset=".165" stop-color="#dba84d"/>
+            <stop offset=".305" stop-color="#dfb765"/>
+            <stop offset=".539" stop-color="#d8a94e"/>
+            <stop offset=".586" stop-color="#d5ab53"/>
+            <stop offset=".84" stop-color="#e0bf6e"/>
+            <stop offset=".924" stop-color="#daae52"/>
+            <stop offset=".962" stop-color="#d9af57"/>
+            <stop offset="1" stop-color="#e1b663"/>
+        </linearGradient>
+        <linearGradient xlink:href="#1HI_svg__a" id="1HI_svg__c" x1="148.578" x2="130.323" y1="49.826" y2="49.826" gradientUnits="userSpaceOnUse" spreadMethod="repeat"/>
+        <linearGradient xlink:href="#1HI_svg__b" id="1HI_svg__e" x1="148.578" x2="130.323" y1="49.826" y2="49.826" gradientUnits="userSpaceOnUse" spreadMethod="repeat"/>
+        <linearGradient id="1HI_svg__b">
+            <stop offset="0" stop-color="#dfb459"/>
+            <stop offset=".042" stop-color="#dead54"/>
+            <stop offset=".093" stop-color="#e1b85f"/>
+            <stop offset=".165" stop-color="#dba84d"/>
+            <stop offset=".305" stop-color="#dfb765"/>
+            <stop offset=".539" stop-color="#d8a94e"/>
+            <stop offset=".586" stop-color="#d5ab53"/>
+            <stop offset=".84" stop-color="#e0bf6e"/>
+            <stop offset=".924" stop-color="#daae52"/>
+            <stop offset=".962" stop-color="#d9af57"/>
+            <stop offset="1" stop-color="#e1b663"/>
+        </linearGradient>
+        <filter id="1HI_svg__d" width="1.285" height="1.233" x="-.118" y="-.096">
+            <feGaussianBlur in="SourceAlpha" result="blur" stdDeviation="2"/>
+            <feOffset dx="2" dy="2" result="offsetBlur"/>
+            <feBlend in="SourceGraphic" in2="offsetBlur"/>
+        </filter>
+        <filter id="1HI_svg__f" width="1.057" height="1.048" x="-.028" y="-.024" color-interpolation-filters="sRGB">
+            <feColorMatrix in="SourceGraphic" result="color" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.85 0"/>
+            <feGaussianBlur in="SourceAlpha" result="blur" stdDeviation=".32"/>
+            <feSpecularLighting in="blur" lighting-color="#fff" result="specular" specularConstant="2.019" specularExponent="25" surfaceScale="5">
+                <feDistantLight azimuth="245" elevation="25"/>
+            </feSpecularLighting>
+            <feComposite in="specular" in2="SourceGraphic" k2="1" k3="1" operator="arithmetic" result="composite1"/>
+            <feComposite in="composite1" in2="color" operator="atop" result="composite2"/>
+        </filter>
+    </defs>
+    <g fill="url(#1HI_svg__c)" filter="url(#1HI_svg__d)" transform="translate(-96.557 -23.219)scale(.98185)">
+        <path fill="#876419" d="m148.702 29.817-.175 1.028.754-.046zm.58.982H109.09l6.41 44.002-.454-.121.578.98 13.14 3.935a.9.9 0 0 0 .27.022l13.41-4.26 6.836-44.558z"/>
+        <path fill="url(#1HI_svg__e)" d="m-37.3-31.01-13.408 4.26-6.837 44.558h40.19l-6.535-44.862-13.138-3.935a.9.9 0 0 0-.271-.021z" transform="rotate(180 45.578 23.813)"/>
+    </g>
+    <path fill="#ac812a" d="m29.567 53.989.303.943 13.431-4.162-.568-.964z"/>
+    <path fill="#020101" d="M16.307 41.456c9.097-.994 17.735-.994 26.858-.017.067.007.045-.09.033-.139-.502-2.022-.673-2.272-2.075-3.76l-22.77.007c-1.454 1.427-1.579 1.715-2.085 3.749-.012.057-.023.171.033.171zm24.847-4.954V19.196h-1.44c-.523 5.036-4.796 8.98-9.968 8.98s-9.443-3.944-9.966-8.98h-1.44v17.306zm-11.408-9.366a8.983 8.983 0 1 0 0-17.966 8.983 8.983 0 0 0 0 17.966M30.58 24v-3.833l2.708 2.71A5.85 5.85 0 0 1 30.58 24m-1.67 0a5.86 5.86 0 0 1-2.708-1.122l2.709-2.71zm5.557-2.303-2.71-2.71h3.832a5.9 5.9 0 0 1-1.122 2.71m-9.446 0a5.85 5.85 0 0 1-1.122-2.71h3.833zm16.033-3.515c.578-.003 1.14-.009 1.14-.009l.855-1.466v-1.656h-3.83c.459.801.683 2.086.609 3.122.055.013.651.011 1.225.009zm-22.616 0c.577.002 1.168.003 1.226-.009-.067-1.036.15-2.324.61-3.122h-3.832v1.656l.855 1.466s.567.006 1.14.009zm17.152-.855h-3.832l2.708-2.71c.599.79.984 1.726 1.124 2.71m-7.859 0H23.9a5.85 5.85 0 0 1 1.124-2.71zm2.85-1.181v-3.83a5.85 5.85 0 0 1 2.705 1.122zm-1.67 0-2.708-2.708a5.85 5.85 0 0 1 2.708-1.123z" filter="url(#1HI_svg__f)" opacity=".99"/>
+</svg>

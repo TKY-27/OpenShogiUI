@@ -1,0 +1,3069 @@
+{
+  "schema": "open-shogi-ui/third-party-piece-assets/v1",
+  "project": "OpenShogiUI",
+  "acquiredAt": "2026-08-21",
+  "source": {
+    "repository": "https://github.com/WandererXII/lishogi",
+    "commit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+    "commitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+    "commitDate": "2026-06-28T19:10:01+02:00",
+    "sourcePathRoot": "ui/@build/pieces/assets/standard",
+    "acquisitionMethod": "git archive from the pinned official repository commit"
+  },
+  "licenseEvidence": {
+    "path": "public/licenses/lishogi-COPYING.md",
+    "upstreamPath": "COPYING.md",
+    "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+    "sha256": "3034502d3f88f9110a4a8554e05eca5a823ed2dc1f5d956bf5024dea806d1c52",
+    "preservedByteForByte": true,
+    "evidence": "The upstream Exceptions (free) table explicitly identifies all retained sets as CC BY 4.0 and names their creators."
+  },
+  "inclusionPolicy": {
+    "standardShogiOnly": true,
+    "requiredLicense": "CC BY 4.0",
+    "copiedImageExtensions": ["png", "svg"],
+    "copiedPieceFilesPerSet": 30,
+    "prohibited": [
+      "AGPL-only or unspecified artwork",
+      "CC BY-SA",
+      "CC BY-NC",
+      "CC BY-NC-SA",
+      "all-rights-reserved",
+      "dobutsu",
+      "logos",
+      "sounds",
+      "upstream CSS",
+      "upstream TypeScript"
+    ]
+  },
+  "assets": [
+    {
+      "id": "1kanji_3d",
+      "name": "Kanji 3D",
+      "creators": ["Little-Mage", "CouchTomato87"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/1kanji_3d",
+      "localPath": "public/pieces/standard/1kanji_3d",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 2350,
+          "upstreamSha256": "049fe3017e7455eccddd1e91b2cd67c2607e08077c68bd10a63b01118ed43389",
+          "localSha256": "049fe3017e7455eccddd1e91b2cd67c2607e08077c68bd10a63b01118ed43389",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 3164,
+          "upstreamSha256": "ad6b670159af86afa447f0e1af9274ce8d980a97edcf81686465e209b54cc3b4",
+          "localSha256": "ad6b670159af86afa447f0e1af9274ce8d980a97edcf81686465e209b54cc3b4",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 2175,
+          "upstreamSha256": "08ccd303c995cd488d33ceb191f114d706bec80ef46bc9a0047036782f5a1e5e",
+          "localSha256": "08ccd303c995cd488d33ceb191f114d706bec80ef46bc9a0047036782f5a1e5e",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 3297,
+          "upstreamSha256": "0715594b2d698ba7e56783e87ff9e66df55d096419040b031fa9afd3ae6288c4",
+          "localSha256": "0715594b2d698ba7e56783e87ff9e66df55d096419040b031fa9afd3ae6288c4",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 2294,
+          "upstreamSha256": "dfa26f4fe687cbccd65fe19a043d8265af27289f491a83af3860d2a70e6c668e",
+          "localSha256": "dfa26f4fe687cbccd65fe19a043d8265af27289f491a83af3860d2a70e6c668e",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 2666,
+          "upstreamSha256": "8c5d8debe6f347b326eb925986e4e8ed64d0370b7f8c23967414f381cba00a4e",
+          "localSha256": "8c5d8debe6f347b326eb925986e4e8ed64d0370b7f8c23967414f381cba00a4e",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 2457,
+          "upstreamSha256": "a7d4c3ede311394d3e7c87c4d8457397f03ae00ae8a68d436b7fd43c5bb02682",
+          "localSha256": "a7d4c3ede311394d3e7c87c4d8457397f03ae00ae8a68d436b7fd43c5bb02682",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 2533,
+          "upstreamSha256": "a32c7698dc7c6997d4e41a97b2677019aae9845aecc91b945ec9fdda89e47841",
+          "localSha256": "a32c7698dc7c6997d4e41a97b2677019aae9845aecc91b945ec9fdda89e47841",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 10572,
+          "upstreamSha256": "2ba7a3bbcd707b739edb282a835f5333adfc3128d9fd3f496420f128128b028f",
+          "localSha256": "2ba7a3bbcd707b739edb282a835f5333adfc3128d9fd3f496420f128128b028f",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 9042,
+          "upstreamSha256": "466eeddec6d6c3ca99bb9da9fae9612d911cc6be01de0ddbe23c1cc84dfe721c",
+          "localSha256": "466eeddec6d6c3ca99bb9da9fae9612d911cc6be01de0ddbe23c1cc84dfe721c",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 9772,
+          "upstreamSha256": "5f1883f507fb6cacc72d87a84dbe521da8c61947bd939cf28ee6d5cc9698ff56",
+          "localSha256": "5f1883f507fb6cacc72d87a84dbe521da8c61947bd939cf28ee6d5cc9698ff56",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 1929,
+          "upstreamSha256": "f3b7098b20a8d2d72368f6e9ca88e1793bbffd777ba40db778006001869bd5ea",
+          "localSha256": "f3b7098b20a8d2d72368f6e9ca88e1793bbffd777ba40db778006001869bd5ea",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 3953,
+          "upstreamSha256": "f53afbcb46919bff999e5563b2b273f4e266b5ab9a30ae2e7f30ef5fa865ea4d",
+          "localSha256": "f53afbcb46919bff999e5563b2b273f4e266b5ab9a30ae2e7f30ef5fa865ea4d",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 4544,
+          "upstreamSha256": "345b6dc3c479808617816bac462d9416fca3cba60ca8f70eae0590fcbba1d1c3",
+          "localSha256": "345b6dc3c479808617816bac462d9416fca3cba60ca8f70eae0590fcbba1d1c3",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 2816,
+          "upstreamSha256": "18b473f5e451c37073e3fc785fb118e33cc53ffc747f1bc889d05cd42d422e8e",
+          "localSha256": "18b473f5e451c37073e3fc785fb118e33cc53ffc747f1bc889d05cd42d422e8e",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 2402,
+          "upstreamSha256": "522f679820131001aec84d8996b3949ba7a76564bbec40712986b38472192ced",
+          "localSha256": "522f679820131001aec84d8996b3949ba7a76564bbec40712986b38472192ced",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 3426,
+          "upstreamSha256": "5019a96bcf7fd8532b7a1efeb01d71ac3fa6cdfda65310ef21a11871ea4f43be",
+          "localSha256": "5019a96bcf7fd8532b7a1efeb01d71ac3fa6cdfda65310ef21a11871ea4f43be",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 2208,
+          "upstreamSha256": "9835e22f0b07b5d58b6bfd97ea28b1c7624410cd5668623585854e1c899654f7",
+          "localSha256": "9835e22f0b07b5d58b6bfd97ea28b1c7624410cd5668623585854e1c899654f7",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 3373,
+          "upstreamSha256": "834aabfc3e0275f0c51d7f42e0e39c6d8b0dc4bd001881c8db39f0eb5d810137",
+          "localSha256": "834aabfc3e0275f0c51d7f42e0e39c6d8b0dc4bd001881c8db39f0eb5d810137",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 2333,
+          "upstreamSha256": "2f3c3f7764d4671a3ee980bbc5e4cdc3f255eea59647a20498e227614e48f368",
+          "localSha256": "2f3c3f7764d4671a3ee980bbc5e4cdc3f255eea59647a20498e227614e48f368",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 2694,
+          "upstreamSha256": "29557deb29a616026a6cfc8d8c10718ef1974881ba4184963291594c85c86954",
+          "localSha256": "29557deb29a616026a6cfc8d8c10718ef1974881ba4184963291594c85c86954",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 2496,
+          "upstreamSha256": "f72038db79ef4c8a36ebbb59b3e54cc798ab435aaf233198fec0493631f03503",
+          "localSha256": "f72038db79ef4c8a36ebbb59b3e54cc798ab435aaf233198fec0493631f03503",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 2617,
+          "upstreamSha256": "4f6bf897ad2965198bcbdb673753fe28c3d1f252a71868313c3b3068bf4074f4",
+          "localSha256": "4f6bf897ad2965198bcbdb673753fe28c3d1f252a71868313c3b3068bf4074f4",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 10523,
+          "upstreamSha256": "aa4395a125d0e0febfd3c0e61e97180da8b7fef3cec8e5c6e002fbe351ef8586",
+          "localSha256": "aa4395a125d0e0febfd3c0e61e97180da8b7fef3cec8e5c6e002fbe351ef8586",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 9046,
+          "upstreamSha256": "6aaec254d9599c793e22912aa403eed82ef420c3906fb3b01adad619b0764b05",
+          "localSha256": "6aaec254d9599c793e22912aa403eed82ef420c3906fb3b01adad619b0764b05",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 9836,
+          "upstreamSha256": "f27ae2750102e4612749a7fb1f16c1f15f0589db94c5a970855c1f98aa645b38",
+          "localSha256": "f27ae2750102e4612749a7fb1f16c1f15f0589db94c5a970855c1f98aa645b38",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 1959,
+          "upstreamSha256": "18e6e913c8ae9288e36843b2daac57f21eba6f1946f60e2c3c9891c58f3bc9a9",
+          "localSha256": "18e6e913c8ae9288e36843b2daac57f21eba6f1946f60e2c3c9891c58f3bc9a9",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 4072,
+          "upstreamSha256": "9cc6d2ed6f95faefa64f1e73349d7729c45ca54d7d4d30ff1f66cce992fc1e6d",
+          "localSha256": "9cc6d2ed6f95faefa64f1e73349d7729c45ca54d7d4d30ff1f66cce992fc1e6d",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 4589,
+          "upstreamSha256": "3447f8f40c61dda4ff3e13add986d1858d7b2a4501da54564dfc2ac60990d51f",
+          "localSha256": "3447f8f40c61dda4ff3e13add986d1858d7b2a4501da54564dfc2ac60990d51f",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 2877,
+          "upstreamSha256": "c148cb0391af216acab35e879b2308085a4d11f1f3ac57f4c5cb8480d74f1331",
+          "localSha256": "c148cb0391af216acab35e879b2308085a4d11f1f3ac57f4c5cb8480d74f1331",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "intl_colored_3d",
+      "name": "International Colored 3D",
+      "creators": ["Little-Mage", "CouchTomato87"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/intl_colored_3d",
+      "localPath": "public/pieces/standard/intl_colored_3d",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 1552,
+          "upstreamSha256": "f335bd657469629a9c2e5a59f096ea85cf12e62183ef513157434d55f15ef25b",
+          "localSha256": "f335bd657469629a9c2e5a59f096ea85cf12e62183ef513157434d55f15ef25b",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 2805,
+          "upstreamSha256": "394b67e46a7e8fc54d244c987e1351d1a72e12bbab200ec7ff6e854609351f58",
+          "localSha256": "394b67e46a7e8fc54d244c987e1351d1a72e12bbab200ec7ff6e854609351f58",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 1074,
+          "upstreamSha256": "1e484961f3daf143fe9fc20d7a14686d8217c992d3c0882f37b80b0241ea3864",
+          "localSha256": "1e484961f3daf143fe9fc20d7a14686d8217c992d3c0882f37b80b0241ea3864",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 5598,
+          "upstreamSha256": "1bcb022c603a1397a77ca23f2d40671f5bdcf51b53b8f2d4e491b280aab8b87e",
+          "localSha256": "1bcb022c603a1397a77ca23f2d40671f5bdcf51b53b8f2d4e491b280aab8b87e",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 2411,
+          "upstreamSha256": "9379362f9b0f4ae96830c8cbcdc468dc96adda67f543c56cafe0ad249cdad97e",
+          "localSha256": "9379362f9b0f4ae96830c8cbcdc468dc96adda67f543c56cafe0ad249cdad97e",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 2188,
+          "upstreamSha256": "8abfaeb1858ccd2ab3aa40c87ffacb2b4d86bb113909c057f0a9f9a5c3f26853",
+          "localSha256": "8abfaeb1858ccd2ab3aa40c87ffacb2b4d86bb113909c057f0a9f9a5c3f26853",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 4059,
+          "upstreamSha256": "ea7088997f0c73d52ae841b7f957552dbf9c415d0ef7212dc616d58fcd63360b",
+          "localSha256": "ea7088997f0c73d52ae841b7f957552dbf9c415d0ef7212dc616d58fcd63360b",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 2208,
+          "upstreamSha256": "528e8c9c02a194820bf93fc8144b85ac21ca23c9e6f9c99d9c8ee7d5c669e0a4",
+          "localSha256": "528e8c9c02a194820bf93fc8144b85ac21ca23c9e6f9c99d9c8ee7d5c669e0a4",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 4927,
+          "upstreamSha256": "b9fb8ec510dedc061dd540069743edbab52b7083bc57b9b098594be0de4eb4d7",
+          "localSha256": "b9fb8ec510dedc061dd540069743edbab52b7083bc57b9b098594be0de4eb4d7",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 5298,
+          "upstreamSha256": "c034ce202b2dddae1bf423ace35d790880b21ed9dadc34ce68594426177a1bef",
+          "localSha256": "c034ce202b2dddae1bf423ace35d790880b21ed9dadc34ce68594426177a1bef",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 2344,
+          "upstreamSha256": "140371e69298ba6efcc4919ff1ced91e99deffbf007836cad45c3827af29c0bb",
+          "localSha256": "140371e69298ba6efcc4919ff1ced91e99deffbf007836cad45c3827af29c0bb",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 1092,
+          "upstreamSha256": "e3c02ead990e27d28119a6fc5fa5c660d80185f22ab897b574bbc88152919e36",
+          "localSha256": "e3c02ead990e27d28119a6fc5fa5c660d80185f22ab897b574bbc88152919e36",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 6519,
+          "upstreamSha256": "1709a2c16ab4177a524ba1b12f8e8eb303b9ea0cab43af033448f5cbda90dcbe",
+          "localSha256": "1709a2c16ab4177a524ba1b12f8e8eb303b9ea0cab43af033448f5cbda90dcbe",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 3573,
+          "upstreamSha256": "4c71be4202c91e6662d63163bb374bb32e1bf18e5736729aa7df3511630c4f02",
+          "localSha256": "4c71be4202c91e6662d63163bb374bb32e1bf18e5736729aa7df3511630c4f02",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 5897,
+          "upstreamSha256": "37482744adf5c83686495d41ae0956b6dda668fc61fdfc7acefb395b4fe017f3",
+          "localSha256": "37482744adf5c83686495d41ae0956b6dda668fc61fdfc7acefb395b4fe017f3",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 1595,
+          "upstreamSha256": "ae52855cf85220cb07556ef15cf644711a035727121a6bc0e18581209150477b",
+          "localSha256": "ae52855cf85220cb07556ef15cf644711a035727121a6bc0e18581209150477b",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 3048,
+          "upstreamSha256": "c045fcedcdb0a3a8c31c268873f5155c8c03759e3c50af16f9c603bc6354950a",
+          "localSha256": "c045fcedcdb0a3a8c31c268873f5155c8c03759e3c50af16f9c603bc6354950a",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 1186,
+          "upstreamSha256": "899f4f41989b2d7ad0f8173bbb752c363a391cf8291d1adf79e7cb0dcb79ecc1",
+          "localSha256": "899f4f41989b2d7ad0f8173bbb752c363a391cf8291d1adf79e7cb0dcb79ecc1",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 5659,
+          "upstreamSha256": "2b115ce00275012dc84be318a13d4c6370c0cddc6a3e59dd3befc1f7953bd04a",
+          "localSha256": "2b115ce00275012dc84be318a13d4c6370c0cddc6a3e59dd3befc1f7953bd04a",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 2449,
+          "upstreamSha256": "6babab8575761b63511124f27dfac281b4aaead627eadf7ab2a61a81fd60e812",
+          "localSha256": "6babab8575761b63511124f27dfac281b4aaead627eadf7ab2a61a81fd60e812",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 2214,
+          "upstreamSha256": "9cc08ffb614410e30a77c9b0f402dba1c35a0e9b6d5adb11e521b834614c51f8",
+          "localSha256": "9cc08ffb614410e30a77c9b0f402dba1c35a0e9b6d5adb11e521b834614c51f8",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 4142,
+          "upstreamSha256": "919b90c884615397837d860ba74aec3fa35749c96cb0eaf543179595ae13ba67",
+          "localSha256": "919b90c884615397837d860ba74aec3fa35749c96cb0eaf543179595ae13ba67",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 2278,
+          "upstreamSha256": "302ec79af53231bb84fbaf65b5271f86bf0d8f093bfbe8f2f994b19bffe4d52e",
+          "localSha256": "302ec79af53231bb84fbaf65b5271f86bf0d8f093bfbe8f2f994b19bffe4d52e",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 4994,
+          "upstreamSha256": "afd8c2fc92eacf6a55ccd1e7e1c674c2b9b6b49a9e556bb19c932030061b991b",
+          "localSha256": "afd8c2fc92eacf6a55ccd1e7e1c674c2b9b6b49a9e556bb19c932030061b991b",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 5973,
+          "upstreamSha256": "2c862a297931ce2095143ea5f50da0202818814767087b50cb9f3c6bf62b9f4c",
+          "localSha256": "2c862a297931ce2095143ea5f50da0202818814767087b50cb9f3c6bf62b9f4c",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 2390,
+          "upstreamSha256": "7af1636af38603dea268f68c380a5d7c8c4adce61231d4c2513f7c35a6084838",
+          "localSha256": "7af1636af38603dea268f68c380a5d7c8c4adce61231d4c2513f7c35a6084838",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 1137,
+          "upstreamSha256": "7884ef657e91fdb4cb120f11e59dc2bc6751f11fbb621a0d95511c294d299f22",
+          "localSha256": "7884ef657e91fdb4cb120f11e59dc2bc6751f11fbb621a0d95511c294d299f22",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 6570,
+          "upstreamSha256": "bbaaae9dcaf1a771ceca3e847f6756daf135da1fec2b46d7a6713d4bda571ffc",
+          "localSha256": "bbaaae9dcaf1a771ceca3e847f6756daf135da1fec2b46d7a6713d4bda571ffc",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 3557,
+          "upstreamSha256": "46ced7a92dee0734f5088b4492134cb3304426131e918e0d68fcfa8760af81bc",
+          "localSha256": "46ced7a92dee0734f5088b4492134cb3304426131e918e0d68fcfa8760af81bc",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 5908,
+          "upstreamSha256": "f84b536459522d1e8bce9f52def6d7ae3ff93b3a645feced5004fbc259b6c59d",
+          "localSha256": "f84b536459522d1e8bce9f52def6d7ae3ff93b3a645feced5004fbc259b6c59d",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "intl_colored_2d",
+      "name": "International Colored 2D",
+      "creators": ["CouchTomato87"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/intl_colored_2d",
+      "localPath": "public/pieces/standard/intl_colored_2d",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 926,
+          "upstreamSha256": "d8f1877136bedd887294abbe8d29ac2802c7fdace70b9ab03c618bdb9b19d814",
+          "localSha256": "d8f1877136bedd887294abbe8d29ac2802c7fdace70b9ab03c618bdb9b19d814",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 2217,
+          "upstreamSha256": "c3ce09b4d222f514bddd3340f4a723b889e82c7bb41c01afbd8ee6d6b98f684a",
+          "localSha256": "c3ce09b4d222f514bddd3340f4a723b889e82c7bb41c01afbd8ee6d6b98f684a",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 508,
+          "upstreamSha256": "fc84386609d2f35289cbc3b3f11e4a8e0d165f3d9b651e4bbe49e636b46f3b13",
+          "localSha256": "fc84386609d2f35289cbc3b3f11e4a8e0d165f3d9b651e4bbe49e636b46f3b13",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 5101,
+          "upstreamSha256": "0fdb3d15b351250c8d36e2d3de6cde7e2e516c81823790ef38bc4c2f5399e25f",
+          "localSha256": "0fdb3d15b351250c8d36e2d3de6cde7e2e516c81823790ef38bc4c2f5399e25f",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 1859,
+          "upstreamSha256": "a868777f5cd5ccfd990530917828a877f0dcb6db3bb49ec690ce4ee2093fdbf9",
+          "localSha256": "a868777f5cd5ccfd990530917828a877f0dcb6db3bb49ec690ce4ee2093fdbf9",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 1600,
+          "upstreamSha256": "bee22c5e1ca47fcaa97906823a40dafb77ccee8d61f2bd833590468450ff3743",
+          "localSha256": "bee22c5e1ca47fcaa97906823a40dafb77ccee8d61f2bd833590468450ff3743",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 3474,
+          "upstreamSha256": "e4db1391d1383ca3cde92879780a9e10af97d99e8e2c8747b038cc990eeff8df",
+          "localSha256": "e4db1391d1383ca3cde92879780a9e10af97d99e8e2c8747b038cc990eeff8df",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 1592,
+          "upstreamSha256": "30d15a0dab70c87d42b97f7c1f93f105b73fac315dc808a623a2e09a86f68368",
+          "localSha256": "30d15a0dab70c87d42b97f7c1f93f105b73fac315dc808a623a2e09a86f68368",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 2768,
+          "upstreamSha256": "f3104b56f56e5b713862d3c6bc2d75c715f72eb2be1594c4142ffc8f89ddff55",
+          "localSha256": "f3104b56f56e5b713862d3c6bc2d75c715f72eb2be1594c4142ffc8f89ddff55",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 2467,
+          "upstreamSha256": "72156a5253d34d683d89d0b86b1359d019fce8d24654f1154efd629b8db17c2a",
+          "localSha256": "72156a5253d34d683d89d0b86b1359d019fce8d24654f1154efd629b8db17c2a",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 4172,
+          "upstreamSha256": "22f9abf552602a3db4ccb0831c02a0a0a8f9bb443634914f6b3e94dcdd1c3283",
+          "localSha256": "22f9abf552602a3db4ccb0831c02a0a0a8f9bb443634914f6b3e94dcdd1c3283",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 490,
+          "upstreamSha256": "6893af74b3ea6b28e8fd1d4a9be7a25aafdc1b7511a33d7b82929b5c5b2548bb",
+          "localSha256": "6893af74b3ea6b28e8fd1d4a9be7a25aafdc1b7511a33d7b82929b5c5b2548bb",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 6145,
+          "upstreamSha256": "59bac15fe3334154b7911033444b6ab35d252cb663c6c75a58e0226b05f7a6d3",
+          "localSha256": "59bac15fe3334154b7911033444b6ab35d252cb663c6c75a58e0226b05f7a6d3",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 1781,
+          "upstreamSha256": "c10dcca252149df11b20a90e19c7712dc17af06e1c0eaa04f8b35a67eeb29e66",
+          "localSha256": "c10dcca252149df11b20a90e19c7712dc17af06e1c0eaa04f8b35a67eeb29e66",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 2840,
+          "upstreamSha256": "e0c04782811f92e8680f7c520d69c55aefe470dfa51ea644d6b1bc9d81900726",
+          "localSha256": "e0c04782811f92e8680f7c520d69c55aefe470dfa51ea644d6b1bc9d81900726",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 933,
+          "upstreamSha256": "263f68fecf615ac3975dd28b23cc767b4a6111d7ec7bc6e08e073bc0d601fbf5",
+          "localSha256": "263f68fecf615ac3975dd28b23cc767b4a6111d7ec7bc6e08e073bc0d601fbf5",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 2230,
+          "upstreamSha256": "2bfea4619ca607814a436202431eb66b12020650506da854adc47f439f214490",
+          "localSha256": "2bfea4619ca607814a436202431eb66b12020650506da854adc47f439f214490",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 515,
+          "upstreamSha256": "8e8382c6b4497cff196c0389c701109485b9b4908bf911c672deb2e0be562b8a",
+          "localSha256": "8e8382c6b4497cff196c0389c701109485b9b4908bf911c672deb2e0be562b8a",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 5127,
+          "upstreamSha256": "951173c55033dac8a00ef8cd76719523c684634c7f39e006e22f3e090045f6a8",
+          "localSha256": "951173c55033dac8a00ef8cd76719523c684634c7f39e006e22f3e090045f6a8",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 1845,
+          "upstreamSha256": "1023db153c652a84da8ca6115d806d480553cc7ab4717f63999b623557f32097",
+          "localSha256": "1023db153c652a84da8ca6115d806d480553cc7ab4717f63999b623557f32097",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 1601,
+          "upstreamSha256": "3abd5e35f3cc39fd0707d24fb9a6086667085ad43d245797262ab2896c829bd6",
+          "localSha256": "3abd5e35f3cc39fd0707d24fb9a6086667085ad43d245797262ab2896c829bd6",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 3501,
+          "upstreamSha256": "db56865fb7ed11229709f020b12643ec0d335f4dc9057d5216c4fbc304a3e090",
+          "localSha256": "db56865fb7ed11229709f020b12643ec0d335f4dc9057d5216c4fbc304a3e090",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 1596,
+          "upstreamSha256": "181fbe63f737ff79bb467d9b51ec9aaf5d4e702038e46247e446075eab2d202b",
+          "localSha256": "181fbe63f737ff79bb467d9b51ec9aaf5d4e702038e46247e446075eab2d202b",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 2771,
+          "upstreamSha256": "b6d050ada555b3d2b3a60ef2998307f159f9dc421e27cd7d1d739f5bbcbb7947",
+          "localSha256": "b6d050ada555b3d2b3a60ef2998307f159f9dc421e27cd7d1d739f5bbcbb7947",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 2469,
+          "upstreamSha256": "0cd0570ebdb7b50a2e2a3ce399e71316a2020338205b87aec6f6ec2d85f61802",
+          "localSha256": "0cd0570ebdb7b50a2e2a3ce399e71316a2020338205b87aec6f6ec2d85f61802",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 4157,
+          "upstreamSha256": "5c59998ecfb1811ab1ebd21c21e91c4ec376a8948a93c62e0107f7258a555cf8",
+          "localSha256": "5c59998ecfb1811ab1ebd21c21e91c4ec376a8948a93c62e0107f7258a555cf8",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 493,
+          "upstreamSha256": "92071aed20deed2a9a5cdbff6aab9726ee09f59cb2ee0fe4fb34ba5028124e5a",
+          "localSha256": "92071aed20deed2a9a5cdbff6aab9726ee09f59cb2ee0fe4fb34ba5028124e5a",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 6722,
+          "upstreamSha256": "a5e572ce7e167583301c9dcb536f9a1617a966befbfb1137a3f7731c6e0fb03e",
+          "localSha256": "a5e572ce7e167583301c9dcb536f9a1617a966befbfb1137a3f7731c6e0fb03e",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 1788,
+          "upstreamSha256": "694eab1640bc19707efc881fd7358d9b6afa3bd33b3ed5573a39223216f75ce8",
+          "localSha256": "694eab1640bc19707efc881fd7358d9b6afa3bd33b3ed5573a39223216f75ce8",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 2836,
+          "upstreamSha256": "3c3373b206c15a1f31aa9cefd17ada2886fa390cd7a158ceb3b8cd5ae7981dfe",
+          "localSha256": "3c3373b206c15a1f31aa9cefd17ada2886fa390cd7a158ceb3b8cd5ae7981dfe",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "intl_monochrome_2d",
+      "name": "International Monochrome 2D",
+      "creators": ["CouchTomato87"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/intl_monochrome_2d",
+      "localPath": "public/pieces/standard/intl_monochrome_2d",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 926,
+          "upstreamSha256": "d8f1877136bedd887294abbe8d29ac2802c7fdace70b9ab03c618bdb9b19d814",
+          "localSha256": "d8f1877136bedd887294abbe8d29ac2802c7fdace70b9ab03c618bdb9b19d814",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 2015,
+          "upstreamSha256": "5ab84e48e0bdaee5e3f5940f764f703280b7d74137cf98bb75b0c25d945fb7e0",
+          "localSha256": "5ab84e48e0bdaee5e3f5940f764f703280b7d74137cf98bb75b0c25d945fb7e0",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 490,
+          "upstreamSha256": "04256761a021ec8b0b2e7d51994cb0d04aeb427711a3f9183badeea4f7c5b6e2",
+          "localSha256": "04256761a021ec8b0b2e7d51994cb0d04aeb427711a3f9183badeea4f7c5b6e2",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 5101,
+          "upstreamSha256": "fbe5b133efcb9eb3f87ec5cbff27fcbe6c5158b3e79eba052f219e9a2799ad5e",
+          "localSha256": "fbe5b133efcb9eb3f87ec5cbff27fcbe6c5158b3e79eba052f219e9a2799ad5e",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 1859,
+          "upstreamSha256": "818ce133796963472f5ab22d89554b84ae4dc64bf59d2e706f21d87761f92ee8",
+          "localSha256": "818ce133796963472f5ab22d89554b84ae4dc64bf59d2e706f21d87761f92ee8",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 1600,
+          "upstreamSha256": "bee22c5e1ca47fcaa97906823a40dafb77ccee8d61f2bd833590468450ff3743",
+          "localSha256": "bee22c5e1ca47fcaa97906823a40dafb77ccee8d61f2bd833590468450ff3743",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 3499,
+          "upstreamSha256": "e28b76f0081991489474cf7e0b150064de8b1a2ee28cc45d47b4945ceeabb04e",
+          "localSha256": "e28b76f0081991489474cf7e0b150064de8b1a2ee28cc45d47b4945ceeabb04e",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 1592,
+          "upstreamSha256": "30d15a0dab70c87d42b97f7c1f93f105b73fac315dc808a623a2e09a86f68368",
+          "localSha256": "30d15a0dab70c87d42b97f7c1f93f105b73fac315dc808a623a2e09a86f68368",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 2874,
+          "upstreamSha256": "d631a384ab686290334c4b8d28ee654a40bfb5a8e77b03582d0d893401908543",
+          "localSha256": "d631a384ab686290334c4b8d28ee654a40bfb5a8e77b03582d0d893401908543",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 2470,
+          "upstreamSha256": "939a316812cbd76d707576207952082091201cf0535d0ed93b0fbcc5aeb429b2",
+          "localSha256": "939a316812cbd76d707576207952082091201cf0535d0ed93b0fbcc5aeb429b2",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 4292,
+          "upstreamSha256": "1f9bc2a92b51f4e870b3896c1c4f717e173c0c1f221ef2df26398d5599f3e315",
+          "localSha256": "1f9bc2a92b51f4e870b3896c1c4f717e173c0c1f221ef2df26398d5599f3e315",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 1084,
+          "upstreamSha256": "278c3f28b689acb00fe5e683b7d2283a59f2e19e06f36b7e906c39028885feda",
+          "localSha256": "278c3f28b689acb00fe5e683b7d2283a59f2e19e06f36b7e906c39028885feda",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 6101,
+          "upstreamSha256": "bd0baa950814b40334ba961987b37b3df9dda0a060ac075ac6a7f073f232e6fd",
+          "localSha256": "bd0baa950814b40334ba961987b37b3df9dda0a060ac075ac6a7f073f232e6fd",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 1801,
+          "upstreamSha256": "794787ab41ce269ebf457f11c8654828b811886ab1e09eecd1862f6c1a6449d1",
+          "localSha256": "794787ab41ce269ebf457f11c8654828b811886ab1e09eecd1862f6c1a6449d1",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 2840,
+          "upstreamSha256": "fcf6e9c3af8f71a4bfa4cd7f2535db9d8bff77d44a82932d3c018f389e425139",
+          "localSha256": "fcf6e9c3af8f71a4bfa4cd7f2535db9d8bff77d44a82932d3c018f389e425139",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 933,
+          "upstreamSha256": "263f68fecf615ac3975dd28b23cc767b4a6111d7ec7bc6e08e073bc0d601fbf5",
+          "localSha256": "263f68fecf615ac3975dd28b23cc767b4a6111d7ec7bc6e08e073bc0d601fbf5",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 1967,
+          "upstreamSha256": "91fbb1be97aba86a9f980fa46f9450bc7d0349a1b13be6f6c06b2f7bba6c779a",
+          "localSha256": "91fbb1be97aba86a9f980fa46f9450bc7d0349a1b13be6f6c06b2f7bba6c779a",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 491,
+          "upstreamSha256": "310311ad82692d8d62204b16c489581e14ed2c81dd240126cb3124cf3e2af040",
+          "localSha256": "310311ad82692d8d62204b16c489581e14ed2c81dd240126cb3124cf3e2af040",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 4842,
+          "upstreamSha256": "115c4a06a3f11d2ace0e0ab28b91466822ed2c2182bb946f89bea9d65cb6bcfa",
+          "localSha256": "115c4a06a3f11d2ace0e0ab28b91466822ed2c2182bb946f89bea9d65cb6bcfa",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 1781,
+          "upstreamSha256": "3ebf6a42da9383541fa159d95404094834e4d9105c904444be63886e76675072",
+          "localSha256": "3ebf6a42da9383541fa159d95404094834e4d9105c904444be63886e76675072",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 1601,
+          "upstreamSha256": "6f0bb417f62772bb4251f509bbfceb31e415d5de746856c6f7ecf68feaa439f2",
+          "localSha256": "6f0bb417f62772bb4251f509bbfceb31e415d5de746856c6f7ecf68feaa439f2",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 3353,
+          "upstreamSha256": "15839cee4cebaa10150363e0c0caf50a52d2db8bd739ee1fdaad0bcaca6f6a8f",
+          "localSha256": "15839cee4cebaa10150363e0c0caf50a52d2db8bd739ee1fdaad0bcaca6f6a8f",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 1596,
+          "upstreamSha256": "181fbe63f737ff79bb467d9b51ec9aaf5d4e702038e46247e446075eab2d202b",
+          "localSha256": "181fbe63f737ff79bb467d9b51ec9aaf5d4e702038e46247e446075eab2d202b",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 2751,
+          "upstreamSha256": "c48b5e15dd2662708beded352f16d79c6c2028c857506e0335143332505d33a9",
+          "localSha256": "c48b5e15dd2662708beded352f16d79c6c2028c857506e0335143332505d33a9",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 2405,
+          "upstreamSha256": "ca0743bf4f591f99b30e79308344f53bd33ed076d937556bb5eed6057756c9ab",
+          "localSha256": "ca0743bf4f591f99b30e79308344f53bd33ed076d937556bb5eed6057756c9ab",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 4157,
+          "upstreamSha256": "629d8b8face681b53097ac97cab0d07678769e2f52a42b08100eccf8e4cbaa16",
+          "localSha256": "629d8b8face681b53097ac97cab0d07678769e2f52a42b08100eccf8e4cbaa16",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 1063,
+          "upstreamSha256": "b5b47465a9e90186c0e4f5688f0284b78712910162ffcead0bc8c4312c51aa06",
+          "localSha256": "b5b47465a9e90186c0e4f5688f0284b78712910162ffcead0bc8c4312c51aa06",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 6116,
+          "upstreamSha256": "6ff9b3a1e553f169c928834891c9f96ecacd62b1a9d838d71e08da47a3562503",
+          "localSha256": "6ff9b3a1e553f169c928834891c9f96ecacd62b1a9d838d71e08da47a3562503",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 1788,
+          "upstreamSha256": "c3fec635ca13c2fe43acf6a60a3945b033bd1a5a8b52fc3f96b7331856f938be",
+          "localSha256": "c3fec635ca13c2fe43acf6a60a3945b033bd1a5a8b52fc3f96b7331856f938be",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 2688,
+          "upstreamSha256": "b4ef6f3c6c1be6bce02497039c7fcba62b0ca738a85de38682bcc80ce7cab3e3",
+          "localSha256": "b4ef6f3c6c1be6bce02497039c7fcba62b0ca738a85de38682bcc80ce7cab3e3",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "intl_shadowed",
+      "name": "International Shadowed",
+      "creators": ["CouchTomato87"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/intl_shadowed",
+      "localPath": "public/pieces/standard/intl_shadowed",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 1344,
+          "upstreamSha256": "1435c276a09b3a2adc84b7ff211e544a7f6b51a20c10c85b623d3cd62e951693",
+          "localSha256": "1435c276a09b3a2adc84b7ff211e544a7f6b51a20c10c85b623d3cd62e951693",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 2407,
+          "upstreamSha256": "65c97db8c016087a2f876e784c90713d01d00b39ef6204e86eb7d2b6fb91fc55",
+          "localSha256": "65c97db8c016087a2f876e784c90713d01d00b39ef6204e86eb7d2b6fb91fc55",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 845,
+          "upstreamSha256": "2c637fdee5d4de203d914f8b5d5d13878457a43076de78bcfb47e519b0540768",
+          "localSha256": "2c637fdee5d4de203d914f8b5d5d13878457a43076de78bcfb47e519b0540768",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 1678,
+          "upstreamSha256": "a84a3710083d06d743fa2cb59ff08342c8212a8df12fb8a229a88eb2d00acd93",
+          "localSha256": "a84a3710083d06d743fa2cb59ff08342c8212a8df12fb8a229a88eb2d00acd93",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 3217,
+          "upstreamSha256": "e6587a68429c635394c8be68bfdc6284b5d268f2b90172e9f94c77e5f84b2660",
+          "localSha256": "e6587a68429c635394c8be68bfdc6284b5d268f2b90172e9f94c77e5f84b2660",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 3533,
+          "upstreamSha256": "3c321bc135244b5dc69d84b868d89d81a74d0f7f21af3a2e285e5d3b8643e5e0",
+          "localSha256": "3c321bc135244b5dc69d84b868d89d81a74d0f7f21af3a2e285e5d3b8643e5e0",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 3502,
+          "upstreamSha256": "3087ec64548edf31e72bc38f5ece19c527dec1aa73f715b5c455af3533b8b44d",
+          "localSha256": "3087ec64548edf31e72bc38f5ece19c527dec1aa73f715b5c455af3533b8b44d",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 1347,
+          "upstreamSha256": "a9fe7a47405b1ce46b801e887f34d88c137ebc6e261feede709aa7745e83b961",
+          "localSha256": "a9fe7a47405b1ce46b801e887f34d88c137ebc6e261feede709aa7745e83b961",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 3622,
+          "upstreamSha256": "4554c4be627beeb1db5e97b03d1dfca2a5534cb6e99863dd5f9af88462d40506",
+          "localSha256": "4554c4be627beeb1db5e97b03d1dfca2a5534cb6e99863dd5f9af88462d40506",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 4994,
+          "upstreamSha256": "14e804b22cc001936149a6c4fc13f575f79e0b912b23fe9c8b8a8e72a217c61d",
+          "localSha256": "14e804b22cc001936149a6c4fc13f575f79e0b912b23fe9c8b8a8e72a217c61d",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 2032,
+          "upstreamSha256": "3fc7934b60d9797a7ecc88d2bd3f57dc3be9c5c119122aada8da1ab77bcd5301",
+          "localSha256": "3fc7934b60d9797a7ecc88d2bd3f57dc3be9c5c119122aada8da1ab77bcd5301",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 1458,
+          "upstreamSha256": "98fc24383c3e0ecdc8833b23ff76ede88e9f48cfb69761cc38c95778a8b8024b",
+          "localSha256": "98fc24383c3e0ecdc8833b23ff76ede88e9f48cfb69761cc38c95778a8b8024b",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 6259,
+          "upstreamSha256": "1fa914721fb6d77597445847d61a11d6bd53dcfff723079c8128f694dc88b532",
+          "localSha256": "1fa914721fb6d77597445847d61a11d6bd53dcfff723079c8128f694dc88b532",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 3270,
+          "upstreamSha256": "8a9bff1e26b80b24b719faaf9997974a612deccaa86fa538ed8dbed48218945b",
+          "localSha256": "8a9bff1e26b80b24b719faaf9997974a612deccaa86fa538ed8dbed48218945b",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 9684,
+          "upstreamSha256": "61ce7759d1590d3e9528260046906b6dc25329a6bc1625064ec8ee7b305c8960",
+          "localSha256": "61ce7759d1590d3e9528260046906b6dc25329a6bc1625064ec8ee7b305c8960",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 1298,
+          "upstreamSha256": "41857dbbb878569189ee948653187eb92dabf3f2b297e2225e72b83cecfcc603",
+          "localSha256": "41857dbbb878569189ee948653187eb92dabf3f2b297e2225e72b83cecfcc603",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 2339,
+          "upstreamSha256": "de4cc0eef2d6cca8c55e2367228db4d10afbf2a0400b1fde6f3d09f9e75d1749",
+          "localSha256": "de4cc0eef2d6cca8c55e2367228db4d10afbf2a0400b1fde6f3d09f9e75d1749",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 971,
+          "upstreamSha256": "ef1e939c620fa7a309711b5b44096c591f3ba72e97fffe0bed2a8b8ecec4eff9",
+          "localSha256": "ef1e939c620fa7a309711b5b44096c591f3ba72e97fffe0bed2a8b8ecec4eff9",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 1654,
+          "upstreamSha256": "37ed9fdd52fc337541c480cb5ff628c9e113ce9899b9e177b90f50a03424b8ca",
+          "localSha256": "37ed9fdd52fc337541c480cb5ff628c9e113ce9899b9e177b90f50a03424b8ca",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 3232,
+          "upstreamSha256": "0f368afd16c90e585cb7ec714fcc637a2a0421c0b3b6dbc9b452cd3a73b37c99",
+          "localSha256": "0f368afd16c90e585cb7ec714fcc637a2a0421c0b3b6dbc9b452cd3a73b37c99",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 3515,
+          "upstreamSha256": "b4d1203dd8c70a0665f655a0c0d4c1b51d29068731fea70e6dc68c613ecc1d82",
+          "localSha256": "b4d1203dd8c70a0665f655a0c0d4c1b51d29068731fea70e6dc68c613ecc1d82",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 3560,
+          "upstreamSha256": "baef76d93cbe91006eff7290e73c2834b55b90899a0cc34d75e6060a3d2bea13",
+          "localSha256": "baef76d93cbe91006eff7290e73c2834b55b90899a0cc34d75e6060a3d2bea13",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 1412,
+          "upstreamSha256": "3027221e0b87dca2b9c2deced85242d8cac494e530c2ef593860f34d7840ea1d",
+          "localSha256": "3027221e0b87dca2b9c2deced85242d8cac494e530c2ef593860f34d7840ea1d",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 3627,
+          "upstreamSha256": "357eb4a5425eda5ccf18838c944ed932ca7611a55893a1cc6d4def9bbcdf0104",
+          "localSha256": "357eb4a5425eda5ccf18838c944ed932ca7611a55893a1cc6d4def9bbcdf0104",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 5027,
+          "upstreamSha256": "35ff2faf13254a6f3c059934ef97adb55f4522353deada3e75b2681bd8d4030b",
+          "localSha256": "35ff2faf13254a6f3c059934ef97adb55f4522353deada3e75b2681bd8d4030b",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 2064,
+          "upstreamSha256": "78a953af1510890817cbc34659a137c3443a8f897147c868c267ebb3ed7a0ef9",
+          "localSha256": "78a953af1510890817cbc34659a137c3443a8f897147c868c267ebb3ed7a0ef9",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 1561,
+          "upstreamSha256": "e913cda4f47c340c3c4aaa5b94aeef5ac53df4736291575bb06a629b76f075f1",
+          "localSha256": "e913cda4f47c340c3c4aaa5b94aeef5ac53df4736291575bb06a629b76f075f1",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 6330,
+          "upstreamSha256": "c3df1b75acee551f833a3b79b9e608a1a32bb6c099c77c39390ac46a2aa105c9",
+          "localSha256": "c3df1b75acee551f833a3b79b9e608a1a32bb6c099c77c39390ac46a2aa105c9",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 3286,
+          "upstreamSha256": "acc2b61098b9aa3bad1cecd34c40cc3275ed4afd5e23b6e582d958fa833a9a45",
+          "localSha256": "acc2b61098b9aa3bad1cecd34c40cc3275ed4afd5e23b6e582d958fa833a9a45",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 9646,
+          "upstreamSha256": "574fd6581c6a3acf299dc49652341e698eeaecffc06d3d24639912afbb0b7c71",
+          "localSha256": "574fd6581c6a3acf299dc49652341e698eeaecffc06d3d24639912afbb0b7c71",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "intl_wooden_3d",
+      "name": "International Wooden 3D",
+      "creators": ["CouchTomato87"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/intl_wooden_3d",
+      "localPath": "public/pieces/standard/intl_wooden_3d",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 4042,
+          "upstreamSha256": "31066f30c95183af12c71b32fea2d551da051c96b239095060a3b3a80edcf232",
+          "localSha256": "31066f30c95183af12c71b32fea2d551da051c96b239095060a3b3a80edcf232",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 4261,
+          "upstreamSha256": "6849e36758353154eb481c02d05a95260e03ee4b27174b8ec53c31d54bd69da9",
+          "localSha256": "6849e36758353154eb481c02d05a95260e03ee4b27174b8ec53c31d54bd69da9",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 2828,
+          "upstreamSha256": "563f2445937da24524aab42b5ffc56c62668d665431a089517b644b7e7bc2be0",
+          "localSha256": "563f2445937da24524aab42b5ffc56c62668d665431a089517b644b7e7bc2be0",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 3548,
+          "upstreamSha256": "e10e7a0a36eaeef6dd1315da9e011e3180b5dbd832b20f15ffb414b56af02337",
+          "localSha256": "e10e7a0a36eaeef6dd1315da9e011e3180b5dbd832b20f15ffb414b56af02337",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 5061,
+          "upstreamSha256": "4f3a23a30a2ba62c0872c18aa36fa152e2817fd3c55638fb4256d5be06c6098d",
+          "localSha256": "4f3a23a30a2ba62c0872c18aa36fa152e2817fd3c55638fb4256d5be06c6098d",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 6367,
+          "upstreamSha256": "31e3987337008bd9b38eb6328fb24355e72ab31c54181fe7565e7094b874e5c2",
+          "localSha256": "31e3987337008bd9b38eb6328fb24355e72ab31c54181fe7565e7094b874e5c2",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 5365,
+          "upstreamSha256": "e95296ccbd09cd4115619368210f5d46f4f391b06839ff97322a47355ca96ca0",
+          "localSha256": "e95296ccbd09cd4115619368210f5d46f4f391b06839ff97322a47355ca96ca0",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 4188,
+          "upstreamSha256": "277d5e0c8d92d76d27b7d9d6032f22b7609f553bdfd1db8a3293bef930bb3d9e",
+          "localSha256": "277d5e0c8d92d76d27b7d9d6032f22b7609f553bdfd1db8a3293bef930bb3d9e",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 5491,
+          "upstreamSha256": "744594c79ca14fa4ad16c82a03b5da66e449a23bff55a8bbc74bf3ce4c364070",
+          "localSha256": "744594c79ca14fa4ad16c82a03b5da66e449a23bff55a8bbc74bf3ce4c364070",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 7803,
+          "upstreamSha256": "4c425c4d085c21c0d4a9ccdf746b536141b06e4d825b5488935026856fdee992",
+          "localSha256": "4c425c4d085c21c0d4a9ccdf746b536141b06e4d825b5488935026856fdee992",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 4851,
+          "upstreamSha256": "d7056831695b889f6ae7287863de351ce47242e6545631298fbbc3df833ef680",
+          "localSha256": "d7056831695b889f6ae7287863de351ce47242e6545631298fbbc3df833ef680",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 3410,
+          "upstreamSha256": "2ed5c71996d4219033b5d2d4f871e4af9d136a0ca766ff190aaa6c0f40a67351",
+          "localSha256": "2ed5c71996d4219033b5d2d4f871e4af9d136a0ca766ff190aaa6c0f40a67351",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 8177,
+          "upstreamSha256": "fb325577dcefb2a81317e513f91d7f7723647e9aa5653d1b4ec4a97d27b23e24",
+          "localSha256": "fb325577dcefb2a81317e513f91d7f7723647e9aa5653d1b4ec4a97d27b23e24",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 6057,
+          "upstreamSha256": "283d08bad0793e99c07b1aabd369e3d901c211ebfc4568f0a5ed0e0e0027c56a",
+          "localSha256": "283d08bad0793e99c07b1aabd369e3d901c211ebfc4568f0a5ed0e0e0027c56a",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 11579,
+          "upstreamSha256": "32f23a2c06386bbddec109fdec2149c3605a4b8646390086414b7350435cf09b",
+          "localSha256": "32f23a2c06386bbddec109fdec2149c3605a4b8646390086414b7350435cf09b",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 3660,
+          "upstreamSha256": "c2df1e13fbf7f3d33b454f914fb3ddf82fa2aee66c04e67e0bede23f581c5f66",
+          "localSha256": "c2df1e13fbf7f3d33b454f914fb3ddf82fa2aee66c04e67e0bede23f581c5f66",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 5193,
+          "upstreamSha256": "2b74db550b88b4a7b6adc547f7704aff276c0aafe44e4e7094fc9d09b625ce8a",
+          "localSha256": "2b74db550b88b4a7b6adc547f7704aff276c0aafe44e4e7094fc9d09b625ce8a",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 3976,
+          "upstreamSha256": "3d270c43b697cd19d6d69f5e68a13e350634e3f82a451c3fd5f20b8157a2f306",
+          "localSha256": "3d270c43b697cd19d6d69f5e68a13e350634e3f82a451c3fd5f20b8157a2f306",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 4472,
+          "upstreamSha256": "5b85bea1dadd4325075f22bd34a09794465c20d9f8e9df22c70e1f504e2db70c",
+          "localSha256": "5b85bea1dadd4325075f22bd34a09794465c20d9f8e9df22c70e1f504e2db70c",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 6010,
+          "upstreamSha256": "ba1078f1815661b0b753b159a2a43d907c816a38afad3803022835d9e507bc85",
+          "localSha256": "ba1078f1815661b0b753b159a2a43d907c816a38afad3803022835d9e507bc85",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 5436,
+          "upstreamSha256": "1549c591be29854c322439f17d888bfc2f72cb139efc8ab29b70f93573015a24",
+          "localSha256": "1549c591be29854c322439f17d888bfc2f72cb139efc8ab29b70f93573015a24",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 6305,
+          "upstreamSha256": "f095434fd0c8b5a9892b8ad142112accdd78e33f1563111dd820a749636aa21f",
+          "localSha256": "f095434fd0c8b5a9892b8ad142112accdd78e33f1563111dd820a749636aa21f",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 3303,
+          "upstreamSha256": "c4e21cac2e3e3976c7bd42e7c85e146a2698f76330850628efcf574cdd728674",
+          "localSha256": "c4e21cac2e3e3976c7bd42e7c85e146a2698f76330850628efcf574cdd728674",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 6394,
+          "upstreamSha256": "1592c61373bf8c539bf8e32c3c7287f60fac91c134e3e77f3eb99d9e135d374f",
+          "localSha256": "1592c61373bf8c539bf8e32c3c7287f60fac91c134e3e77f3eb99d9e135d374f",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 6920,
+          "upstreamSha256": "70eaf69a76d655ed4de3202126909bf998c7a063738a615f60c6735d7a1e12e2",
+          "localSha256": "70eaf69a76d655ed4de3202126909bf998c7a063738a615f60c6735d7a1e12e2",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 4052,
+          "upstreamSha256": "00e8f7877819d7d315b3054e70bbea1d2f66d56ab812c53f26fc7ca5415415ab",
+          "localSha256": "00e8f7877819d7d315b3054e70bbea1d2f66d56ab812c53f26fc7ca5415415ab",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 4557,
+          "upstreamSha256": "8a3314a63b4c1f821aacc48cb9ec6fc7468fb68e284be01e70f9cc7edc670b7e",
+          "localSha256": "8a3314a63b4c1f821aacc48cb9ec6fc7468fb68e284be01e70f9cc7edc670b7e",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 9052,
+          "upstreamSha256": "1d3affb2207455891e8249261f98a35367e3990b18f82faca293b1e2d56670b9",
+          "localSha256": "1d3affb2207455891e8249261f98a35367e3990b18f82faca293b1e2d56670b9",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 6348,
+          "upstreamSha256": "647271672e55fba9c88428be1ec22d9336811a037089db8f1d0405d246e6ee1c",
+          "localSha256": "647271672e55fba9c88428be1ec22d9336811a037089db8f1d0405d246e6ee1c",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 12472,
+          "upstreamSha256": "8ca5092b472c059e1af872641e38d91aec05eb3d81e4ed07a652b02ecdfedaef",
+          "localSha256": "8ca5092b472c059e1af872641e38d91aec05eb3d81e4ed07a652b02ecdfedaef",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "international",
+      "name": "International Variant",
+      "creators": ["CouchTomato87"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/international",
+      "localPath": "public/pieces/standard/international",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 766,
+          "upstreamSha256": "4670d03afefbbd4844ad2229d089483b44eae536222e5bb26c797ddd10c0d2ec",
+          "localSha256": "4670d03afefbbd4844ad2229d089483b44eae536222e5bb26c797ddd10c0d2ec",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 1694,
+          "upstreamSha256": "34a177815f5ea0a2e996da6cd925e23631dc2267e866360998d955e1c2119ec0",
+          "localSha256": "34a177815f5ea0a2e996da6cd925e23631dc2267e866360998d955e1c2119ec0",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 1638,
+          "upstreamSha256": "2a36d780490e14ceeb87ee04ce8880565686c78f5d3f45a2175bad52b9d80a3a",
+          "localSha256": "2a36d780490e14ceeb87ee04ce8880565686c78f5d3f45a2175bad52b9d80a3a",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 4796,
+          "upstreamSha256": "10a2db0e58a632bed45d6cdf453229e3e16ad5bbee1a6cc0e0df2279dd044fb0",
+          "localSha256": "10a2db0e58a632bed45d6cdf453229e3e16ad5bbee1a6cc0e0df2279dd044fb0",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 939,
+          "upstreamSha256": "a48200d7762fcbeaba08b0cd142171aa1f07c359d69c3f79c7ee9b0820843d5d",
+          "localSha256": "a48200d7762fcbeaba08b0cd142171aa1f07c359d69c3f79c7ee9b0820843d5d",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 967,
+          "upstreamSha256": "719c04be2aa375651f0f88c75800b18cf5c7f892508ce398c6baee6964fe8fd3",
+          "localSha256": "719c04be2aa375651f0f88c75800b18cf5c7f892508ce398c6baee6964fe8fd3",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 2514,
+          "upstreamSha256": "2ac50989beefbee669a2a61e21022424cfc6d7d1e0c2f133ff49fb336581ff89",
+          "localSha256": "2ac50989beefbee669a2a61e21022424cfc6d7d1e0c2f133ff49fb336581ff89",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 1017,
+          "upstreamSha256": "1ff96f36327b023aefb23929b8acee55ead8cf11184213dfecb2db8d280e3df8",
+          "localSha256": "1ff96f36327b023aefb23929b8acee55ead8cf11184213dfecb2db8d280e3df8",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 1722,
+          "upstreamSha256": "b5a98d94b3712e3fc6f8d866e23c1b59c13ca149d622e5bc77da3e0d6c4c52fd",
+          "localSha256": "b5a98d94b3712e3fc6f8d866e23c1b59c13ca149d622e5bc77da3e0d6c4c52fd",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 1073,
+          "upstreamSha256": "bca689b06644faaeb318b5b4941e102b2289174adc823ce2254eeb38a9e7046d",
+          "localSha256": "bca689b06644faaeb318b5b4941e102b2289174adc823ce2254eeb38a9e7046d",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 3246,
+          "upstreamSha256": "1b13599320e28e8c89fda38f33e0ca075d8773c612c45fe8b2e67eeff288ac8f",
+          "localSha256": "1b13599320e28e8c89fda38f33e0ca075d8773c612c45fe8b2e67eeff288ac8f",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 1436,
+          "upstreamSha256": "6141a7039d03537c6f9373348c7c04b0dec82e75fcfe01863c456b84df1c632c",
+          "localSha256": "6141a7039d03537c6f9373348c7c04b0dec82e75fcfe01863c456b84df1c632c",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 5363,
+          "upstreamSha256": "4ec12ec8f2a1d55daa6f8ceb287a6be5666085b40a0ce53cd9423b583062f691",
+          "localSha256": "4ec12ec8f2a1d55daa6f8ceb287a6be5666085b40a0ce53cd9423b583062f691",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 1615,
+          "upstreamSha256": "8e2597631d5d8041b5fd2f1c9d3efc1ffe9fa404405d5bcc0c58465ac62f0680",
+          "localSha256": "8e2597631d5d8041b5fd2f1c9d3efc1ffe9fa404405d5bcc0c58465ac62f0680",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 1809,
+          "upstreamSha256": "4eaa6fe81bf110e778d905f0ef741fdcf59460e8fdd35ce7ed9a033234e44ec2",
+          "localSha256": "4eaa6fe81bf110e778d905f0ef741fdcf59460e8fdd35ce7ed9a033234e44ec2",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 765,
+          "upstreamSha256": "d6219f7e977851ba9e2b9b1818dd3847f23d8f1d53d298b612a803b17084214f",
+          "localSha256": "d6219f7e977851ba9e2b9b1818dd3847f23d8f1d53d298b612a803b17084214f",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 1715,
+          "upstreamSha256": "1bc730990c73395138579e482c815d82e09ad5f475a29574061f1e8027806294",
+          "localSha256": "1bc730990c73395138579e482c815d82e09ad5f475a29574061f1e8027806294",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 1630,
+          "upstreamSha256": "b52e750c24ebb755ba7e4b326840cba5c8bcbe1270f80360cba34658a7f95935",
+          "localSha256": "b52e750c24ebb755ba7e4b326840cba5c8bcbe1270f80360cba34658a7f95935",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 4813,
+          "upstreamSha256": "e038dcb25026188a1649fee397cac9d1b8da7ce23d6c53613bcd086557e700dc",
+          "localSha256": "e038dcb25026188a1649fee397cac9d1b8da7ce23d6c53613bcd086557e700dc",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 944,
+          "upstreamSha256": "4fc17f64a7b97ea9a928fe52a6892851487f5d9963f25027a9314b2a33cb006e",
+          "localSha256": "4fc17f64a7b97ea9a928fe52a6892851487f5d9963f25027a9314b2a33cb006e",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 976,
+          "upstreamSha256": "347ab93f996922b751b6d51337f32c4c505d08c673e5d0a0577c9d6a80ef0eb0",
+          "localSha256": "347ab93f996922b751b6d51337f32c4c505d08c673e5d0a0577c9d6a80ef0eb0",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 2520,
+          "upstreamSha256": "ed4d535282178bfe9f0e3e73d46f1ea55dea759cb41581671cee6ce4e7391a9a",
+          "localSha256": "ed4d535282178bfe9f0e3e73d46f1ea55dea759cb41581671cee6ce4e7391a9a",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 1050,
+          "upstreamSha256": "9ec064aa689a6b7715aea6234e29d356d0d7049021919d0ce97afafc6ef3b789",
+          "localSha256": "9ec064aa689a6b7715aea6234e29d356d0d7049021919d0ce97afafc6ef3b789",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 1721,
+          "upstreamSha256": "385808fc89259d53cf97268ddc25297310f00066e8e7a11094140325d2940e12",
+          "localSha256": "385808fc89259d53cf97268ddc25297310f00066e8e7a11094140325d2940e12",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 1094,
+          "upstreamSha256": "0d323e6d775dd92cb6332a0d61d44f94a5bdc547da63a0ca055cb3146eb11bcc",
+          "localSha256": "0d323e6d775dd92cb6332a0d61d44f94a5bdc547da63a0ca055cb3146eb11bcc",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 3270,
+          "upstreamSha256": "65106b906a091e0f5ed2501688368b5fe4d24ea51a39c81de3eb2a27527a2c1f",
+          "localSha256": "65106b906a091e0f5ed2501688368b5fe4d24ea51a39c81de3eb2a27527a2c1f",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 1439,
+          "upstreamSha256": "af53306acc2c04d373921e3d998a879216e86029cb0e9830d164816e0c922345",
+          "localSha256": "af53306acc2c04d373921e3d998a879216e86029cb0e9830d164816e0c922345",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 5361,
+          "upstreamSha256": "e722a70da26bae18e0fc0eec431b1c98a0d3abfc5cfa4819ac9a5d63e1508fa6",
+          "localSha256": "e722a70da26bae18e0fc0eec431b1c98a0d3abfc5cfa4819ac9a5d63e1508fa6",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 1622,
+          "upstreamSha256": "ec3dce72a27e89e30f599f353fcb96428305161f07e671bd89c4a6c0dae69cf7",
+          "localSha256": "ec3dce72a27e89e30f599f353fcb96428305161f07e671bd89c4a6c0dae69cf7",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 1768,
+          "upstreamSha256": "22ed77ff9dd4fe1ecaae5becc9321eaf7c4435861a8db1da919837744b4c4464",
+          "localSha256": "22ed77ff9dd4fe1ecaae5becc9321eaf7c4435861a8db1da919837744b4c4464",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "kanji_guide_shadowed",
+      "name": "Kanji Guide Shadowed",
+      "creators": ["CouchTomato87"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/kanji_guide_shadowed",
+      "localPath": "public/pieces/standard/kanji_guide_shadowed",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 1929,
+          "upstreamSha256": "6c628a0e970a15f4005565aca8a220be7394a6c0e60874c35d730528964516e1",
+          "localSha256": "6c628a0e970a15f4005565aca8a220be7394a6c0e60874c35d730528964516e1",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 3043,
+          "upstreamSha256": "9e05833ac9ae74c26318eb982fc2cc72a8b99f00e10c9cb63ede5cc4982f16b6",
+          "localSha256": "9e05833ac9ae74c26318eb982fc2cc72a8b99f00e10c9cb63ede5cc4982f16b6",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 2012,
+          "upstreamSha256": "cb73941412299627465930e13bb74ff7a4b6e470f9f4e651775f01c2f30e00ac",
+          "localSha256": "cb73941412299627465930e13bb74ff7a4b6e470f9f4e651775f01c2f30e00ac",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 3148,
+          "upstreamSha256": "0cd628f3bee1ebc9b48f847165012e20a44bafb8b91ce75840c6775c0c6a1f06",
+          "localSha256": "0cd628f3bee1ebc9b48f847165012e20a44bafb8b91ce75840c6775c0c6a1f06",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 2151,
+          "upstreamSha256": "55fe17b3f24260fe0c8d8effea034ebe6663b29f70b1a6cd55a3c7ea45f901ce",
+          "localSha256": "55fe17b3f24260fe0c8d8effea034ebe6663b29f70b1a6cd55a3c7ea45f901ce",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 2464,
+          "upstreamSha256": "60dac4c7c3f1c4d6a40eada614fa9f1bb3f6951e528e70abdf0109e8a4ea4bff",
+          "localSha256": "60dac4c7c3f1c4d6a40eada614fa9f1bb3f6951e528e70abdf0109e8a4ea4bff",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 2400,
+          "upstreamSha256": "effd616efc258e4e9f7a0c0e490af3a76bc1dff541c4587f699c8fbed25a398d",
+          "localSha256": "effd616efc258e4e9f7a0c0e490af3a76bc1dff541c4587f699c8fbed25a398d",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 2197,
+          "upstreamSha256": "440b7eff47a89021d553be9ee19600a36aa717b1156f105cb3525358cc0c0710",
+          "localSha256": "440b7eff47a89021d553be9ee19600a36aa717b1156f105cb3525358cc0c0710",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 2108,
+          "upstreamSha256": "638c0adc6735c64c729fa9f79515eeece8860f84102aee9b7bcddcd2f284f5d3",
+          "localSha256": "638c0adc6735c64c729fa9f79515eeece8860f84102aee9b7bcddcd2f284f5d3",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 1834,
+          "upstreamSha256": "c6991218f642ffdcdcca437c51898e57dee7ac419ba16f805d6da3c612e025da",
+          "localSha256": "c6991218f642ffdcdcca437c51898e57dee7ac419ba16f805d6da3c612e025da",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 2063,
+          "upstreamSha256": "f5659ab78d16a478baf4ad0b3cccfc27681d2e5d57535ad9e526acb43434c178",
+          "localSha256": "f5659ab78d16a478baf4ad0b3cccfc27681d2e5d57535ad9e526acb43434c178",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 1816,
+          "upstreamSha256": "115f4b1b9ebd7f9d069ea6536a906e198b2ac1952a506ad3128463f1be4fb2fb",
+          "localSha256": "115f4b1b9ebd7f9d069ea6536a906e198b2ac1952a506ad3128463f1be4fb2fb",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 3980,
+          "upstreamSha256": "7d54365796414bace33a3f70a3c2a8f195e6dcdda7c4bd1191091b52046dd7dc",
+          "localSha256": "7d54365796414bace33a3f70a3c2a8f195e6dcdda7c4bd1191091b52046dd7dc",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 4286,
+          "upstreamSha256": "71daa84b939bd5a1b72e2a662a1f4d2a889d0c441e534ae78ff83510107defa2",
+          "localSha256": "71daa84b939bd5a1b72e2a662a1f4d2a889d0c441e534ae78ff83510107defa2",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 2867,
+          "upstreamSha256": "541f7621a34459a4ae49e4658cb6ea5115d28ca41d6ee48259ee601d466b51b7",
+          "localSha256": "541f7621a34459a4ae49e4658cb6ea5115d28ca41d6ee48259ee601d466b51b7",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 1895,
+          "upstreamSha256": "0050496e4d75d3a69d09319c45d2fc0fe7122162631a783b790f994aa1e3407f",
+          "localSha256": "0050496e4d75d3a69d09319c45d2fc0fe7122162631a783b790f994aa1e3407f",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 3096,
+          "upstreamSha256": "08fa739a3fa8cdc634ba0e68e816bccb342045b572fbfae1bb6139a2217315cc",
+          "localSha256": "08fa739a3fa8cdc634ba0e68e816bccb342045b572fbfae1bb6139a2217315cc",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 1997,
+          "upstreamSha256": "7e51feb85c7a63ce6b6fa8307f3d396f52ab936687bf4bd10ec71bbc752f9ab8",
+          "localSha256": "7e51feb85c7a63ce6b6fa8307f3d396f52ab936687bf4bd10ec71bbc752f9ab8",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 3134,
+          "upstreamSha256": "09978e6d7d8e61a7c35725e13f23d5251611348721b4ed3d16a02638cfe86b8c",
+          "localSha256": "09978e6d7d8e61a7c35725e13f23d5251611348721b4ed3d16a02638cfe86b8c",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 2098,
+          "upstreamSha256": "92d1261f69a2004805c5db1419e25681a00416ba6d5ad89cd33fa28a4d8b3e01",
+          "localSha256": "92d1261f69a2004805c5db1419e25681a00416ba6d5ad89cd33fa28a4d8b3e01",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 2431,
+          "upstreamSha256": "327db0c6b0b41a4d133743d5db217f161d336cb4725813aa7d56d777287674d9",
+          "localSha256": "327db0c6b0b41a4d133743d5db217f161d336cb4725813aa7d56d777287674d9",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 2368,
+          "upstreamSha256": "a706c3aef5daa9cf7190c2c52d32a7d4d2733c3f4d7c7a0781bbb9185517cf0d",
+          "localSha256": "a706c3aef5daa9cf7190c2c52d32a7d4d2733c3f4d7c7a0781bbb9185517cf0d",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 2228,
+          "upstreamSha256": "a47756739d6513b4571441aefaef2675c667f675218a41f469c1e0fa667192a4",
+          "localSha256": "a47756739d6513b4571441aefaef2675c667f675218a41f469c1e0fa667192a4",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 2108,
+          "upstreamSha256": "10eb4a85a748dd9fc2320bee41b44d09ffd8fa3889a0d51a16496bb743f3ab6e",
+          "localSha256": "10eb4a85a748dd9fc2320bee41b44d09ffd8fa3889a0d51a16496bb743f3ab6e",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 1841,
+          "upstreamSha256": "fef022e98c7cc3529280868b8918d9aa87b2d1756370c957422a1914b03e448c",
+          "localSha256": "fef022e98c7cc3529280868b8918d9aa87b2d1756370c957422a1914b03e448c",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 2061,
+          "upstreamSha256": "75f90d532bc93173aca2b0b0dbb2135e452ec0aab999851f5d9c2d99264d415e",
+          "localSha256": "75f90d532bc93173aca2b0b0dbb2135e452ec0aab999851f5d9c2d99264d415e",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 1804,
+          "upstreamSha256": "d05ed20d79338b0fca64385119e0cb861a75b09fc5c858a6bb9ef56f15b7ac45",
+          "localSha256": "d05ed20d79338b0fca64385119e0cb861a75b09fc5c858a6bb9ef56f15b7ac45",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 3966,
+          "upstreamSha256": "f2b422498e257959678bba4ba97d42dcddc4f38e0ee8856c456c4cd4c41889b6",
+          "localSha256": "f2b422498e257959678bba4ba97d42dcddc4f38e0ee8856c456c4cd4c41889b6",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 4299,
+          "upstreamSha256": "9cd886a2c7fcf3fe928883f43ef53afe8900dc4cd7486e711a83d4fe27be4da1",
+          "localSha256": "9cd886a2c7fcf3fe928883f43ef53afe8900dc4cd7486e711a83d4fe27be4da1",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 2842,
+          "upstreamSha256": "3375c725124fcd3e36b16602b9826c3f2a1ae8caf503b3727a64c02442fd76d0",
+          "localSha256": "3375c725124fcd3e36b16602b9826c3f2a1ae8caf503b3727a64c02442fd76d0",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "intl_portella",
+      "name": "International Portella",
+      "creators": ["CouchTomato87"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/intl_portella",
+      "localPath": "public/pieces/standard/intl_portella",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.png",
+          "byteLength": 14089,
+          "upstreamSha256": "9209416cb9e581721d9c5bc1c9ad1509fd1a06dbb4e505b7f2d415dac2b9332c",
+          "localSha256": "9209416cb9e581721d9c5bc1c9ad1509fd1a06dbb4e505b7f2d415dac2b9332c",
+          "modified": false
+        },
+        {
+          "path": "0GI.png",
+          "byteLength": 17669,
+          "upstreamSha256": "2e465830fa340381b87ad26849db9316ceddbbfa575f09ce695bff76cf1d5c86",
+          "localSha256": "2e465830fa340381b87ad26849db9316ceddbbfa575f09ce695bff76cf1d5c86",
+          "modified": false
+        },
+        {
+          "path": "0GY.png",
+          "byteLength": 18357,
+          "upstreamSha256": "c939df245bc3df573f53c1fbd111df79683d6ca7446313c88a2bb207dd31fd26",
+          "localSha256": "c939df245bc3df573f53c1fbd111df79683d6ca7446313c88a2bb207dd31fd26",
+          "modified": false
+        },
+        {
+          "path": "0HI.png",
+          "byteLength": 17907,
+          "upstreamSha256": "9495ff1c2785ead2e3982ac9fca968275ae0c27ae1bbd166c920f3f2bfb1f9ac",
+          "localSha256": "9495ff1c2785ead2e3982ac9fca968275ae0c27ae1bbd166c920f3f2bfb1f9ac",
+          "modified": false
+        },
+        {
+          "path": "0KA.png",
+          "byteLength": 19663,
+          "upstreamSha256": "a0ace42d4ed47fdc38ca33c5370b5a773fe13ea1b1b2e2037812e76379302d2a",
+          "localSha256": "a0ace42d4ed47fdc38ca33c5370b5a773fe13ea1b1b2e2037812e76379302d2a",
+          "modified": false
+        },
+        {
+          "path": "0KE.png",
+          "byteLength": 16633,
+          "upstreamSha256": "5e430aedfffcacdb08ad00b19fcbc4f2745c2158670a96e7503641742c383db7",
+          "localSha256": "5e430aedfffcacdb08ad00b19fcbc4f2745c2158670a96e7503641742c383db7",
+          "modified": false
+        },
+        {
+          "path": "0KI.png",
+          "byteLength": 18388,
+          "upstreamSha256": "5b05349be96ea16000a12d5147084fb55a2b52610e956ba339bbdb3e7246c51b",
+          "localSha256": "5b05349be96ea16000a12d5147084fb55a2b52610e956ba339bbdb3e7246c51b",
+          "modified": false
+        },
+        {
+          "path": "0KY.png",
+          "byteLength": 16640,
+          "upstreamSha256": "f1eedc818dc15585f6d35b2f0508c8349f106a863d5e74989bdd0362405517cd",
+          "localSha256": "f1eedc818dc15585f6d35b2f0508c8349f106a863d5e74989bdd0362405517cd",
+          "modified": false
+        },
+        {
+          "path": "0NG.png",
+          "byteLength": 18329,
+          "upstreamSha256": "e4a191d3ef77d9c98eb5fd2823105ed5682cc7cd86b72da7ad44f1535d8b030a",
+          "localSha256": "e4a191d3ef77d9c98eb5fd2823105ed5682cc7cd86b72da7ad44f1535d8b030a",
+          "modified": false
+        },
+        {
+          "path": "0NK.png",
+          "byteLength": 17573,
+          "upstreamSha256": "734766046f6dce807c27cbec9152f8b00270674cf1a1cd4fd7c5be979c1b468e",
+          "localSha256": "734766046f6dce807c27cbec9152f8b00270674cf1a1cd4fd7c5be979c1b468e",
+          "modified": false
+        },
+        {
+          "path": "0NY.png",
+          "byteLength": 16957,
+          "upstreamSha256": "a3f449802ace3c83535f12a72c61986716f2b5bf4b933f6409800c9a1ca39199",
+          "localSha256": "a3f449802ace3c83535f12a72c61986716f2b5bf4b933f6409800c9a1ca39199",
+          "modified": false
+        },
+        {
+          "path": "0OU.png",
+          "byteLength": 19507,
+          "upstreamSha256": "0c7ef6216316255d4d0ed7be3e749d01d5aed7db53a81013a37aa6512b93ede3",
+          "localSha256": "0c7ef6216316255d4d0ed7be3e749d01d5aed7db53a81013a37aa6512b93ede3",
+          "modified": false
+        },
+        {
+          "path": "0RY.png",
+          "byteLength": 21733,
+          "upstreamSha256": "41e74c99eaaa7a876cb4338b2246379d1d0a2b8ba0c762a5195b24770a9a0513",
+          "localSha256": "41e74c99eaaa7a876cb4338b2246379d1d0a2b8ba0c762a5195b24770a9a0513",
+          "modified": false
+        },
+        {
+          "path": "0TO.png",
+          "byteLength": 14778,
+          "upstreamSha256": "f8cea44c8bb7641440524245ba346e42279abb9fd4285eb28c5544ef204d380c",
+          "localSha256": "f8cea44c8bb7641440524245ba346e42279abb9fd4285eb28c5544ef204d380c",
+          "modified": false
+        },
+        {
+          "path": "0UM.png",
+          "byteLength": 20466,
+          "upstreamSha256": "4ef8b9db8addcfad47ced210ffbd0348f844faa3d9d83204f499ef7d7ba65142",
+          "localSha256": "4ef8b9db8addcfad47ced210ffbd0348f844faa3d9d83204f499ef7d7ba65142",
+          "modified": false
+        },
+        {
+          "path": "1FU.png",
+          "byteLength": 15949,
+          "upstreamSha256": "bec645ece61998949725b9d87e565671b41e68814f6e31c01d6a6291efdc1b46",
+          "localSha256": "bec645ece61998949725b9d87e565671b41e68814f6e31c01d6a6291efdc1b46",
+          "modified": false
+        },
+        {
+          "path": "1GI.png",
+          "byteLength": 19570,
+          "upstreamSha256": "244f916a3c6d5472c3739c82af46797f41bf768334b8874eea1ca99b453d50d2",
+          "localSha256": "244f916a3c6d5472c3739c82af46797f41bf768334b8874eea1ca99b453d50d2",
+          "modified": false
+        },
+        {
+          "path": "1GY.png",
+          "byteLength": 21098,
+          "upstreamSha256": "d61bee9e425ee02f335a3854343b5059028954bbeb842c9c84dac2145684ebf1",
+          "localSha256": "d61bee9e425ee02f335a3854343b5059028954bbeb842c9c84dac2145684ebf1",
+          "modified": false
+        },
+        {
+          "path": "1HI.png",
+          "byteLength": 20621,
+          "upstreamSha256": "f6b6b7fd222de68508d7df35f577f46f26855deaac38efa558c738d8172daceb",
+          "localSha256": "f6b6b7fd222de68508d7df35f577f46f26855deaac38efa558c738d8172daceb",
+          "modified": false
+        },
+        {
+          "path": "1KA.png",
+          "byteLength": 22210,
+          "upstreamSha256": "bfd9ab819ad14ae92638fa4d6eb5d04723a01a78e935194a7dd38d7903250c37",
+          "localSha256": "bfd9ab819ad14ae92638fa4d6eb5d04723a01a78e935194a7dd38d7903250c37",
+          "modified": false
+        },
+        {
+          "path": "1KE.png",
+          "byteLength": 18514,
+          "upstreamSha256": "71166b1abbdf26cb8e0a8fe599fff1813fe90443c1b58cab040e29ba3863d314",
+          "localSha256": "71166b1abbdf26cb8e0a8fe599fff1813fe90443c1b58cab040e29ba3863d314",
+          "modified": false
+        },
+        {
+          "path": "1KI.png",
+          "byteLength": 20501,
+          "upstreamSha256": "97578d8d5e0f4a8245540289c24b284d8083804d5095f9f13dc29af1bb942ab8",
+          "localSha256": "97578d8d5e0f4a8245540289c24b284d8083804d5095f9f13dc29af1bb942ab8",
+          "modified": false
+        },
+        {
+          "path": "1KY.png",
+          "byteLength": 18365,
+          "upstreamSha256": "626653fddf6151ac474b7e0f0f39699a0f02f4087f87ae397a415aa9ffc1cd11",
+          "localSha256": "626653fddf6151ac474b7e0f0f39699a0f02f4087f87ae397a415aa9ffc1cd11",
+          "modified": false
+        },
+        {
+          "path": "1NG.png",
+          "byteLength": 20785,
+          "upstreamSha256": "48c84755946b14bf634d7c4b9364bccad23d5429510ae83e3cdeef09de8e4059",
+          "localSha256": "48c84755946b14bf634d7c4b9364bccad23d5429510ae83e3cdeef09de8e4059",
+          "modified": false
+        },
+        {
+          "path": "1NK.png",
+          "byteLength": 20314,
+          "upstreamSha256": "68b7363c067691b311a730ef3129ef7c73b0a838089707eb6f21b63e23c69bb8",
+          "localSha256": "68b7363c067691b311a730ef3129ef7c73b0a838089707eb6f21b63e23c69bb8",
+          "modified": false
+        },
+        {
+          "path": "1NY.png",
+          "byteLength": 18583,
+          "upstreamSha256": "b3929301fc6ac0c9d237149d01112f965c24c361caa99bcf82edbbdb49d11813",
+          "localSha256": "b3929301fc6ac0c9d237149d01112f965c24c361caa99bcf82edbbdb49d11813",
+          "modified": false
+        },
+        {
+          "path": "1OU.png",
+          "byteLength": 22597,
+          "upstreamSha256": "a67072251ccec26440383bec15fd721eaf455398bde8291eac979d0008c3ab86",
+          "localSha256": "a67072251ccec26440383bec15fd721eaf455398bde8291eac979d0008c3ab86",
+          "modified": false
+        },
+        {
+          "path": "1RY.png",
+          "byteLength": 24259,
+          "upstreamSha256": "4de8918cda3ffebf79dd015707f98656e37c1e425bb9d45d95c452d84299c3c8",
+          "localSha256": "4de8918cda3ffebf79dd015707f98656e37c1e425bb9d45d95c452d84299c3c8",
+          "modified": false
+        },
+        {
+          "path": "1TO.png",
+          "byteLength": 16229,
+          "upstreamSha256": "ab93536ca22e6b48df1bb66d8b6f001bb4e615c25e4f195fa9d2c3eaf42013e4",
+          "localSha256": "ab93536ca22e6b48df1bb66d8b6f001bb4e615c25e4f195fa9d2c3eaf42013e4",
+          "modified": false
+        },
+        {
+          "path": "1UM.png",
+          "byteLength": 22874,
+          "upstreamSha256": "f296da8c7b3edc4f2ecbc54f438ee07b0d8be31ebe12e9153327ad46b1768ef3",
+          "localSha256": "f296da8c7b3edc4f2ecbc54f438ee07b0d8be31ebe12e9153327ad46b1768ef3",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "simple_kanji",
+      "name": "Simple Kanji",
+      "creators": ["Ka-hu"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/simple_kanji",
+      "localPath": "public/pieces/standard/simple_kanji",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 703,
+          "upstreamSha256": "c182c334d31cac3e2ee67292dc4d37f750593ffd0b3645aa1309463279f21e0e",
+          "localSha256": "c182c334d31cac3e2ee67292dc4d37f750593ffd0b3645aa1309463279f21e0e",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 1083,
+          "upstreamSha256": "d92e664e505169d527716d8281402772147da5a6c17638925b0b688187a86c23",
+          "localSha256": "d92e664e505169d527716d8281402772147da5a6c17638925b0b688187a86c23",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 384,
+          "upstreamSha256": "c83497483a383c05f277d6418a90c0451d7a8fecb82fa55bfa7fcce13e5ab479",
+          "localSha256": "c83497483a383c05f277d6418a90c0451d7a8fecb82fa55bfa7fcce13e5ab479",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 1162,
+          "upstreamSha256": "5c0e00e359661e8fe375f3bcec25c5fc8604a2969e7c2df37a69abde0dce30f9",
+          "localSha256": "5c0e00e359661e8fe375f3bcec25c5fc8604a2969e7c2df37a69abde0dce30f9",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 794,
+          "upstreamSha256": "f8d0482a12628956d802caf3931a9acf2e7a56e9331227af203b994331af931d",
+          "localSha256": "f8d0482a12628956d802caf3931a9acf2e7a56e9331227af203b994331af931d",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 589,
+          "upstreamSha256": "2dce36724cbc399a9561cbbc6bc884586f44b2f6febe75deeb7e4272e2426c0c",
+          "localSha256": "2dce36724cbc399a9561cbbc6bc884586f44b2f6febe75deeb7e4272e2426c0c",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 660,
+          "upstreamSha256": "37b6680932233ca0c5b3389e0484035668fcbb6dca6d972c05d95fa8d191d83c",
+          "localSha256": "37b6680932233ca0c5b3389e0484035668fcbb6dca6d972c05d95fa8d191d83c",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 657,
+          "upstreamSha256": "61404ea01676f5125a40077bd946079f3d575aeb6364804faac58cc7dddba285",
+          "localSha256": "61404ea01676f5125a40077bd946079f3d575aeb6364804faac58cc7dddba285",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 2048,
+          "upstreamSha256": "ebbacd532d7e84263b157979bceb4dcacf1529288a7bd325d6445996ed9c6dba",
+          "localSha256": "ebbacd532d7e84263b157979bceb4dcacf1529288a7bd325d6445996ed9c6dba",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 1568,
+          "upstreamSha256": "b8a47d4d14414c31156d809326906551d695dae2ac33da716fa2518823064450",
+          "localSha256": "b8a47d4d14414c31156d809326906551d695dae2ac33da716fa2518823064450",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 1618,
+          "upstreamSha256": "014552b8e2e07b14826f35a7fc6de722acaed84194bd037d8c8a91355ba5b9e0",
+          "localSha256": "014552b8e2e07b14826f35a7fc6de722acaed84194bd037d8c8a91355ba5b9e0",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 295,
+          "upstreamSha256": "c48bc9e7c26094955ae5341c9efd6f82ff21053a188e43a27610790f1152f3e7",
+          "localSha256": "c48bc9e7c26094955ae5341c9efd6f82ff21053a188e43a27610790f1152f3e7",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 968,
+          "upstreamSha256": "441b01fe10b3bc5454839067845fab43503ec60eedc0a39310e3a350fbbcb064",
+          "localSha256": "441b01fe10b3bc5454839067845fab43503ec60eedc0a39310e3a350fbbcb064",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 570,
+          "upstreamSha256": "f82a959bf7a82ff9bb2e2c2fdec5502495f281bca0a48c5c83a39ea471dc8a80",
+          "localSha256": "f82a959bf7a82ff9bb2e2c2fdec5502495f281bca0a48c5c83a39ea471dc8a80",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 907,
+          "upstreamSha256": "8c73ef0f5917a7451b6ae8eb6bf2c4c4a082337b21e067c5036a73815dc8103b",
+          "localSha256": "8c73ef0f5917a7451b6ae8eb6bf2c4c4a082337b21e067c5036a73815dc8103b",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 705,
+          "upstreamSha256": "96ab7601936d7f490502d742decaafaceddaa53aea3dd47c018790c2a6986a25",
+          "localSha256": "96ab7601936d7f490502d742decaafaceddaa53aea3dd47c018790c2a6986a25",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 1085,
+          "upstreamSha256": "3f3c8a98ee07270fc7004fe73f026efe727a7f70ec24ffebfbfabc0e3cfebf8d",
+          "localSha256": "3f3c8a98ee07270fc7004fe73f026efe727a7f70ec24ffebfbfabc0e3cfebf8d",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 379,
+          "upstreamSha256": "969d1a99798150141545b0bd2f4212ab479d3f834aa33633b9c0e1dbc86394b8",
+          "localSha256": "969d1a99798150141545b0bd2f4212ab479d3f834aa33633b9c0e1dbc86394b8",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 1162,
+          "upstreamSha256": "36e34890f3652af2deccf6ebcfc677fc1831a209876bb194b3d2ba9103306066",
+          "localSha256": "36e34890f3652af2deccf6ebcfc677fc1831a209876bb194b3d2ba9103306066",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 797,
+          "upstreamSha256": "3c2fc362f46a5ecc5a420afb44c46ad8d7f487d6a07bdb748dbd13ab5d8c107a",
+          "localSha256": "3c2fc362f46a5ecc5a420afb44c46ad8d7f487d6a07bdb748dbd13ab5d8c107a",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 588,
+          "upstreamSha256": "277a7e382d872b8f5718ef35f500bb7fac6abc0ea83f35012c2b81dec568127a",
+          "localSha256": "277a7e382d872b8f5718ef35f500bb7fac6abc0ea83f35012c2b81dec568127a",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 635,
+          "upstreamSha256": "aeb481e294fe2250faa00c741b602237d5d7cdccfc22a74da67214a2a826a77c",
+          "localSha256": "aeb481e294fe2250faa00c741b602237d5d7cdccfc22a74da67214a2a826a77c",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 654,
+          "upstreamSha256": "c87c94ad71e7fbf630f86e1d2ca6bb306f173b091128148ac6bed2cd7969b837",
+          "localSha256": "c87c94ad71e7fbf630f86e1d2ca6bb306f173b091128148ac6bed2cd7969b837",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 2048,
+          "upstreamSha256": "0c461b0d075670f65b7444f2443abf3e50416daedb4fc7f67c6b0ab47b60d415",
+          "localSha256": "0c461b0d075670f65b7444f2443abf3e50416daedb4fc7f67c6b0ab47b60d415",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 1568,
+          "upstreamSha256": "a7e0ed295fbce8f888e15785d3ff1705bb21631168ad017af6d917a248342132",
+          "localSha256": "a7e0ed295fbce8f888e15785d3ff1705bb21631168ad017af6d917a248342132",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 1620,
+          "upstreamSha256": "992e2886b697ad090d82ea46300a0cac7479d925be1a62585cf214788492e162",
+          "localSha256": "992e2886b697ad090d82ea46300a0cac7479d925be1a62585cf214788492e162",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 294,
+          "upstreamSha256": "e2e0a0a4ae3ecdd3ff48be0a6dfbfc448ae99e0069153aad902ffe66fd224a12",
+          "localSha256": "e2e0a0a4ae3ecdd3ff48be0a6dfbfc448ae99e0069153aad902ffe66fd224a12",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 938,
+          "upstreamSha256": "d7973d4edb1b5b4a248bfb6cfad78f7751882741ac769eac944749da01d9b9e2",
+          "localSha256": "d7973d4edb1b5b4a248bfb6cfad78f7751882741ac769eac944749da01d9b9e2",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 569,
+          "upstreamSha256": "d41c915bad3bf9e96d8d6144c10dc947186eee6ce0ed105da1d60e6390187bf2",
+          "localSha256": "d41c915bad3bf9e96d8d6144c10dc947186eee6ce0ed105da1d60e6390187bf2",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 886,
+          "upstreamSha256": "2ea4fc943ef4b9a3651202b69f02eb085624c2dd15e4f1a780f5504724c23c18",
+          "localSha256": "2ea4fc943ef4b9a3651202b69f02eb085624c2dd15e4f1a780f5504724c23c18",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "kanji_red_wood",
+      "name": "Kanji Red Wood",
+      "creators": ["Ka-hu"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/kanji_red_wood",
+      "localPath": "public/pieces/standard/kanji_red_wood",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 157807,
+          "upstreamSha256": "e7a95a933c69272f45bb3e90e7ea391159264c07a4240b06af09c13d9dd27b31",
+          "localSha256": "e7a95a933c69272f45bb3e90e7ea391159264c07a4240b06af09c13d9dd27b31",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 160636,
+          "upstreamSha256": "85787bfc2d282bb8e089d35ba16f0635c2ae81893e4f83a383f558669b3a9e64",
+          "localSha256": "85787bfc2d282bb8e089d35ba16f0635c2ae81893e4f83a383f558669b3a9e64",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 158350,
+          "upstreamSha256": "f1cd122813c9de88325c265a3c1bcb61f88ca71093c36995f49a3affb084a7dd",
+          "localSha256": "f1cd122813c9de88325c265a3c1bcb61f88ca71093c36995f49a3affb084a7dd",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 159865,
+          "upstreamSha256": "640702d067204d42f09ed47e17cbb4178b0f82a08c79d95b6f46a752aa8322fb",
+          "localSha256": "640702d067204d42f09ed47e17cbb4178b0f82a08c79d95b6f46a752aa8322fb",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 159162,
+          "upstreamSha256": "d232c83d81258cedbdb4a2233242c4b8c364551edac8274822b5a8ad76971ff3",
+          "localSha256": "d232c83d81258cedbdb4a2233242c4b8c364551edac8274822b5a8ad76971ff3",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 159129,
+          "upstreamSha256": "6d88c0f9f21ce5429a4cfa23fe2680328b001df2e103955236941c91cef7b24f",
+          "localSha256": "6d88c0f9f21ce5429a4cfa23fe2680328b001df2e103955236941c91cef7b24f",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 159084,
+          "upstreamSha256": "93f6824c4942e8ba1a725a5cd8516b0bbf2a8c1322774972c6354ed0618604d0",
+          "localSha256": "93f6824c4942e8ba1a725a5cd8516b0bbf2a8c1322774972c6354ed0618604d0",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 158591,
+          "upstreamSha256": "303474775b9cb54c3090272ca778b9fd9656ccadbe47bfae744c0d587b3de2f8",
+          "localSha256": "303474775b9cb54c3090272ca778b9fd9656ccadbe47bfae744c0d587b3de2f8",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 159125,
+          "upstreamSha256": "57e182784179bf3b8bba5ca5b581bf7d8948deb685e590c08b5d654bf16cf1d7",
+          "localSha256": "57e182784179bf3b8bba5ca5b581bf7d8948deb685e590c08b5d654bf16cf1d7",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 158448,
+          "upstreamSha256": "4790cfa5cfe22db337c82f6195ab9c927b73c0d3751f7bc7d91d51a6c9986291",
+          "localSha256": "4790cfa5cfe22db337c82f6195ab9c927b73c0d3751f7bc7d91d51a6c9986291",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 158328,
+          "upstreamSha256": "49388e263b978338a7261f4516c9bae5e952395a217f4fd860ba9f321a9f2c0d",
+          "localSha256": "49388e263b978338a7261f4516c9bae5e952395a217f4fd860ba9f321a9f2c0d",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 158120,
+          "upstreamSha256": "beb2b19868e2ef143ec714cd732d6bcc4cd2474c2a1d99091bd26d7a28b724e2",
+          "localSha256": "beb2b19868e2ef143ec714cd732d6bcc4cd2474c2a1d99091bd26d7a28b724e2",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 159811,
+          "upstreamSha256": "1a3279756aeec48776968457d0b1e9390a46c33c7f69da303abba47fa62ef15a",
+          "localSha256": "1a3279756aeec48776968457d0b1e9390a46c33c7f69da303abba47fa62ef15a",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 157446,
+          "upstreamSha256": "10336e0ff9d37d8d697dbcc1599d7dec437167d91ac868e2fad46d24bd558e57",
+          "localSha256": "10336e0ff9d37d8d697dbcc1599d7dec437167d91ac868e2fad46d24bd558e57",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 158658,
+          "upstreamSha256": "4afbd1527afc33178cd3435f513cf510029d706aa000a7db21d54a28a2d5dbcf",
+          "localSha256": "4afbd1527afc33178cd3435f513cf510029d706aa000a7db21d54a28a2d5dbcf",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 157224,
+          "upstreamSha256": "90d76553bbc83ebf6f542c5910e7ded6d7a85710ece75e1520e2a0e9462acb06",
+          "localSha256": "90d76553bbc83ebf6f542c5910e7ded6d7a85710ece75e1520e2a0e9462acb06",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 159978,
+          "upstreamSha256": "dd60130b74f61848e84180728a4e1c087549da035b7c3818ca4547b3f28067f1",
+          "localSha256": "dd60130b74f61848e84180728a4e1c087549da035b7c3818ca4547b3f28067f1",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 157692,
+          "upstreamSha256": "1cb90b60b65aeabcdf7ce9d56fb8e2f43d454605cad7267198629cd8154ee83f",
+          "localSha256": "1cb90b60b65aeabcdf7ce9d56fb8e2f43d454605cad7267198629cd8154ee83f",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 159378,
+          "upstreamSha256": "d96d456bc9c28de75029a06fc84d480dcdec784facfc622b2f506447c3e33c64",
+          "localSha256": "d96d456bc9c28de75029a06fc84d480dcdec784facfc622b2f506447c3e33c64",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 158511,
+          "upstreamSha256": "7f74dae8cadef1f02d797693d2def250fafdb38ef41aa8749482dc0f2ccdf878",
+          "localSha256": "7f74dae8cadef1f02d797693d2def250fafdb38ef41aa8749482dc0f2ccdf878",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 158506,
+          "upstreamSha256": "8344073be73f154bde9e7129c73dd6ee0dfc72e02556a523cc6c9f7aa8560593",
+          "localSha256": "8344073be73f154bde9e7129c73dd6ee0dfc72e02556a523cc6c9f7aa8560593",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 157351,
+          "upstreamSha256": "8d64f3a55257a6e472f2c1bc84459f54adeb3b86c4f3b1cd24f394908c87ec07",
+          "localSha256": "8d64f3a55257a6e472f2c1bc84459f54adeb3b86c4f3b1cd24f394908c87ec07",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 158280,
+          "upstreamSha256": "486ff9aae7e2c77b7a414e76492072cb7321dff6f0c1be4a1714e4d639e786da",
+          "localSha256": "486ff9aae7e2c77b7a414e76492072cb7321dff6f0c1be4a1714e4d639e786da",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 157989,
+          "upstreamSha256": "1175d0b655db38a63036b592df62579c624d6661db18485b0803f25146facb8e",
+          "localSha256": "1175d0b655db38a63036b592df62579c624d6661db18485b0803f25146facb8e",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 157475,
+          "upstreamSha256": "a0e2949dd4e8dc56a8ddb0540351a6820180089295c8185aa86e3c0707d77068",
+          "localSha256": "a0e2949dd4e8dc56a8ddb0540351a6820180089295c8185aa86e3c0707d77068",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 158383,
+          "upstreamSha256": "7c4ecd716015eb3ffee997c5c577ffdfa10c315d9f6652f451360c22d520dd1a",
+          "localSha256": "7c4ecd716015eb3ffee997c5c577ffdfa10c315d9f6652f451360c22d520dd1a",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 157716,
+          "upstreamSha256": "854f1234ac97f0badede598aec66775ce98644438f6f4c7381c8ea05ac8c265c",
+          "localSha256": "854f1234ac97f0badede598aec66775ce98644438f6f4c7381c8ea05ac8c265c",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 158680,
+          "upstreamSha256": "f3ca8d9e71817cb1341795b145cd38fb289fb3f5ec19ed4fba9ece2a505fab96",
+          "localSha256": "f3ca8d9e71817cb1341795b145cd38fb289fb3f5ec19ed4fba9ece2a505fab96",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 156434,
+          "upstreamSha256": "cfec8e6d78bd6ddd5cf895cc0c09ac5a346e8a93a88eca751d4f878b9b493f14",
+          "localSha256": "cfec8e6d78bd6ddd5cf895cc0c09ac5a346e8a93a88eca751d4f878b9b493f14",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 158282,
+          "upstreamSha256": "90a611bf7141d25658ffa555ca1bc259bf7229896ad6db9572fb31498c33d7bb",
+          "localSha256": "90a611bf7141d25658ffa555ca1bc259bf7229896ad6db9572fb31498c33d7bb",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "kanji_light",
+      "name": "Kanji Light",
+      "creators": ["Ka-hu"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/kanji_light",
+      "localPath": "public/pieces/standard/kanji_light",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 1730,
+          "upstreamSha256": "05de0de8b566d781328ceeeeea1c4b22d9f1b5ab6cc2637d5c7e98ab0a523bd7",
+          "localSha256": "05de0de8b566d781328ceeeeea1c4b22d9f1b5ab6cc2637d5c7e98ab0a523bd7",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 3316,
+          "upstreamSha256": "79474a1b958f5d5c87358eaec8463305615e68294ec60f7af037dd45212e1c59",
+          "localSha256": "79474a1b958f5d5c87358eaec8463305615e68294ec60f7af037dd45212e1c59",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 1264,
+          "upstreamSha256": "f70d8f6390f2979dae2321839b3fa3adeb242934e9fb31b333f154b49a436a06",
+          "localSha256": "f70d8f6390f2979dae2321839b3fa3adeb242934e9fb31b333f154b49a436a06",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 2641,
+          "upstreamSha256": "ba92d5e2ac01eed30b3db0e4d7bb62e67a25ca3b4640d6c0e7578b1eaf829bf8",
+          "localSha256": "ba92d5e2ac01eed30b3db0e4d7bb62e67a25ca3b4640d6c0e7578b1eaf829bf8",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 1865,
+          "upstreamSha256": "54c98aac5d863060d3367624339eed4093165dfa0eb957c994c1232e2cec5d03",
+          "localSha256": "54c98aac5d863060d3367624339eed4093165dfa0eb957c994c1232e2cec5d03",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 2025,
+          "upstreamSha256": "cc2e7df11b6219635074cbd788214673f536091c95b22c2bfbf9d838c487e2ec",
+          "localSha256": "cc2e7df11b6219635074cbd788214673f536091c95b22c2bfbf9d838c487e2ec",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 2366,
+          "upstreamSha256": "df917dcacbafe785d7c30ccf393b86bbbdeb7f06b69ea72a6f2f4927df88703a",
+          "localSha256": "df917dcacbafe785d7c30ccf393b86bbbdeb7f06b69ea72a6f2f4927df88703a",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 1846,
+          "upstreamSha256": "113256baf05726a709a31396eb4a24a867287dfbca83bc930c69685142ea825c",
+          "localSha256": "113256baf05726a709a31396eb4a24a867287dfbca83bc930c69685142ea825c",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 1319,
+          "upstreamSha256": "cdffe8bcef1ecc9821758081216ac29bd77d23ae7eef9cc59d4a6ed080606d9f",
+          "localSha256": "cdffe8bcef1ecc9821758081216ac29bd77d23ae7eef9cc59d4a6ed080606d9f",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 1528,
+          "upstreamSha256": "255930131bb3b4b63125ecf0eeeb7412698eebd237207e317e234625a14a2990",
+          "localSha256": "255930131bb3b4b63125ecf0eeeb7412698eebd237207e317e234625a14a2990",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 1577,
+          "upstreamSha256": "b3410dc44fc8a9027fe11da4b1050096c592a5ab1cc5c0213144f7eeefd490a5",
+          "localSha256": "b3410dc44fc8a9027fe11da4b1050096c592a5ab1cc5c0213144f7eeefd490a5",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 1109,
+          "upstreamSha256": "5a1234337aa1a733e803b1828b0fd5a87814e1ed66d1a1c5334c571c0f30955e",
+          "localSha256": "5a1234337aa1a733e803b1828b0fd5a87814e1ed66d1a1c5334c571c0f30955e",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 2663,
+          "upstreamSha256": "a728af4e89c9796493ccc6660bb3dc23388eddca1af1075a49d4f443331fdd96",
+          "localSha256": "a728af4e89c9796493ccc6660bb3dc23388eddca1af1075a49d4f443331fdd96",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 927,
+          "upstreamSha256": "da6ebd9d8dbbd5a0316b11de7565139ae21f7e4ba9a12b2f1ca56658bc545211",
+          "localSha256": "da6ebd9d8dbbd5a0316b11de7565139ae21f7e4ba9a12b2f1ca56658bc545211",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 2028,
+          "upstreamSha256": "b0cd3c52075ec3f6d6f6d889397440f7698da30a152d07aced9b318787213405",
+          "localSha256": "b0cd3c52075ec3f6d6f6d889397440f7698da30a152d07aced9b318787213405",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 1739,
+          "upstreamSha256": "065f298bd38df86860bbb24a76cc4a85a822b8ee7594e967f2f48e44bff0a7d5",
+          "localSha256": "065f298bd38df86860bbb24a76cc4a85a822b8ee7594e967f2f48e44bff0a7d5",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 3311,
+          "upstreamSha256": "e94539112d4cbbc43d538d204418f5a00b47516887d9b21edeb185fa16279371",
+          "localSha256": "e94539112d4cbbc43d538d204418f5a00b47516887d9b21edeb185fa16279371",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 1229,
+          "upstreamSha256": "f06e68dd5d485e2ba2ff4c8536f533aa673f2fe61d0ab39bc49f0bb1442e3e67",
+          "localSha256": "f06e68dd5d485e2ba2ff4c8536f533aa673f2fe61d0ab39bc49f0bb1442e3e67",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 2637,
+          "upstreamSha256": "c6a074271f80ad346c81bcf07bd368655a4760eda8515819a2b99bf71b20417d",
+          "localSha256": "c6a074271f80ad346c81bcf07bd368655a4760eda8515819a2b99bf71b20417d",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 1872,
+          "upstreamSha256": "a0769a8b4dce6599556b9a6b8fd521285a44e92adebd62217f2f4a0781124e05",
+          "localSha256": "a0769a8b4dce6599556b9a6b8fd521285a44e92adebd62217f2f4a0781124e05",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 2026,
+          "upstreamSha256": "73955b70bc357e8c1056e376f8dabe7dcfabeb2cba0e1b503b21323283f09af5",
+          "localSha256": "73955b70bc357e8c1056e376f8dabe7dcfabeb2cba0e1b503b21323283f09af5",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 2361,
+          "upstreamSha256": "0670af4f24a57964eb88303a0df7029ddd6b79d8aa266a2ee8eb7bd7da50f525",
+          "localSha256": "0670af4f24a57964eb88303a0df7029ddd6b79d8aa266a2ee8eb7bd7da50f525",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 1845,
+          "upstreamSha256": "6b2d519ee52dfc7aca1d0592659b97b0524c9214708634bf18dbeffdbfc90f61",
+          "localSha256": "6b2d519ee52dfc7aca1d0592659b97b0524c9214708634bf18dbeffdbfc90f61",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 1332,
+          "upstreamSha256": "db873c302745d30ae2d00b69bffdb25c1e66011aca0ba6536f93d88e7335eacf",
+          "localSha256": "db873c302745d30ae2d00b69bffdb25c1e66011aca0ba6536f93d88e7335eacf",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 1534,
+          "upstreamSha256": "515e8c1d0ce55280a33bafbbb4a8eef6eefe9989aa7b112b1c11444231c4008a",
+          "localSha256": "515e8c1d0ce55280a33bafbbb4a8eef6eefe9989aa7b112b1c11444231c4008a",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 1538,
+          "upstreamSha256": "28e247c7d163ca0ed925934f287d42a2cae7dab7991191db24573651b8ca137c",
+          "localSha256": "28e247c7d163ca0ed925934f287d42a2cae7dab7991191db24573651b8ca137c",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 1081,
+          "upstreamSha256": "72f45289a6a26519895fc95833db438a391cb362a7fd70ac7f23fe3ed1d02c97",
+          "localSha256": "72f45289a6a26519895fc95833db438a391cb362a7fd70ac7f23fe3ed1d02c97",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 2678,
+          "upstreamSha256": "ecfda08b33ed987e39a1d266455710294f6941f2e01f28986794f72b9d2f4cce",
+          "localSha256": "ecfda08b33ed987e39a1d266455710294f6941f2e01f28986794f72b9d2f4cce",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 926,
+          "upstreamSha256": "0ed22a12a3a1b20b7adbd389c1e643521c1c748d0d5d4f68d09de476931822fc",
+          "localSha256": "0ed22a12a3a1b20b7adbd389c1e643521c1c748d0d5d4f68d09de476931822fc",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 2042,
+          "upstreamSha256": "3c139b87b28ba915fdd710983fe4d4f198d8488c12ab615ec3b7d7f5d63d8459",
+          "localSha256": "3c139b87b28ba915fdd710983fe4d4f198d8488c12ab615ec3b7d7f5d63d8459",
+          "modified": false
+        }
+      ]
+    },
+    {
+      "id": "kanji_brown",
+      "name": "Kanji Brown",
+      "creators": ["Ka-hu"],
+      "license": "CC BY 4.0",
+      "spdxLicenseId": "CC-BY-4.0",
+      "upstreamPath": "ui/@build/pieces/assets/standard/kanji_brown",
+      "localPath": "public/pieces/standard/kanji_brown",
+      "sourceCommit": "acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "sourceCommitUrl": "https://github.com/WandererXII/lishogi/commit/acb3b12286dd41bc88edfa81172e6a5e7f68c52b",
+      "modification": {
+        "modified": false,
+        "details": "Copied byte-for-byte from the pinned upstream commit; no resizing, re-encoding, renaming, or other edits."
+      },
+      "files": [
+        {
+          "path": "0FU.svg",
+          "byteLength": 1405,
+          "upstreamSha256": "e016c72c949bd1bb6948e4044bb5465ac66c0db15018568cacfb4a451acee732",
+          "localSha256": "e016c72c949bd1bb6948e4044bb5465ac66c0db15018568cacfb4a451acee732",
+          "modified": false
+        },
+        {
+          "path": "0GI.svg",
+          "byteLength": 3144,
+          "upstreamSha256": "213ce0571782c09f841cc0e040e99a87f1be78d3edb4b229781ed54553732a2f",
+          "localSha256": "213ce0571782c09f841cc0e040e99a87f1be78d3edb4b229781ed54553732a2f",
+          "modified": false
+        },
+        {
+          "path": "0GY.svg",
+          "byteLength": 1194,
+          "upstreamSha256": "bf3aba70585d06b819d77f73359487de5f836313873632f52fa8ccb55843650f",
+          "localSha256": "bf3aba70585d06b819d77f73359487de5f836313873632f52fa8ccb55843650f",
+          "modified": false
+        },
+        {
+          "path": "0HI.svg",
+          "byteLength": 2411,
+          "upstreamSha256": "3db59a1043dd3863b14a6eb8d54b677bcb2de8a8a80617db8714afaf82b8ccec",
+          "localSha256": "3db59a1043dd3863b14a6eb8d54b677bcb2de8a8a80617db8714afaf82b8ccec",
+          "modified": false
+        },
+        {
+          "path": "0KA.svg",
+          "byteLength": 1833,
+          "upstreamSha256": "058bffc8ec4ffc9122696f6ccba2130300d32044fc70bb25fe4eaab2c7fe94a2",
+          "localSha256": "058bffc8ec4ffc9122696f6ccba2130300d32044fc70bb25fe4eaab2c7fe94a2",
+          "modified": false
+        },
+        {
+          "path": "0KE.svg",
+          "byteLength": 1920,
+          "upstreamSha256": "b04b4d244990bfebdb61c35297638b0fdd7130aa487e975af54c5f20e56b5195",
+          "localSha256": "b04b4d244990bfebdb61c35297638b0fdd7130aa487e975af54c5f20e56b5195",
+          "modified": false
+        },
+        {
+          "path": "0KI.svg",
+          "byteLength": 2228,
+          "upstreamSha256": "ca859367a5a133b14169ec3df54b2eba443c132ef38686f176f7a3b7dc1722c2",
+          "localSha256": "ca859367a5a133b14169ec3df54b2eba443c132ef38686f176f7a3b7dc1722c2",
+          "modified": false
+        },
+        {
+          "path": "0KY.svg",
+          "byteLength": 1726,
+          "upstreamSha256": "740e79d4a247a135228623a21d68251c6f29f9347c53fbb5ba5aaacb64989bf7",
+          "localSha256": "740e79d4a247a135228623a21d68251c6f29f9347c53fbb5ba5aaacb64989bf7",
+          "modified": false
+        },
+        {
+          "path": "0NG.svg",
+          "byteLength": 1272,
+          "upstreamSha256": "b2272be1fc0d75b0679d1d3de399fe7dfe0e298e7978e98e3285f1b2cb6500ba",
+          "localSha256": "b2272be1fc0d75b0679d1d3de399fe7dfe0e298e7978e98e3285f1b2cb6500ba",
+          "modified": false
+        },
+        {
+          "path": "0NK.svg",
+          "byteLength": 1494,
+          "upstreamSha256": "3e7ba3f0e197cad5e416b1078ed886b75b2152e6b7066ab65a7cc81049bd0944",
+          "localSha256": "3e7ba3f0e197cad5e416b1078ed886b75b2152e6b7066ab65a7cc81049bd0944",
+          "modified": false
+        },
+        {
+          "path": "0NY.svg",
+          "byteLength": 1488,
+          "upstreamSha256": "3cec90253c8c707d16ae31103b991a20f8390f62abfb6248110d08903a38c361",
+          "localSha256": "3cec90253c8c707d16ae31103b991a20f8390f62abfb6248110d08903a38c361",
+          "modified": false
+        },
+        {
+          "path": "0OU.svg",
+          "byteLength": 1034,
+          "upstreamSha256": "fb4a3ae86d0459afbf94020f64bdfbac5ad833e4fddc722d5cf50cd09941edd4",
+          "localSha256": "fb4a3ae86d0459afbf94020f64bdfbac5ad833e4fddc722d5cf50cd09941edd4",
+          "modified": false
+        },
+        {
+          "path": "0RY.svg",
+          "byteLength": 2610,
+          "upstreamSha256": "79bc2a5ceb8ed9040fc36a00622856d64fbb25fbdf66c1021713732cb938f2be",
+          "localSha256": "79bc2a5ceb8ed9040fc36a00622856d64fbb25fbdf66c1021713732cb938f2be",
+          "modified": false
+        },
+        {
+          "path": "0TO.svg",
+          "byteLength": 782,
+          "upstreamSha256": "b1dc32e739e6959ca89928c5359c39885d48fc008e0c49d3e493ea240cb8756b",
+          "localSha256": "b1dc32e739e6959ca89928c5359c39885d48fc008e0c49d3e493ea240cb8756b",
+          "modified": false
+        },
+        {
+          "path": "0UM.svg",
+          "byteLength": 1986,
+          "upstreamSha256": "9472292b78059e177c11861e4ae06c7ce81e0bde96d5e501c9778048946bc884",
+          "localSha256": "9472292b78059e177c11861e4ae06c7ce81e0bde96d5e501c9778048946bc884",
+          "modified": false
+        },
+        {
+          "path": "1FU.svg",
+          "byteLength": 1412,
+          "upstreamSha256": "970cc452e4b4aa236fc42124d066321e624fe4a093ed8723aafe92a5a8ead7c0",
+          "localSha256": "970cc452e4b4aa236fc42124d066321e624fe4a093ed8723aafe92a5a8ead7c0",
+          "modified": false
+        },
+        {
+          "path": "1GI.svg",
+          "byteLength": 3144,
+          "upstreamSha256": "c8e8399923fba94a75f614b5c1fefd3b0c5f25b7c526a639a6076f9d12448b6b",
+          "localSha256": "c8e8399923fba94a75f614b5c1fefd3b0c5f25b7c526a639a6076f9d12448b6b",
+          "modified": false
+        },
+        {
+          "path": "1GY.svg",
+          "byteLength": 1174,
+          "upstreamSha256": "2bb81cd0281e4365fb6792bf8cc69e2bff92f256a0346ce32ba6027598fb526f",
+          "localSha256": "2bb81cd0281e4365fb6792bf8cc69e2bff92f256a0346ce32ba6027598fb526f",
+          "modified": false
+        },
+        {
+          "path": "1HI.svg",
+          "byteLength": 2436,
+          "upstreamSha256": "becf496e9a9d7275f93db8c854b721156a00517cb359f4009f41e258ee3e3fc7",
+          "localSha256": "becf496e9a9d7275f93db8c854b721156a00517cb359f4009f41e258ee3e3fc7",
+          "modified": false
+        },
+        {
+          "path": "1KA.svg",
+          "byteLength": 1839,
+          "upstreamSha256": "89e1c426075359be109e5a41bf2db08ac61e13fc7aae157765710b91006a9728",
+          "localSha256": "89e1c426075359be109e5a41bf2db08ac61e13fc7aae157765710b91006a9728",
+          "modified": false
+        },
+        {
+          "path": "1KE.svg",
+          "byteLength": 1911,
+          "upstreamSha256": "f111267cad549dbf6474b71a2c388da1153ff0fa36111d65d0ccef74621bb5ac",
+          "localSha256": "f111267cad549dbf6474b71a2c388da1153ff0fa36111d65d0ccef74621bb5ac",
+          "modified": false
+        },
+        {
+          "path": "1KI.svg",
+          "byteLength": 2223,
+          "upstreamSha256": "9ac6f5a362c7a77254273f90d4554599856ec7201ddc0bbede070fbe83b875e6",
+          "localSha256": "9ac6f5a362c7a77254273f90d4554599856ec7201ddc0bbede070fbe83b875e6",
+          "modified": false
+        },
+        {
+          "path": "1KY.svg",
+          "byteLength": 1772,
+          "upstreamSha256": "969043ccffd403bd8fbe492b557e10db23cfb9a8094b07fe8e1498b035f87bbb",
+          "localSha256": "969043ccffd403bd8fbe492b557e10db23cfb9a8094b07fe8e1498b035f87bbb",
+          "modified": false
+        },
+        {
+          "path": "1NG.svg",
+          "byteLength": 1275,
+          "upstreamSha256": "239608f4a664609cf0108e48aedb488d0a5ddb31e3fa021a114dbb67cebd9bad",
+          "localSha256": "239608f4a664609cf0108e48aedb488d0a5ddb31e3fa021a114dbb67cebd9bad",
+          "modified": false
+        },
+        {
+          "path": "1NK.svg",
+          "byteLength": 1493,
+          "upstreamSha256": "178db3bf206142b4fba6b0404f510394a79b6cf55037d5bb67ced38524e822ff",
+          "localSha256": "178db3bf206142b4fba6b0404f510394a79b6cf55037d5bb67ced38524e822ff",
+          "modified": false
+        },
+        {
+          "path": "1NY.svg",
+          "byteLength": 1486,
+          "upstreamSha256": "c3a29ab43234ad4e349b342dc1ca3124a255f284260436f7a7647afa5c4c82d5",
+          "localSha256": "c3a29ab43234ad4e349b342dc1ca3124a255f284260436f7a7647afa5c4c82d5",
+          "modified": false
+        },
+        {
+          "path": "1OU.svg",
+          "byteLength": 1019,
+          "upstreamSha256": "e5ff744e21541fbed97d08734a8f9b17aef320d240a12dd38914075a07ac5690",
+          "localSha256": "e5ff744e21541fbed97d08734a8f9b17aef320d240a12dd38914075a07ac5690",
+          "modified": false
+        },
+        {
+          "path": "1RY.svg",
+          "byteLength": 2643,
+          "upstreamSha256": "fc45cf0d25bf775566b272a76599ff1653db4e6638751c992d16847be9be9ade",
+          "localSha256": "fc45cf0d25bf775566b272a76599ff1653db4e6638751c992d16847be9be9ade",
+          "modified": false
+        },
+        {
+          "path": "1TO.svg",
+          "byteLength": 785,
+          "upstreamSha256": "8969070be2ba7cd68f2c78c9579e6e1771e047430ebed2c20ae4260edf1b98e3",
+          "localSha256": "8969070be2ba7cd68f2c78c9579e6e1771e047430ebed2c20ae4260edf1b98e3",
+          "modified": false
+        },
+        {
+          "path": "1UM.svg",
+          "byteLength": 2000,
+          "upstreamSha256": "df1cc5e2bc1ea07512779a5a99c627dcaf4c36145fa632630a2a427ba965c398",
+          "localSha256": "df1cc5e2bc1ea07512779a5a99c627dcaf4c36145fa632630a2a427ba965c398",
+          "modified": false
+        }
+      ]
+    }
+  ],
+  "excludedSets": [
+    {
+      "id": "2kanji_3d",
+      "license": "CC BY-SA 3.0",
+      "reason": "ShareAlike license is outside the required CC BY 4.0 scope."
+    },
+    {
+      "id": "orangain",
+      "license": "CC BY-SA 3.0",
+      "reason": "ShareAlike license is outside the required CC BY 4.0 scope."
+    },
+    {
+      "id": "shogi_cz",
+      "license": "CC BY-SA 4.0",
+      "reason": "ShareAlike license is outside the required CC BY 4.0 scope."
+    },
+    {
+      "id": "shogi_bnw",
+      "license": "CC BY-SA 4.0",
+      "reason": "ShareAlike license is outside the required CC BY 4.0 scope."
+    },
+    {
+      "id": "ryoko_1kanji",
+      "license": "CC BY-SA 4.0",
+      "reason": "ShareAlike license is outside the required CC BY 4.0 scope."
+    },
+    {
+      "id": "logy_games",
+      "license": "CC BY-SA 4.0",
+      "reason": "ShareAlike license is outside the required CC BY 4.0 scope."
+    },
+    {
+      "id": "vald_opt",
+      "license": "CC BY-SA 4.0",
+      "reason": "ShareAlike license is outside the required CC BY 4.0 scope."
+    },
+    {
+      "id": "valdivia",
+      "license": "CC BY-SA 4.0",
+      "reason": "ShareAlike license is outside the required CC BY 4.0 scope."
+    },
+    {
+      "id": "western",
+      "license": "CC BY-SA 3.0",
+      "reason": "ShareAlike license is outside the required CC BY 4.0 scope."
+    },
+    {
+      "id": "engraved_cz",
+      "license": "CC BY-SA 4.0",
+      "reason": "ShareAlike license is outside the required CC BY 4.0 scope."
+    },
+    {
+      "id": "portella",
+      "license": "CC BY-NC-SA 4.0",
+      "reason": "NonCommercial and ShareAlike terms are prohibited."
+    },
+    {
+      "id": "portella_2kanji",
+      "license": "CC BY-NC-SA 4.0",
+      "reason": "NonCommercial and ShareAlike terms are prohibited."
+    },
+    {
+      "id": "dobutsu",
+      "license": "All rights reserved",
+      "reason": "Non-free exception; also not standard shogi."
+    }
+  ],
+  "excludedContent": [
+    {
+      "path": "ui/@build/pieces/assets/**",
+      "reason": "All other piece directories were audited against COPYING.md and excluded when their license was not exactly CC BY 4.0."
+    },
+    {
+      "path": "ui/@build/static/assets/**",
+      "reason": "No static artwork, logos, sounds, CSS, or TypeScript was acquired."
+    }
+  ]
+}
