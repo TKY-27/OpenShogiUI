@@ -29,6 +29,7 @@ import {
   type MatchClock,
   type MoveHighlight,
 } from "./play-settings";
+import { resolveShortcut } from "./keyboard";
 import {
   destinationIndex,
   HandStand,
@@ -117,6 +118,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
   const [now, setNow] = useState(() => Date.now());
   const [outcome, setOutcome] = useState<MatchOutcome | null>(null);
   const [confirmingResign, setConfirmingResign] = useState(false);
+  const [undone, setUndone] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
 
   const clocked = presetIsClocked(preset);
@@ -276,6 +278,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       const next = await adapter.playMove(movement);
       if (operationRef.current !== operation) return;
       setSnapshot(next);
+      setUndone([]);
       setClock(afterHuman);
       setTurnStartedAt(Date.now());
       setNow(Date.now());
@@ -343,6 +346,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       if (operationRef.current !== operation) return;
       const startingClock = initialClockFor(preset);
       setSnapshot(fresh);
+      setUndone([]);
       setClock(startingClock);
       setOrientation(humanSide === "black" ? "sente-bottom" : "gote-bottom");
       setPhase("playing");
@@ -360,6 +364,117 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       setBusy(null);
     }
   }
+
+  /**
+   * Replays the game two plies earlier: the player's move and the engine's
+   * reply. Two keeps the side to move on the human, so the position is always
+   * one the player can act on.
+   *
+   * Spent time is deliberately not returned. Rewinding a sudden-death clock
+   * would make the flag-fall rule meaningless.
+   */
+  async function rewind(
+    count: number,
+    nextUndone: (moves: string[]) => string[],
+  ) {
+    const adapter = adapterRef.current;
+    if (adapter === null || snapshot === null || busy !== null) return;
+    if (snapshot.moves.length < count) return;
+    const operation = operationRef.current + 1;
+    operationRef.current = operation;
+    setBusy("moving");
+    setSelection(null);
+    setPromotionMoves(null);
+    setNotice(null);
+    try {
+      const moves = snapshot.moves.slice(0, snapshot.moves.length - count);
+      const restored = await adapter.restart(
+        { initialSfen: snapshot.initialSfen, moves },
+        null,
+        null,
+      );
+      if (operationRef.current !== operation) return;
+      setSnapshot(restored);
+      setPrevious(null);
+      setUndone(nextUndone(snapshot.moves));
+      setOutcome(null);
+      setPhase("playing");
+      setTurnStartedAt(Date.now());
+      setNow(Date.now());
+      setBusy(null);
+    } catch (error) {
+      if (operationRef.current !== operation) return;
+      setNotice(error instanceof Error ? error.message : messages.play.error);
+      setBusy(null);
+    }
+  }
+
+  function takeback() {
+    void rewind(2, (moves) => [...undone, ...moves.slice(-2)]);
+  }
+
+  async function redo() {
+    const adapter = adapterRef.current;
+    if (adapter === null || snapshot === null || busy !== null) return;
+    if (undone.length < 2) return;
+    const operation = operationRef.current + 1;
+    operationRef.current = operation;
+    setBusy("moving");
+    setNotice(null);
+    try {
+      const replay = undone.slice(-2);
+      const restored = await adapter.restart(
+        {
+          initialSfen: snapshot.initialSfen,
+          moves: [...snapshot.moves, ...replay],
+        },
+        null,
+        null,
+      );
+      if (operationRef.current !== operation) return;
+      setSnapshot(restored);
+      setPrevious(null);
+      setUndone(undone.slice(0, -2));
+      setTurnStartedAt(Date.now());
+      setNow(Date.now());
+      setBusy(null);
+    } catch (error) {
+      if (operationRef.current !== operation) return;
+      setNotice(error instanceof Error ? error.message : messages.play.error);
+      setBusy(null);
+    }
+  }
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const action = resolveShortcut({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        isComposing: event.isComposing,
+        target: event.target as HTMLElement | null,
+      });
+      if (action === null) return;
+      if (action === "clear-selection") {
+        setSelection(null);
+        return;
+      }
+      if (action === "undo") {
+        event.preventDefault();
+        takeback();
+        return;
+      }
+      if (action === "redo") {
+        event.preventDefault();
+        void redo();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   function resign() {
     setConfirmingResign(false);
@@ -462,7 +577,11 @@ export function MatchPlay({ locale }: { locale: Locale }) {
           </fieldset>
 
           <p className="match-setup__note">{match.engineAllocatesTime}</p>
-          {clocked ? null : (
+          {clocked ? (
+            // title alone is unreachable by keyboard and touch, so the caveat
+            // is stated here where there is room for it.
+            <p className="match-setup__note">{match.takebackClockNote}</p>
+          ) : (
             <p className="match-setup__note">{match.casualCap}</p>
           )}
 
@@ -575,6 +694,14 @@ export function MatchPlay({ locale }: { locale: Locale }) {
             type="button"
           >
             {match.flip}
+          </button>
+          <button
+            disabled={busy !== null || (snapshot?.moves.length ?? 0) < 2}
+            onClick={takeback}
+            title={clocked ? match.takebackClockNote : undefined}
+            type="button"
+          >
+            {match.takeback}
           </button>
           {phase === "playing" ? (
             <button

@@ -29,6 +29,7 @@ import {
 } from "./browser-engine";
 import { type EngineReadyState, WasmEngineAdapter } from "./engine-adapter";
 import type { RestorableModel, RestorableOpeningBook } from "./engine-client";
+import { resolveShortcut } from "./keyboard";
 import { getMessages, type Locale } from "./localization";
 import {
   PIECE_ASSET_CATALOG,
@@ -1100,6 +1101,49 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     setSelection(null);
     setPromotionMoves(null);
   }
+
+  // Arrow keys walk the history; Escape drops a piece selection. Both are
+  // presentation only and never mutate the live game.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const action = resolveShortcut({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        isComposing: event.isComposing,
+        target: event.target as HTMLElement | null,
+      });
+      if (action === null) return;
+      switch (action) {
+        case "history-previous":
+          event.preventDefault();
+          selectHistory(displayedIndex - 1);
+          break;
+        case "history-next":
+          event.preventDefault();
+          selectHistory(displayedIndex + 1);
+          break;
+        case "history-first":
+          event.preventDefault();
+          selectHistory(0);
+          break;
+        case "history-last":
+          event.preventDefault();
+          selectHistory(history.length - 1);
+          break;
+        case "clear-selection":
+          setSelection(null);
+          break;
+        default:
+          break;
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
 
   async function applyMove(movement: string) {
     const adapter = adaptersRef.current?.play;
