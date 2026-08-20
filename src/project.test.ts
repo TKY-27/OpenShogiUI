@@ -20,6 +20,7 @@ describe("project foundation metadata", () => {
   });
 
   it("keeps Workspace as the safe default for unknown hash routes", () => {
+    expect(routeForHash("#/match")).toBe("match");
     expect(routeForHash("#/evaluation-lab")).toBe("evaluation-lab");
     expect(routeForHash("#/browser-play")).toBe("browser-play");
     expect(routeForHash("#/workspace")).toBe("workspace");

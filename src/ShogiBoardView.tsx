@@ -256,7 +256,11 @@ export function ShogiBoard({
           <span key={file}>{file}</span>
         ))}
       </div>
-      <div aria-label={messages.play.title} className="shogi-board" role="grid">
+      <div
+        aria-label={messages.play.boardLabel}
+        className="shogi-board"
+        role="grid"
+      >
         {Array.from({ length: 9 }, (_, visualRank) => (
           <div className="board-row" key={rankLabels[visualRank]} role="row">
             {order.slice(visualRank * 9, visualRank * 9 + 9).map((index) => {

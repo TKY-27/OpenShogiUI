@@ -11,6 +11,7 @@ export interface Messages {
   header: {
     primaryNavigation: string;
     workspace: string;
+    match: string;
     browserPlay: string;
     evaluationLab: string;
     language: string;
@@ -19,6 +20,7 @@ export interface Messages {
   };
   play: {
     title: string;
+    boardLabel: string;
     description: string;
     localNote: string;
     matchMode: string;
@@ -74,6 +76,39 @@ export interface Messages {
     deviceChoice: string;
     supplementalLines: string;
   };
+  match: {
+    title: string;
+    subtitle: string;
+    setupHeading: string;
+    timeControl: string;
+    preset: Record<"blitz3" | "rapid10" | "unlimited", string>;
+    presetDetail: Record<"blitz3" | "rapid10" | "unlimited", string>;
+    yourSide: string;
+    sente: string;
+    gote: string;
+    strength: string;
+    engineAllocatesTime: string;
+    casualCap: string;
+    start: string;
+    resign: string;
+    resignConfirm: string;
+    confirm: string;
+    cancel: string;
+    flip: string;
+    takeback: string;
+    takebackClockNote: string;
+    rematch: string;
+    exit: string;
+    moveNumber: string;
+    yourTurn: string;
+    engineThinking: string;
+    preparing: string;
+    you: string;
+    engine: string;
+    result: Record<"win" | "loss", string>;
+    reason: Record<"checkmate" | "timeout" | "resignation", string>;
+    remainingTime: (clock: string) => string;
+  };
   workspace: {
     headline: string;
     summary: string;
@@ -84,6 +119,13 @@ export interface Messages {
     delivery: string;
     ready: string;
     inProgress: string;
+    startHeading: string;
+    startMatch: string;
+    startMatchDetail: string;
+    startAnalysis: string;
+    startAnalysisDetail: string;
+    startLab: string;
+    startLabDetail: string;
   };
   lab: {
     title: string;
@@ -327,7 +369,8 @@ const messages: Record<Locale, Messages> = {
     header: {
       primaryNavigation: "メインナビゲーション",
       workspace: "ワークスペース",
-      browserPlay: "ブラウザ対局",
+      match: "対局",
+      browserPlay: "解析",
       evaluationLab: "評価ラボ",
       language: "表示言語",
       japanese: "日本語",
@@ -344,9 +387,63 @@ const messages: Record<Locale, Messages> = {
       delivery: "静的サイト配信",
       ready: "準備完了",
       inProgress: "進行中",
+      startHeading: "はじめる",
+      startMatch: "AIと対局",
+      startMatchDetail: "3分切れ負け・10分切れ負け・時間無制限",
+      startAnalysis: "局面を解析",
+      startAnalysisDetail: "評価値・候補手・棋譜の確認",
+      startLab: "評価ラボ",
+      startLabDetail: "ローカル対局レポートの検証",
+    },
+    match: {
+      title: "対局",
+      subtitle: "盤だけで指す。解析は表示しません。",
+      setupHeading: "対局設定",
+      timeControl: "持ち時間",
+      preset: {
+        blitz3: "3分切れ負け",
+        rapid10: "10分切れ負け",
+        unlimited: "時間無制限",
+      },
+      presetDetail: {
+        blitz3: "秒読み・加算なし",
+        rapid10: "秒読み・加算なし",
+        unlimited: "時計を表示しません",
+      },
+      yourSide: "あなたの手番",
+      sente: "先手",
+      gote: "後手",
+      strength: "AIの探索設定",
+      engineAllocatesTime:
+        "1手ごとの使用時間はエンジンが残り時間から自分で決めます。",
+      casualCap: "時間無制限では、エンジンは1手あたり最大20秒で指します。",
+      start: "対局開始",
+      resign: "投了",
+      resignConfirm: "投了しますか？この操作は取り消せません。",
+      confirm: "投了する",
+      cancel: "キャンセル",
+      flip: "盤を反転",
+      takeback: "待った",
+      takebackClockNote: "持ち時間ありの対局では、消費した時間は戻りません。",
+      rematch: "もう一局",
+      exit: "対局を終える",
+      moveNumber: "手数",
+      yourTurn: "あなたの手番です",
+      engineThinking: "AIが考えています…",
+      preparing: "エンジンを準備しています…",
+      you: "あなた",
+      engine: "AI",
+      result: { win: "あなたの勝ち", loss: "あなたの負け" },
+      reason: {
+        checkmate: "詰み",
+        timeout: "時間切れ",
+        resignation: "投了",
+      },
+      remainingTime: (clock) => `残り ${clock}`,
     },
     play: {
-      title: "ブラウザ対局",
+      title: "局面解析",
+      boardLabel: "将棋盤",
       description: "盤面・合法手・探索を、この端末のWeb Worker内で実行します。",
       localNote: "棋譜とモデルは外部へ送信されません。",
       matchMode: "真剣対戦",
@@ -518,7 +615,8 @@ const messages: Record<Locale, Messages> = {
     header: {
       primaryNavigation: "Primary navigation",
       workspace: "Workspace",
-      browserPlay: "Browser Play",
+      match: "Match",
+      browserPlay: "Analysis",
       evaluationLab: "Evaluation Lab",
       language: "Display language",
       japanese: "日本語",
@@ -535,9 +633,65 @@ const messages: Record<Locale, Messages> = {
       delivery: "Static site delivery",
       ready: "Ready",
       inProgress: "In progress",
+      startHeading: "Start",
+      startMatch: "Play the AI",
+      startMatchDetail: "3-minute, 10-minute, or untimed",
+      startAnalysis: "Analyze a position",
+      startAnalysisDetail: "Evaluation, candidate lines, and move history",
+      startLab: "Evaluation Lab",
+      startLabDetail: "Inspect local arena reports",
+    },
+    match: {
+      title: "Match",
+      subtitle: "Just the board. No analysis is shown.",
+      setupHeading: "Match setup",
+      timeControl: "Time control",
+      preset: {
+        blitz3: "3 min sudden death",
+        rapid10: "10 min sudden death",
+        unlimited: "Untimed",
+      },
+      presetDetail: {
+        blitz3: "No byoyomi, no increment",
+        rapid10: "No byoyomi, no increment",
+        unlimited: "No clock is shown",
+      },
+      yourSide: "Your side",
+      sente: "Sente",
+      gote: "Gote",
+      strength: "AI search profile",
+      engineAllocatesTime:
+        "The engine decides how long to think for each move from its own remaining time.",
+      casualCap:
+        "When untimed, the engine plays with a 20 second cap per move.",
+      start: "Start match",
+      resign: "Resign",
+      resignConfirm: "Resign this match? This cannot be undone.",
+      confirm: "Resign",
+      cancel: "Cancel",
+      flip: "Flip board",
+      takeback: "Take back",
+      takebackClockNote:
+        "In a timed match, time already spent is not returned.",
+      rematch: "Play again",
+      exit: "Leave match",
+      moveNumber: "Move",
+      yourTurn: "Your turn",
+      engineThinking: "The AI is thinking…",
+      preparing: "Preparing engine…",
+      you: "You",
+      engine: "AI",
+      result: { win: "You win", loss: "You lose" },
+      reason: {
+        checkmate: "Checkmate",
+        timeout: "Time forfeit",
+        resignation: "Resignation",
+      },
+      remainingTime: (clock) => `${clock} left`,
     },
     play: {
-      title: "Browser Play",
+      title: "Position analysis",
+      boardLabel: "Shogi board",
       description:
         "Run the board, legal moves, and search inside a Web Worker on this device.",
       localNote: "Game records and model files never leave this browser.",

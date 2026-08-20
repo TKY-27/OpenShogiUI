@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const browserPlay = readFileSync(join(root, "src/BrowserPlay.tsx"), "utf8");
 const boardView = readFileSync(join(root, "src/ShogiBoardView.tsx"), "utf8");
+const matchPlay = readFileSync(join(root, "src/MatchPlay.tsx"), "utf8");
 const app = readFileSync(join(root, "src/App.tsx"), "utf8");
 const styles = readFileSync(join(root, "src/index.css"), "utf8");
 const failures = [];
@@ -35,6 +36,26 @@ for (const marker of requiredBrowserEvidence) {
     failures.push(`BrowserPlay is missing ${marker}`);
 }
 
+const requiredMatchEvidence = [
+  'role="status"',
+  'aria-live="polite"',
+  'aria-modal="true"',
+  "showModal()",
+  "aria-label={remainingLabel(formatMatchClock(remainingMs))}",
+  'type="button"',
+];
+for (const marker of requiredMatchEvidence) {
+  if (!matchPlay.includes(marker))
+    failures.push(`MatchPlay is missing ${marker}`);
+}
+
+// The match route must not be able to render an analysis surface at all.
+for (const forbidden of ["analysis-panel", "analysis-lines", "scoreCp"]) {
+  if (matchPlay.includes(forbidden)) {
+    failures.push(`MatchPlay must not reference ${forbidden}`);
+  }
+}
+
 for (const marker of [
   "Source Code",
   "AGPL-3.0-only",
@@ -57,6 +78,10 @@ for (const selector of [
   ".board-square--pv",
   "@media (prefers-reduced-motion: reduce)",
 ]) {
+  if (!styles.includes(selector)) failures.push(`CSS is missing ${selector}`);
+}
+
+for (const selector of [".match-clock--active", ".match-clock--urgent"]) {
   if (!styles.includes(selector)) failures.push(`CSS is missing ${selector}`);
 }
 

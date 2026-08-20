@@ -1229,6 +1229,171 @@ input[type="number"] {
 }
 
 /* --------------------------------------------------------------------------
+   5b. Match mode
+
+   Board only. No evaluation, principal variation, depth, or node count is
+   rendered on this route at all.
+   -------------------------------------------------------------------------- */
+
+.match-page {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-4) var(--space-3);
+  justify-items: center;
+  align-content: start;
+  overflow-y: auto;
+}
+
+/*
+ * Flex rather than grid rows: the error notice is conditional, so fixed row
+ * placement would put the board in the wrong track whenever it is absent.
+ */
+.match-page--playing {
+  display: flex;
+  padding: var(--space-3);
+  align-items: center;
+  flex-direction: column;
+  gap: var(--space-2);
+  overflow: hidden;
+}
+
+.match-page--playing > .play-notice {
+  width: min(100%, var(--board-max));
+  flex: 0 0 auto;
+}
+
+/* Setup ------------------------------------------------------------------- */
+
+.match-setup {
+  display: grid;
+  width: min(100%, 30rem);
+  align-content: start;
+  gap: var(--space-3);
+}
+
+.match-setup h1 {
+  font-size: 1.25rem;
+}
+
+.match-setup__lead {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.match-setup__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+.match-start {
+  min-height: 2.75rem;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--accent);
+  margin-top: var(--space-2);
+  background: var(--accent);
+  color: #fffaf4;
+  cursor: pointer;
+  font: 600 0.875rem/1.2 var(--ui-font);
+}
+
+/* Playing ----------------------------------------------------------------- */
+
+.match-board {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  justify-items: center;
+  gap: var(--space-2);
+}
+
+.match-clock {
+  display: grid;
+  width: min(100%, var(--board-max));
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.match-clock--active {
+  border-color: var(--ink);
+  border-left: 3px solid var(--accent);
+}
+
+.match-clock__side {
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.match-clock__name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.match-clock__time {
+  font-family: var(--mono-font);
+  font-size: 1.375rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.match-clock--urgent .match-clock__time {
+  color: var(--accent);
+}
+
+.match-page--playing .board-fit {
+  width: 100%;
+}
+
+.match-controls {
+  display: grid;
+  width: min(100%, var(--board-max));
+  flex: 0 0 auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.match-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.match-move-number {
+  display: grid;
+  margin: 0;
+  justify-items: end;
+}
+
+.match-move-number span {
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.match-move-number strong {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.match-controls .inline-actions button.match-resign {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* --------------------------------------------------------------------------
    6. Dialogs
    -------------------------------------------------------------------------- */
 

@@ -6,6 +6,7 @@ import pieceAssetNotices from "../THIRD_PARTY_ASSETS.md?raw";
 
 import { BrowserPlay } from "./BrowserPlay";
 import { EvaluationLab } from "./EvaluationLab";
+import { MatchPlay } from "./MatchPlay";
 import {
   applyDocumentLanguage,
   DEFAULT_LOCALE,
@@ -63,6 +64,22 @@ function WorkspaceHome({ locale }: { locale: Locale }) {
           </p>
         </div>
         <BoardMotif />
+      </section>
+
+      <section className="start-actions" aria-labelledby="start-title">
+        <h2 id="start-title">{workspace.startHeading}</h2>
+        <a className="start-action start-action--primary" href="#/match">
+          <strong>{workspace.startMatch}</strong>
+          <span>{workspace.startMatchDetail}</span>
+        </a>
+        <a className="start-action" href="#/browser-play">
+          <strong>{workspace.startAnalysis}</strong>
+          <span>{workspace.startAnalysisDetail}</span>
+        </a>
+        <a className="start-action" href="#/evaluation-lab">
+          <strong>{workspace.startLab}</strong>
+          <span>{workspace.startLabDetail}</span>
+        </a>
       </section>
 
       <section className="workspace" aria-labelledby="workspace-title">
@@ -185,9 +202,10 @@ function App() {
   const [noticeView, setNoticeView] = useState<NoticeView | null>(null);
   const isEvaluationLab = route === "evaluation-lab";
   const isBrowserPlay = route === "browser-play";
+  const isMatch = route === "match";
   // App routes own a fixed-height shell whose panes scroll; document routes
   // keep normal page flow because their content is genuinely long.
-  const isAppRoute = isBrowserPlay;
+  const isAppRoute = isBrowserPlay || isMatch;
   const selectedMessages = getMessages(locale);
 
   useEffect(() => {
@@ -217,11 +235,16 @@ function App() {
         >
           <a
             aria-current={
-              !isEvaluationLab && !isBrowserPlay ? "page" : undefined
+              !isEvaluationLab && !isBrowserPlay && !isMatch
+                ? "page"
+                : undefined
             }
             href="#/workspace"
           >
             {selectedMessages.header.workspace}
+          </a>
+          <a aria-current={isMatch ? "page" : undefined} href="#/match">
+            {selectedMessages.header.match}
           </a>
           <a
             aria-current={isBrowserPlay ? "page" : undefined}
@@ -245,7 +268,9 @@ function App() {
       </header>
 
       <div className="app-main">
-        {isBrowserPlay ? (
+        {isMatch ? (
+          <MatchPlay locale={locale} />
+        ) : isBrowserPlay ? (
           <BrowserPlay locale={locale} />
         ) : isEvaluationLab ? (
           <EvaluationLab locale={locale} />

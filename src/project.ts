@@ -12,9 +12,14 @@ export const workspaceStatuses = [
   { workspace: "delivery", status: "ready" },
 ] as const;
 
-export type WorkspaceRoute = "workspace" | "browser-play" | "evaluation-lab";
+export type WorkspaceRoute =
+  | "workspace"
+  | "match"
+  | "browser-play"
+  | "evaluation-lab";
 
 export function routeForHash(hash: string): WorkspaceRoute {
+  if (hash === "#/match") return "match";
   if (hash === "#/browser-play") return "browser-play";
   if (hash === "#/evaluation-lab") return "evaluation-lab";
   return "workspace";
