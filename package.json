@@ -1,0 +1,42 @@
+{
+  "name": "open-shogi-ui",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Standalone local-first browser interface for OpenShogiAI",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13 <23",
+    "npm": ">=10 <11"
+  },
+  "scripts": {
+    "boundary": "node scripts/check-boundaries.mjs",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run boundary && npm run license:check && npm run provenance:check && npm run build",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/*.mjs\" \"*.{json,html,ts}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"scripts/*.mjs\" \"*.{json,html,ts}\"",
+    "integration:ai": "node scripts/verify-ai-wasm.mjs",
+    "license:check": "node scripts/check-license.mjs",
+    "lint": "oxlint --deny-warnings src vite.config.ts",
+    "preview": "vite preview",
+    "provenance:check": "node scripts/check-provenance.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.2",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.3",
+    "oxlint": "1.71.0",
+    "prettier": "3.8.3",
+    "typescript": "6.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.6"
+  }
+}

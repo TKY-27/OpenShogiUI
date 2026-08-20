@@ -1,0 +1,20 @@
+# Node and Vite
+/node_modules/
+/dist/
+/.npm-cache/
+/.playwright-mcp/
+*.tsbuildinfo
+
+# Secrets and machine-local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# macOS and editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
