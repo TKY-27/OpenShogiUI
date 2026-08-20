@@ -1,8 +1,9 @@
 # OpenShogiUI
 
 OpenShogiUI is the standalone browser interface for OpenShogiAI. It supports local browser play,
-position analysis, and import-only inspection of bounded arena reports. The WebAssembly engine,
-game state, search, and optional model stay in a module Worker on the user's device.
+continuous position analysis, and import-only inspection of bounded arena reports. Separate play
+and analysis module Workers keep WebAssembly game state, search, optional models, and optional
+opening books on the user's device.
 
 This clean-history repository contains the UI only. It has no Rust engine source, Python
 training stack, data-acquisition pipeline, local model, or private source history.
@@ -30,6 +31,12 @@ npm run preview
 The build output is `dist/`. Hash routes provide Workspace, Browser Play, and Evaluation Lab
 without requiring server-side route rewrites.
 
+Browser Play includes independent Sente/Gote role and board-orientation controls, move-history
+navigation, takeover without position mutation, bounded time controls, MultiPV analysis, opening
+profiles, local opening-book/model loading, and 13 selectable CC BY 4.0 piece sets. The default
+casual time control delegates to the engine's adaptive policy with its documented 20-second cap;
+fixed, clock, and node limits are serialized through `open_shogi_time_control/v1`.
+
 ## AI integration contract
 
 The four committed files under `src/generated/` are a pinned interface snapshot produced by the
@@ -40,8 +47,9 @@ all four files together and verify that the snapshots remain byte-identical:
 OPENSHOGIAI_ROOT=../OpenShogiAI-final npm run integration:ai
 ```
 
-Only `src/engine.worker.ts` imports the generated JavaScript/Wasm interface. See
-`ARCHITECTURE.md` and `docs/interfaces.md` for the closed message and artifact boundaries.
+Only `src/engine.worker.ts` imports the generated JavaScript/Wasm interface. The frozen engine
+commit and all four generated hashes are recorded in `PROVENANCE.md`. See `ARCHITECTURE.md` and
+`docs/interfaces.md` for the closed message, cache-identity, and artifact boundaries.
 
 ## Static hosting preparation
 
@@ -53,5 +61,5 @@ No deployment, upload, release, or remote push is performed by this repository's
 ## License
 
 Project-owned source is licensed under `AGPL-3.0-only`. Generated AI bindings, dependency code,
-and optional local model files retain their own applicable scope; see `LICENSE_SCOPE.md` and
-`THIRD_PARTY.md`.
+optional local files, and bundled CC BY 4.0 piece art retain their own applicable scope; see
+`LICENSE_SCOPE.md`, `THIRD_PARTY.md`, and `THIRD_PARTY_ASSETS.md`.

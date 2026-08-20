@@ -83,6 +83,13 @@ function startPosition(): BrowserSnapshot {
     moves: [],
     terminal: null,
     evaluator: { kind: "handcrafted-only", model: null },
+    openingBook: null,
+    openingPolicy: {
+      profile: "ibisha_strict",
+      maxPlies: 40,
+      minimumSampleCount: 2,
+      maximumTeacherLossCp: 80,
+    },
   };
 }
 
@@ -112,9 +119,9 @@ describe("browser shogi board", () => {
     ]);
     expect(markup.match(/role="row"/g)).toHaveLength(9);
     expect(markup.match(/role="gridcell"/g)).toHaveLength(81);
-    expect(markup.match(/class="shogi-piece/g)).toHaveLength(40);
-    expect(markup.match(/shogi-piece--white/g)).toHaveLength(20);
-    expect(markup.match(/shogi-piece--black/g)).toHaveLength(20);
+    expect(markup.match(/class="piece-image"/g)).toHaveLength(40);
+    expect(markup.match(/src="[^"]+\/0[A-Z]{2}\.svg"/g)).toHaveLength(20);
+    expect(markup.match(/src="[^"]+\/1[A-Z]{2}\.svg"/g)).toHaveLength(20);
     expect(
       markup.match(/data-kind="pawn" data-rank="3" data-side="white"/g),
     ).toHaveLength(9);
@@ -135,17 +142,80 @@ describe("browser shogi board", () => {
     );
   });
 
-  it("rotates only white pieces and preserves equal-width hand columns", () => {
+  it("keeps a fixed piece frame and rotates the complete asset orientation on flip", () => {
     const styles = readFileSync(
       new URL("./index.css", import.meta.url),
       "utf8",
     );
 
     expect(styles).toMatch(
-      /\.shogi-piece--white\s*\{[^}]*transform:\s*rotate\(180deg\)/s,
+      /\.piece-frame--flipped\s*\{[^}]*transform:\s*rotate\(180deg\)/s,
     );
     expect(styles).toMatch(
-      /\.board-stage\s*\{[^}]*grid-template-columns:\s*minmax\(6\.7rem, 8\.5rem\)[^;]*minmax\(\s*6\.7rem,\s*8\.5rem\s*\)/s,
+      /\.piece-image\s*\{[^}]*width:\s*90%;[^}]*height:\s*90%/s,
+    );
+  });
+
+  it("renders orientation-aware highlights and preserves board-square semantics", () => {
+    const markup = renderToStaticMarkup(
+      <ShogiBoard
+        disabled={false}
+        lastMove={{
+          from: { file: 7, rank: 7 },
+          to: { file: 7, rank: 6 },
+          drop: false,
+          capture: true,
+          promotion: true,
+        }}
+        messages={getMessages("en")}
+        onSquare={() => undefined}
+        orientation="gote-bottom"
+        pieceSet="kanji_brown"
+        pv={["7g7f+", "P*5e"]}
+        selection={null}
+        snapshot={startPosition()}
+      />,
+    );
+
+    const firstSquare = markup.match(
+      /<button[^>]*class="board-square[^>]*>/,
+    )?.[0];
+    expect(firstSquare).toContain('data-file="1"');
+    expect(firstSquare).toContain('data-rank="9"');
+    expect(markup).toMatch(/board-square--last-origin/);
+    expect(markup).toMatch(/board-square--last-destination/);
+    expect(markup).toMatch(/board-square--last-capture/);
+    expect(markup).toMatch(/board-square--last-promotion/);
+    expect(markup).toMatch(/board-square--pv/);
+    expect(markup).toContain("last move origin");
+    expect(markup).toContain("last move destination");
+    expect(markup).toContain("analysis PV preview");
+  });
+
+  it("keeps image failure fallback and desktop/mobile layout contracts explicit", () => {
+    const source = readFileSync(
+      new URL("./BrowserPlay.tsx", import.meta.url),
+      "utf8",
+    );
+    const styles = readFileSync(
+      new URL("./index.css", import.meta.url),
+      "utf8",
+    );
+    const mobileLayout = styles.slice(
+      styles.lastIndexOf("@media (max-width: 48rem)"),
+    );
+
+    expect(source).toContain("const [failed, setFailed] = useState(false);");
+    expect(source).toContain("onError={() => setFailed(true)}");
+    expect(source).toContain("className={`shogi-piece shogi-piece--${side}`}");
+    expect(styles).toMatch(
+      /\.analysis-layout\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(13\.5rem, 18rem\)/s,
+    );
+    expect(mobileLayout).toMatch(
+      /\.analysis-layout\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column/s,
+    );
+    expect(mobileLayout).toMatch(
+      /\.analysis-workspace \.board-stage\s*\{[^}]*grid-template-areas:\s*"white"\s*"board"\s*"black"/s,
     );
   });
 });

@@ -1,13 +1,23 @@
 import {
+  AnalysisResponse,
+  AnalysisStart,
+  AnalysisStep,
   BrowserSnapshot,
   EvaluatorChoice,
   ModelSummary,
+  OpeningBookSummary,
+  OpeningPolicySummary,
+  OpeningProfile,
+  parseAnalysisResponse,
   parseBrowserSnapshot,
   parseModelSummary,
+  parseOpeningBookSummary,
+  parseOpeningPolicySummary,
   parseSearchResponse,
   parseWorkerResponse,
   SearchProfile,
   SearchResponse,
+  TimeControl,
   WorkerRequest,
 } from "./browser-engine";
 
@@ -32,12 +42,20 @@ export interface RestorableModel {
   expectedArtifactSha256: string | null;
 }
 
+export interface RestorableOpeningBook {
+  bytes: ArrayBuffer;
+  expectedArtifactSha256: string | null;
+}
+
 export class EngineWorkerClient {
   private worker: Worker;
   private nextId = 1;
   private readonly pending = new Map<number, PendingRequest>();
 
-  constructor() {
+  constructor(
+    private readonly role: "play" | "analysis" = "play",
+    private readonly onCrash?: (message: string) => void,
+  ) {
     this.worker = this.createWorker();
   }
 
@@ -83,21 +101,108 @@ export class EngineWorkerClient {
     profile: SearchProfile,
     evaluator: EvaluatorChoice,
     multiPv: number,
+    timeControl: TimeControl | null = null,
   ): Promise<SearchResponse> {
     return parseSearchResponse(
-      await this.request({ kind: "search", profile, evaluator, multiPv }),
+      await this.request({
+        kind: "search",
+        profile,
+        evaluator,
+        multiPv,
+        timeControl,
+      }),
+    );
+  }
+
+  async loadOpeningBook(
+    openingBook: RestorableOpeningBook,
+  ): Promise<OpeningBookSummary> {
+    const transferable = openingBook.bytes.slice(0);
+    return parseOpeningBookSummary(
+      await this.request(
+        {
+          kind: "load-opening-book",
+          bytes: transferable,
+          expectedArtifactSha256: openingBook.expectedArtifactSha256,
+        },
+        [transferable],
+      ),
+    );
+  }
+
+  async unloadOpeningBook(): Promise<BrowserSnapshot> {
+    return parseBrowserSnapshot(
+      await this.request({ kind: "unload-opening-book" }),
+    );
+  }
+
+  async configureOpening(
+    profile: OpeningProfile,
+    maxPlies = 40,
+    minimumSampleCount = 2,
+    maximumTeacherLossCp = 80,
+  ): Promise<OpeningPolicySummary> {
+    return parseOpeningPolicySummary(
+      await this.request({
+        kind: "configure-opening",
+        profile,
+        maxPlies,
+        minimumSampleCount,
+        maximumTeacherLossCp,
+      }),
+    );
+  }
+
+  async analysisStart(
+    profile: SearchProfile,
+    evaluator: EvaluatorChoice,
+    request: AnalysisStart,
+  ): Promise<AnalysisResponse> {
+    return parseAnalysisResponse(
+      await this.request({
+        kind: "analysis-start",
+        profile,
+        evaluator,
+        request,
+      }),
+    );
+  }
+
+  async analysisStep(request: AnalysisStep): Promise<AnalysisResponse> {
+    return parseAnalysisResponse(
+      await this.request({ kind: "analysis-step", request }),
+    );
+  }
+
+  async analysisStop(): Promise<AnalysisResponse> {
+    return parseAnalysisResponse(await this.request({ kind: "analysis-stop" }));
+  }
+
+  async analysisWorkerFailed(): Promise<AnalysisResponse> {
+    return parseAnalysisResponse(
+      await this.request({ kind: "analysis-worker-failed" }),
+    );
+  }
+
+  async analysisRestart(): Promise<AnalysisResponse> {
+    return parseAnalysisResponse(
+      await this.request({ kind: "analysis-restart" }),
     );
   }
 
   async cancelAndRestore(
     session: EngineSession,
     model: RestorableModel | null,
+    openingBook: RestorableOpeningBook | null = null,
   ): Promise<BrowserSnapshot> {
     this.terminatePending("search cancelled");
     this.worker = this.createWorker();
     const snapshot = await this.initialize(session);
     if (model !== null) {
       await this.loadModel(model);
+    }
+    if (openingBook !== null) {
+      await this.loadOpeningBook(openingBook);
     }
     return snapshot;
   }
@@ -109,7 +214,7 @@ export class EngineWorkerClient {
   private createWorker(): Worker {
     const worker = new Worker(new URL("./engine.worker.ts", import.meta.url), {
       type: "module",
-      name: "open-shogi-engine",
+      name: `open-shogi-${this.role}`,
     });
     worker.addEventListener("message", (event: MessageEvent<unknown>) => {
       let response;
@@ -131,7 +236,14 @@ export class EngineWorkerClient {
       }
     });
     worker.addEventListener("error", (event) => {
-      this.terminatePending(event.message || "engine worker crashed");
+      const message = event.message || `${this.role} engine worker crashed`;
+      this.terminatePending(message);
+      this.onCrash?.(message);
+    });
+    worker.addEventListener("messageerror", () => {
+      const message = `${this.role} engine worker message could not be decoded`;
+      this.terminatePending(message);
+      this.onCrash?.(message);
     });
     return worker;
   }

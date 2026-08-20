@@ -2,12 +2,28 @@ export const WORKER_RESPONSE_SCHEMA = "open_shogi_worker_response/v1";
 export const SNAPSHOT_SCHEMA = "open_shogi_browser_snapshot/v1";
 export const SEARCH_SCHEMA = "open_shogi_browser_search/v1";
 export const MODEL_SCHEMA = "open_shogi_browser_model/v1";
+export const OPENING_BOOK_SUMMARY_SCHEMA = "open_shogi_browser_opening_book/v1";
+export const ANALYSIS_SCHEMA = "open_shogi_analysis/v1";
+export const TIME_CONTROL_SCHEMA = "open_shogi_time_control/v1";
+export const RESOURCE_BUDGET_SCHEMA = "open_shogi_resource_budget/v1";
 export const MAX_BROWSER_MODEL_BYTES = 16 * 1024 * 1024;
+export const MAX_BROWSER_OPENING_BOOK_BYTES = 64 * 1024 * 1024;
 export const MAX_GAME_MOVES = 512;
 
 export type Side = "black" | "white";
 export type SearchProfile = "eco" | "balanced" | "quality";
-export type EvaluatorChoice = "handcrafted" | "model";
+export type EvaluatorChoice =
+  | "overall-champion"
+  | "model"
+  | "model-residual"
+  | "model-composite";
+export type EvaluatorName =
+  | Exclude<EvaluatorChoice, "model-composite">
+  | "model-composite-50-50";
+export type OpeningProfile =
+  | "ibisha_strict"
+  | "ibisha_preferred"
+  | "unrestricted";
 export type PieceKind =
   | "pawn"
   | "lance"
@@ -82,6 +98,21 @@ export interface ModelSummary {
   outputScaleCp: number;
 }
 
+export interface OpeningBookSummary {
+  schema: typeof OPENING_BOOK_SUMMARY_SCHEMA;
+  artifactSha256: string;
+  artifactSize: number;
+  positions: number;
+  candidates: number;
+}
+
+export interface OpeningPolicySummary {
+  profile: OpeningProfile;
+  maxPlies: number;
+  minimumSampleCount: number;
+  maximumTeacherLossCp: number;
+}
+
 export interface BrowserSnapshot {
   schema: typeof SNAPSHOT_SCHEMA;
   engine: { name: string; version: string };
@@ -98,13 +129,50 @@ export interface BrowserSnapshot {
     kind: "handcrafted-only" | "model-available";
     model: ModelSummary | null;
   };
+  openingBook: OpeningBookSummary | null;
+  openingPolicy: OpeningPolicySummary;
+}
+
+export interface TimeControl {
+  schema: typeof TIME_CONTROL_SCHEMA;
+  blackTimeMs?: number;
+  whiteTimeMs?: number;
+  byoyomiMs?: number;
+  blackIncrementMs?: number;
+  whiteIncrementMs?: number;
+  movetimeMs?: number;
+  nodes?: number;
+  depth?: number;
+  infinite?: boolean;
+  casual?: boolean;
+  safetyMarginMs?: number;
+}
+
+export interface ResourceBudget {
+  schema: typeof RESOURCE_BUDGET_SCHEMA;
+  playThreads: 1;
+  analysisThreads: 0 | 1;
+  playHashMegabytes: number;
+  analysisHashMegabytes: number;
+  analysisPauseDuringAiTurn: boolean;
+  maximumAggregateMemoryMegabytes: number;
 }
 
 export interface SearchResponse {
   schema: typeof SEARCH_SCHEMA;
+  timeControlSchema: typeof TIME_CONTROL_SCHEMA;
+  timeControlMode:
+    | "casual"
+    | "movetime"
+    | "clock"
+    | "nodes"
+    | "depth"
+    | "infinite"
+    | "profile-nodes";
   profile: SearchProfile;
-  evaluator: EvaluatorChoice;
+  evaluator: EvaluatorName;
   perspective: Side;
+  source: "search" | "book";
   bestMove: string | null;
   scoreCp: number;
   depth: number;
@@ -113,7 +181,7 @@ export interface SearchResponse {
   elapsedNs: number;
   nps: number;
   pv: string[];
-  termination: "completed" | "node-limit" | "time-limit" | "cancelled";
+  termination: "completed" | "node-limit" | "time-limit" | "cancelled" | "book";
   lines: Array<{
     rank: number;
     bestMove: string;
@@ -133,6 +201,82 @@ export interface SearchResponse {
     qnodes: number;
     neuralInferenceCalls: number;
     neuralInferenceTimeNs: number;
+  };
+  openingBookMove?: {
+    sampleCount: number;
+    teacherScoreCp: number;
+    teacherDepth: number;
+    teacherNodes: number;
+    openingClassification: string;
+    provenanceReferences: string[];
+  };
+}
+
+export interface AnalysisStart {
+  schema: typeof ANALYSIS_SCHEMA;
+  positionSfen: string;
+  modelHash: string;
+  evaluatorConfigHash: string;
+  featureSchemaHash: string;
+  evaluationSemanticsHash: string;
+  searchOptionsHash: string;
+  openingProfileHash: string;
+  multiPv: number;
+}
+
+export interface AnalysisStep {
+  schema: typeof ANALYSIS_SCHEMA;
+  nodes: number;
+  maxDepth: number;
+  timestampMs: number;
+}
+
+export interface AnalysisLine {
+  rank: number;
+  score: number;
+  mateScore: number | null;
+  depth: number;
+  nodes: number;
+  pv: string[];
+}
+
+export interface AnalysisUpdate {
+  source: "cache" | "search";
+  canonicalPosition: string;
+  positionHash: string;
+  modelHash: string;
+  evaluatorConfigHash: string;
+  featureSchemaHash: string;
+  evaluationSemanticsHash: string;
+  searchOptionsHash: string;
+  openingProfileHash: string;
+  multiPv: number;
+  depth: number;
+  nodes: number;
+  nps: number;
+  score: number;
+  mateScore: number | null;
+  lines: AnalysisLine[];
+  rootMoveStatistics: Array<{
+    movement: string;
+    score: number;
+    depth: number;
+    nodes: number;
+    pv: string[];
+  }>;
+  timestampMs: number;
+  engineVersion: string;
+}
+
+export interface AnalysisResponse {
+  schema: typeof ANALYSIS_SCHEMA;
+  event: "started" | "updates" | "stopped" | "worker-failed" | "restarted";
+  updates: AnalysisUpdate[];
+  slice?: {
+    termination: "completed" | "node-limit" | "time-limit" | "cancelled";
+    depth: number;
+    nodes: number;
+    elapsedNs: number;
   };
 }
 
@@ -162,7 +306,34 @@ export type WorkerRequest =
       profile: SearchProfile;
       evaluator: EvaluatorChoice;
       multiPv: number;
-    };
+      timeControl: TimeControl | null;
+    }
+  | {
+      id: number;
+      kind: "load-opening-book";
+      bytes: ArrayBuffer;
+      expectedArtifactSha256: string | null;
+    }
+  | { id: number; kind: "unload-opening-book" }
+  | {
+      id: number;
+      kind: "configure-opening";
+      profile: OpeningProfile;
+      maxPlies: number;
+      minimumSampleCount: number;
+      maximumTeacherLossCp: number;
+    }
+  | {
+      id: number;
+      kind: "analysis-start";
+      profile: SearchProfile;
+      evaluator: EvaluatorChoice;
+      request: AnalysisStart;
+    }
+  | { id: number; kind: "analysis-step"; request: AnalysisStep }
+  | { id: number; kind: "analysis-stop" }
+  | { id: number; kind: "analysis-worker-failed" }
+  | { id: number; kind: "analysis-restart" };
 
 export type WorkerSuccess = {
   schema: typeof WORKER_RESPONSE_SCHEMA;
@@ -186,7 +357,23 @@ type JsonRecord = Record<string, unknown>;
 
 const SIDES = new Set<Side>(["black", "white"]);
 const SEARCH_PROFILES = new Set<SearchProfile>(["eco", "balanced", "quality"]);
-const EVALUATORS = new Set<EvaluatorChoice>(["handcrafted", "model"]);
+const EVALUATOR_CHOICES = new Set<EvaluatorChoice>([
+  "overall-champion",
+  "model",
+  "model-residual",
+  "model-composite",
+]);
+const EVALUATOR_NAMES = new Set<EvaluatorName>([
+  "overall-champion",
+  "model",
+  "model-residual",
+  "model-composite-50-50",
+]);
+const OPENING_PROFILES = new Set<OpeningProfile>([
+  "ibisha_strict",
+  "ibisha_preferred",
+  "unrestricted",
+]);
 const WORKER_KINDS = new Set<WorkerRequest["kind"]>([
   "initialize",
   "reset",
@@ -194,6 +381,14 @@ const WORKER_KINDS = new Set<WorkerRequest["kind"]>([
   "unload-model",
   "play-move",
   "search",
+  "load-opening-book",
+  "unload-opening-book",
+  "configure-opening",
+  "analysis-start",
+  "analysis-step",
+  "analysis-stop",
+  "analysis-worker-failed",
+  "analysis-restart",
 ]);
 const PIECE_KINDS = new Set<PieceKind>([
   "pawn",
@@ -410,6 +605,60 @@ function modelSummary(value: unknown, path: string): ModelSummary {
   };
 }
 
+function openingBookSummary(value: unknown, path: string): OpeningBookSummary {
+  const parsed = record(value, path);
+  exactKeys(
+    parsed,
+    ["schema", "artifactSha256", "artifactSize", "positions", "candidates"],
+    path,
+  );
+  if (parsed.schema !== OPENING_BOOK_SUMMARY_SCHEMA) {
+    throw new Error(`${path}.schema is unsupported`);
+  }
+  return {
+    schema: OPENING_BOOK_SUMMARY_SCHEMA,
+    artifactSha256: sha256(parsed.artifactSha256, `${path}.artifactSha256`),
+    artifactSize: integer(
+      parsed.artifactSize,
+      `${path}.artifactSize`,
+      1,
+      MAX_BROWSER_OPENING_BOOK_BYTES,
+    ),
+    positions: integer(parsed.positions, `${path}.positions`, 1),
+    candidates: integer(parsed.candidates, `${path}.candidates`, 1),
+  };
+}
+
+function openingPolicySummary(
+  value: unknown,
+  path: string,
+): OpeningPolicySummary {
+  const parsed = record(value, path);
+  exactKeys(
+    parsed,
+    ["profile", "maxPlies", "minimumSampleCount", "maximumTeacherLossCp"],
+    path,
+  );
+  if (!OPENING_PROFILES.has(parsed.profile as OpeningProfile)) {
+    throw new Error(`${path}.profile is unsupported`);
+  }
+  return {
+    profile: parsed.profile as OpeningProfile,
+    maxPlies: integer(parsed.maxPlies, `${path}.maxPlies`, 1, 40),
+    minimumSampleCount: integer(
+      parsed.minimumSampleCount,
+      `${path}.minimumSampleCount`,
+      1,
+    ),
+    maximumTeacherLossCp: integer(
+      parsed.maximumTeacherLossCp,
+      `${path}.maximumTeacherLossCp`,
+      0,
+      32_000,
+    ),
+  };
+}
+
 function moveSummary(value: unknown, path: string): MoveSummary {
   const parsed = record(value, path);
   exactKeys(parsed, ["usi", "from", "to", "drop", "promote"], path);
@@ -470,6 +719,8 @@ export function parseBrowserSnapshot(value: unknown): BrowserSnapshot {
       "moves",
       "terminal",
       "evaluator",
+      "openingBook",
+      "openingPolicy",
     ],
     "snapshot",
   );
@@ -575,6 +826,14 @@ export function parseBrowserSnapshot(value: unknown): BrowserSnapshot {
     ),
     terminal,
     evaluator: { kind: evaluator.kind, model },
+    openingBook:
+      parsed.openingBook === null
+        ? null
+        : openingBookSummary(parsed.openingBook, "snapshot.openingBook"),
+    openingPolicy: openingPolicySummary(
+      parsed.openingPolicy,
+      "snapshot.openingPolicy",
+    ),
   };
 }
 
@@ -582,15 +841,426 @@ export function parseModelSummary(value: unknown): ModelSummary {
   return modelSummary(value, "model");
 }
 
-export function parseSearchResponse(value: unknown): SearchResponse {
-  const parsed = record(value, "search");
+export function parseOpeningBookSummary(value: unknown): OpeningBookSummary {
+  return openingBookSummary(value, "openingBook");
+}
+
+export function parseOpeningPolicySummary(
+  value: unknown,
+): OpeningPolicySummary {
+  return openingPolicySummary(value, "openingPolicy");
+}
+
+function optionalInteger(
+  parsed: JsonRecord,
+  key: string,
+  path: string,
+  minimum: number,
+  maximum: number,
+): number | undefined {
+  return Object.hasOwn(parsed, key)
+    ? integer(parsed[key], `${path}.${key}`, minimum, maximum)
+    : undefined;
+}
+
+export function parseTimeControl(value: unknown): TimeControl {
+  const parsed = record(value, "timeControl");
+  const allowed = new Set([
+    "schema",
+    "blackTimeMs",
+    "whiteTimeMs",
+    "byoyomiMs",
+    "blackIncrementMs",
+    "whiteIncrementMs",
+    "movetimeMs",
+    "nodes",
+    "depth",
+    "infinite",
+    "casual",
+    "safetyMarginMs",
+  ]);
+  if (Object.keys(parsed).some((key) => !allowed.has(key))) {
+    throw new Error("timeControl has an unsupported key set");
+  }
+  if (parsed.schema !== TIME_CONTROL_SCHEMA) {
+    throw new Error("timeControl.schema is unsupported");
+  }
+  for (const key of ["infinite", "casual"] as const) {
+    if (Object.hasOwn(parsed, key) && typeof parsed[key] !== "boolean") {
+      throw new Error(`timeControl.${key} must be boolean`);
+    }
+  }
+  const result: TimeControl = {
+    schema: TIME_CONTROL_SCHEMA,
+    blackTimeMs: optionalInteger(
+      parsed,
+      "blackTimeMs",
+      "timeControl",
+      0,
+      604_800_000,
+    ),
+    whiteTimeMs: optionalInteger(
+      parsed,
+      "whiteTimeMs",
+      "timeControl",
+      0,
+      604_800_000,
+    ),
+    byoyomiMs: optionalInteger(
+      parsed,
+      "byoyomiMs",
+      "timeControl",
+      0,
+      3_600_000,
+    ),
+    blackIncrementMs: optionalInteger(
+      parsed,
+      "blackIncrementMs",
+      "timeControl",
+      0,
+      3_600_000,
+    ),
+    whiteIncrementMs: optionalInteger(
+      parsed,
+      "whiteIncrementMs",
+      "timeControl",
+      0,
+      3_600_000,
+    ),
+    movetimeMs: optionalInteger(
+      parsed,
+      "movetimeMs",
+      "timeControl",
+      1,
+      3_600_000,
+    ),
+    nodes: optionalInteger(parsed, "nodes", "timeControl", 1, 1_000_000_000),
+    depth: optionalInteger(parsed, "depth", "timeControl", 1, 64),
+    infinite: Object.hasOwn(parsed, "infinite")
+      ? (parsed.infinite as boolean)
+      : undefined,
+    casual: Object.hasOwn(parsed, "casual")
+      ? (parsed.casual as boolean)
+      : undefined,
+    safetyMarginMs: optionalInteger(
+      parsed,
+      "safetyMarginMs",
+      "timeControl",
+      0,
+      1_000,
+    ),
+  };
+  const hasClock = [
+    result.blackTimeMs,
+    result.whiteTimeMs,
+    result.byoyomiMs,
+    result.blackIncrementMs,
+    result.whiteIncrementMs,
+  ].some((entry) => entry !== undefined);
+  const fixed =
+    result.movetimeMs !== undefined ||
+    result.nodes !== undefined ||
+    result.depth !== undefined ||
+    hasClock;
+  if ((result.casual || result.infinite) && fixed) {
+    throw new Error("timeControl modes are contradictory");
+  }
+  if (result.casual && result.infinite) {
+    throw new Error("timeControl modes are contradictory");
+  }
+  return Object.fromEntries(
+    Object.entries(result).filter(([, entry]) => entry !== undefined),
+  ) as unknown as TimeControl;
+}
+
+export function parseAnalysisStart(value: unknown): AnalysisStart {
+  const parsed = record(value, "analysisStart");
   exactKeys(
     parsed,
     [
       "schema",
+      "positionSfen",
+      "modelHash",
+      "evaluatorConfigHash",
+      "featureSchemaHash",
+      "evaluationSemanticsHash",
+      "searchOptionsHash",
+      "openingProfileHash",
+      "multiPv",
+    ],
+    "analysisStart",
+  );
+  if (parsed.schema !== ANALYSIS_SCHEMA) {
+    throw new Error("analysisStart.schema is unsupported");
+  }
+  return {
+    schema: ANALYSIS_SCHEMA,
+    positionSfen: stringValue(
+      parsed.positionSfen,
+      "analysisStart.positionSfen",
+      512,
+    ),
+    modelHash: sha256(parsed.modelHash, "analysisStart.modelHash"),
+    evaluatorConfigHash: sha256(
+      parsed.evaluatorConfigHash,
+      "analysisStart.evaluatorConfigHash",
+    ),
+    featureSchemaHash: sha256(
+      parsed.featureSchemaHash,
+      "analysisStart.featureSchemaHash",
+    ),
+    evaluationSemanticsHash: sha256(
+      parsed.evaluationSemanticsHash,
+      "analysisStart.evaluationSemanticsHash",
+    ),
+    searchOptionsHash: sha256(
+      parsed.searchOptionsHash,
+      "analysisStart.searchOptionsHash",
+    ),
+    openingProfileHash: sha256(
+      parsed.openingProfileHash,
+      "analysisStart.openingProfileHash",
+    ),
+    multiPv: integer(parsed.multiPv, "analysisStart.multiPv", 1, 10),
+  };
+}
+
+export function parseAnalysisStep(value: unknown): AnalysisStep {
+  const parsed = record(value, "analysisStep");
+  exactKeys(
+    parsed,
+    ["schema", "nodes", "maxDepth", "timestampMs"],
+    "analysisStep",
+  );
+  if (parsed.schema !== ANALYSIS_SCHEMA) {
+    throw new Error("analysisStep.schema is unsupported");
+  }
+  return {
+    schema: ANALYSIS_SCHEMA,
+    nodes: integer(parsed.nodes, "analysisStep.nodes", 1, 10_000_000),
+    maxDepth: integer(parsed.maxDepth, "analysisStep.maxDepth", 1, 64),
+    timestampMs: integer(parsed.timestampMs, "analysisStep.timestampMs", 0),
+  };
+}
+
+function nullableScore(value: unknown, path: string): number | null {
+  return value === null ? null : integer(value, path, -32_000, 32_000);
+}
+
+function moveArray(value: unknown, path: string): string[] {
+  if (!Array.isArray(value) || value.length > 256) {
+    throw new Error(`${path} exceeds the bound`);
+  }
+  return value.map((move, index) => usiMove(move, `${path}[${index}]`));
+}
+
+export function parseAnalysisResponse(value: unknown): AnalysisResponse {
+  const parsed = record(value, "analysis");
+  const hasSlice = Object.hasOwn(parsed, "slice");
+  exactKeys(
+    parsed,
+    ["schema", "event", "updates", ...(hasSlice ? ["slice"] : [])],
+    "analysis",
+  );
+  if (parsed.schema !== ANALYSIS_SCHEMA) {
+    throw new Error("analysis.schema is unsupported");
+  }
+  const events = new Set<AnalysisResponse["event"]>([
+    "started",
+    "updates",
+    "stopped",
+    "worker-failed",
+    "restarted",
+  ]);
+  if (!events.has(parsed.event as AnalysisResponse["event"])) {
+    throw new Error("analysis.event is unsupported");
+  }
+  if (!Array.isArray(parsed.updates) || parsed.updates.length > 64) {
+    throw new Error("analysis.updates exceeds the bound");
+  }
+  const updates = parsed.updates.map((value, updateIndex) => {
+    const path = `analysis.updates[${updateIndex}]`;
+    const update = record(value, path);
+    exactKeys(
+      update,
+      [
+        "source",
+        "canonicalPosition",
+        "positionHash",
+        "modelHash",
+        "evaluatorConfigHash",
+        "featureSchemaHash",
+        "evaluationSemanticsHash",
+        "searchOptionsHash",
+        "openingProfileHash",
+        "multiPv",
+        "depth",
+        "nodes",
+        "nps",
+        "score",
+        "mateScore",
+        "lines",
+        "rootMoveStatistics",
+        "timestampMs",
+        "engineVersion",
+      ],
+      path,
+    );
+    if (update.source !== "cache" && update.source !== "search") {
+      throw new Error(`${path}.source is unsupported`);
+    }
+    const positionHash = stringValue(
+      update.positionHash,
+      `${path}.positionHash`,
+      16,
+    );
+    if (!/^[0-9a-f]{16}$/.test(positionHash)) {
+      throw new Error(`${path}.positionHash is invalid`);
+    }
+    if (!Array.isArray(update.lines) || update.lines.length > 10) {
+      throw new Error(`${path}.lines exceeds the bound`);
+    }
+    const lines = update.lines.map((entry, lineIndex) => {
+      const linePath = `${path}.lines[${lineIndex}]`;
+      const line = record(entry, linePath);
+      exactKeys(
+        line,
+        ["rank", "score", "mateScore", "depth", "nodes", "pv"],
+        linePath,
+      );
+      return {
+        rank: integer(
+          line.rank,
+          `${linePath}.rank`,
+          lineIndex + 1,
+          lineIndex + 1,
+        ),
+        score: integer(line.score, `${linePath}.score`, -32_000, 32_000),
+        mateScore: nullableScore(line.mateScore, `${linePath}.mateScore`),
+        depth: integer(line.depth, `${linePath}.depth`, 0, 64),
+        nodes: integer(line.nodes, `${linePath}.nodes`, 0),
+        pv: moveArray(line.pv, `${linePath}.pv`),
+      };
+    });
+    if (
+      !Array.isArray(update.rootMoveStatistics) ||
+      update.rootMoveStatistics.length > 700
+    ) {
+      throw new Error(`${path}.rootMoveStatistics exceeds the bound`);
+    }
+    const rootMoveStatistics = update.rootMoveStatistics.map(
+      (entry, rootIndex) => {
+        const rootPath = `${path}.rootMoveStatistics[${rootIndex}]`;
+        const root = record(entry, rootPath);
+        exactKeys(
+          root,
+          ["movement", "score", "depth", "nodes", "pv"],
+          rootPath,
+        );
+        return {
+          movement: usiMove(root.movement, `${rootPath}.movement`),
+          score: integer(root.score, `${rootPath}.score`, -32_000, 32_000),
+          depth: integer(root.depth, `${rootPath}.depth`, 0, 64),
+          nodes: integer(root.nodes, `${rootPath}.nodes`, 0),
+          pv: moveArray(root.pv, `${rootPath}.pv`),
+        };
+      },
+    );
+    return {
+      source: update.source,
+      canonicalPosition: stringValue(
+        update.canonicalPosition,
+        `${path}.canonicalPosition`,
+        512,
+      ),
+      positionHash,
+      modelHash: sha256(update.modelHash, `${path}.modelHash`),
+      evaluatorConfigHash: sha256(
+        update.evaluatorConfigHash,
+        `${path}.evaluatorConfigHash`,
+      ),
+      featureSchemaHash: sha256(
+        update.featureSchemaHash,
+        `${path}.featureSchemaHash`,
+      ),
+      evaluationSemanticsHash: sha256(
+        update.evaluationSemanticsHash,
+        `${path}.evaluationSemanticsHash`,
+      ),
+      searchOptionsHash: sha256(
+        update.searchOptionsHash,
+        `${path}.searchOptionsHash`,
+      ),
+      openingProfileHash: sha256(
+        update.openingProfileHash,
+        `${path}.openingProfileHash`,
+      ),
+      multiPv: integer(update.multiPv, `${path}.multiPv`, 1, 10),
+      depth: integer(update.depth, `${path}.depth`, 0, 64),
+      nodes: integer(update.nodes, `${path}.nodes`, 0),
+      nps: integer(update.nps, `${path}.nps`, 0),
+      score: integer(update.score, `${path}.score`, -32_000, 32_000),
+      mateScore: nullableScore(update.mateScore, `${path}.mateScore`),
+      lines,
+      rootMoveStatistics,
+      timestampMs: integer(update.timestampMs, `${path}.timestampMs`, 0),
+      engineVersion: stringValue(
+        update.engineVersion,
+        `${path}.engineVersion`,
+        128,
+      ),
+    } satisfies AnalysisUpdate;
+  });
+  let slice: AnalysisResponse["slice"];
+  if (hasSlice) {
+    const rawSlice = record(parsed.slice, "analysis.slice");
+    exactKeys(
+      rawSlice,
+      ["termination", "depth", "nodes", "elapsedNs"],
+      "analysis.slice",
+    );
+    const terminations = new Set<
+      NonNullable<AnalysisResponse["slice"]>["termination"]
+    >(["completed", "node-limit", "time-limit", "cancelled"]);
+    if (
+      !terminations.has(
+        rawSlice.termination as NonNullable<
+          AnalysisResponse["slice"]
+        >["termination"],
+      )
+    ) {
+      throw new Error("analysis.slice.termination is unsupported");
+    }
+    slice = {
+      termination: rawSlice.termination as NonNullable<
+        AnalysisResponse["slice"]
+      >["termination"],
+      depth: integer(rawSlice.depth, "analysis.slice.depth", 0, 64),
+      nodes: integer(rawSlice.nodes, "analysis.slice.nodes", 0),
+      elapsedNs: integer(rawSlice.elapsedNs, "analysis.slice.elapsedNs", 0),
+    };
+  }
+  return {
+    schema: ANALYSIS_SCHEMA,
+    event: parsed.event as AnalysisResponse["event"],
+    updates,
+    ...(slice === undefined ? {} : { slice }),
+  };
+}
+
+export function parseSearchResponse(value: unknown): SearchResponse {
+  const parsed = record(value, "search");
+  const hasOpeningBookMove = Object.hasOwn(parsed, "openingBookMove");
+  exactKeys(
+    parsed,
+    [
+      "schema",
+      "timeControlSchema",
+      "timeControlMode",
       "profile",
       "evaluator",
       "perspective",
+      "source",
       "bestMove",
       "scoreCp",
       "depth",
@@ -602,26 +1272,54 @@ export function parseSearchResponse(value: unknown): SearchResponse {
       "termination",
       "lines",
       "stats",
+      ...(hasOpeningBookMove ? ["openingBookMove"] : []),
     ],
     "search",
   );
   if (parsed.schema !== SEARCH_SCHEMA) {
     throw new Error("search.schema is unsupported");
   }
+  if (parsed.timeControlSchema !== TIME_CONTROL_SCHEMA) {
+    throw new Error("search.timeControlSchema is unsupported");
+  }
+  const timeControlModes = new Set<SearchResponse["timeControlMode"]>([
+    "casual",
+    "movetime",
+    "clock",
+    "nodes",
+    "depth",
+    "infinite",
+    "profile-nodes",
+  ]);
+  if (
+    !timeControlModes.has(
+      parsed.timeControlMode as SearchResponse["timeControlMode"],
+    )
+  ) {
+    throw new Error("search.timeControlMode is unsupported");
+  }
   if (!SEARCH_PROFILES.has(parsed.profile as SearchProfile)) {
     throw new Error("search.profile is unsupported");
   }
-  if (!EVALUATORS.has(parsed.evaluator as EvaluatorChoice)) {
+  if (!EVALUATOR_NAMES.has(parsed.evaluator as EvaluatorName)) {
     throw new Error("search.evaluator is unsupported");
   }
-  const maximumNodes =
+  if (parsed.source !== "search" && parsed.source !== "book") {
+    throw new Error("search.source is unsupported");
+  }
+  const profileMaximumNodes =
     parsed.profile === "eco"
       ? 1_500
       : parsed.profile === "balanced"
         ? 4_000
         : 12_000;
-  const maximumDepth =
+  const maximumNodes =
+    parsed.timeControlMode === "profile-nodes"
+      ? profileMaximumNodes
+      : 1_000_000_000;
+  const profileMaximumDepth =
     parsed.profile === "eco" ? 5 : parsed.profile === "balanced" ? 7 : 9;
+  const maximumDepth = parsed.source === "book" ? 64 : profileMaximumDepth;
   if (!Array.isArray(parsed.pv) || parsed.pv.length > 256) {
     throw new Error("search.pv exceeds the bound");
   }
@@ -710,17 +1408,83 @@ export function parseSearchResponse(value: unknown): SearchResponse {
     "node-limit",
     "time-limit",
     "cancelled",
+    "book",
   ]);
   if (
     !terminationValues.has(parsed.termination as SearchResponse["termination"])
   ) {
     throw new Error("search.termination is unsupported");
   }
+  if ((parsed.source === "book") !== (parsed.termination === "book")) {
+    throw new Error("search book source and termination are inconsistent");
+  }
+  let openingBookMove: SearchResponse["openingBookMove"];
+  if (hasOpeningBookMove) {
+    const book = record(parsed.openingBookMove, "search.openingBookMove");
+    exactKeys(
+      book,
+      [
+        "sampleCount",
+        "teacherScoreCp",
+        "teacherDepth",
+        "teacherNodes",
+        "openingClassification",
+        "provenanceReferences",
+      ],
+      "search.openingBookMove",
+    );
+    if (
+      !Array.isArray(book.provenanceReferences) ||
+      book.provenanceReferences.length === 0 ||
+      book.provenanceReferences.length > 64
+    ) {
+      throw new Error("search.openingBookMove provenance exceeds the bound");
+    }
+    openingBookMove = {
+      sampleCount: integer(
+        book.sampleCount,
+        "search.openingBookMove.sampleCount",
+        1,
+      ),
+      teacherScoreCp: integer(
+        book.teacherScoreCp,
+        "search.openingBookMove.teacherScoreCp",
+        -32_000,
+        32_000,
+      ),
+      teacherDepth: integer(
+        book.teacherDepth,
+        "search.openingBookMove.teacherDepth",
+        1,
+        64,
+      ),
+      teacherNodes: integer(
+        book.teacherNodes,
+        "search.openingBookMove.teacherNodes",
+        1,
+      ),
+      openingClassification: stringValue(
+        book.openingClassification,
+        "search.openingBookMove.openingClassification",
+        64,
+      ),
+      provenanceReferences: book.provenanceReferences.map((hash, index) =>
+        sha256(hash, `search.openingBookMove.provenanceReferences[${index}]`),
+      ),
+    };
+  }
+  if ((parsed.source === "book") !== (openingBookMove !== undefined)) {
+    throw new Error("search book metadata is inconsistent");
+  }
   return {
     schema: SEARCH_SCHEMA,
+    timeControlSchema: TIME_CONTROL_SCHEMA,
+    timeControlMode:
+      parsed.timeControlMode as SearchResponse["timeControlMode"],
     profile: parsed.profile as SearchProfile,
-    evaluator: parsed.evaluator as EvaluatorChoice,
+    evaluator: parsed.evaluator as EvaluatorName,
     perspective: side(parsed.perspective, "search.perspective"),
+    source: parsed.source,
     bestMove:
       parsed.bestMove === null
         ? null
@@ -735,6 +1499,7 @@ export function parseSearchResponse(value: unknown): SearchResponse {
     termination: parsed.termination as SearchResponse["termination"],
     lines,
     stats: counters,
+    ...(openingBookMove === undefined ? {} : { openingBookMove }),
   };
 }
 
@@ -811,13 +1576,13 @@ export function parseWorkerRequest(value: unknown): WorkerRequest {
     case "search": {
       exactKeys(
         parsed,
-        ["id", "kind", "profile", "evaluator", "multiPv"],
+        ["id", "kind", "profile", "evaluator", "multiPv", "timeControl"],
         "request",
       );
       if (!SEARCH_PROFILES.has(parsed.profile as SearchProfile)) {
         throw new Error("request.profile is unsupported");
       }
-      if (!EVALUATORS.has(parsed.evaluator as EvaluatorChoice)) {
+      if (!EVALUATOR_CHOICES.has(parsed.evaluator as EvaluatorChoice)) {
         throw new Error("request.evaluator is unsupported");
       }
       return {
@@ -826,8 +1591,100 @@ export function parseWorkerRequest(value: unknown): WorkerRequest {
         profile: parsed.profile as SearchProfile,
         evaluator: parsed.evaluator as EvaluatorChoice,
         multiPv: integer(parsed.multiPv, "request.multiPv", 1, 3),
+        timeControl:
+          parsed.timeControl === null
+            ? null
+            : parseTimeControl(parsed.timeControl),
       };
     }
+    case "load-opening-book":
+      exactKeys(
+        parsed,
+        ["id", "kind", "bytes", "expectedArtifactSha256"],
+        "request",
+      );
+      if (
+        !(parsed.bytes instanceof ArrayBuffer) ||
+        parsed.bytes.byteLength === 0 ||
+        parsed.bytes.byteLength > MAX_BROWSER_OPENING_BOOK_BYTES
+      ) {
+        throw new Error("request.bytes exceeds the opening-book bound");
+      }
+      return {
+        id,
+        kind,
+        bytes: parsed.bytes,
+        expectedArtifactSha256:
+          parsed.expectedArtifactSha256 === null
+            ? null
+            : sha256(
+                parsed.expectedArtifactSha256,
+                "request.expectedArtifactSha256",
+              ),
+      };
+    case "unload-opening-book":
+      exactKeys(parsed, ["id", "kind"], "request");
+      return { id, kind };
+    case "configure-opening":
+      exactKeys(
+        parsed,
+        [
+          "id",
+          "kind",
+          "profile",
+          "maxPlies",
+          "minimumSampleCount",
+          "maximumTeacherLossCp",
+        ],
+        "request",
+      );
+      if (!OPENING_PROFILES.has(parsed.profile as OpeningProfile)) {
+        throw new Error("request.profile is unsupported");
+      }
+      return {
+        id,
+        kind,
+        profile: parsed.profile as OpeningProfile,
+        maxPlies: integer(parsed.maxPlies, "request.maxPlies", 1, 40),
+        minimumSampleCount: integer(
+          parsed.minimumSampleCount,
+          "request.minimumSampleCount",
+          1,
+        ),
+        maximumTeacherLossCp: integer(
+          parsed.maximumTeacherLossCp,
+          "request.maximumTeacherLossCp",
+          0,
+          32_000,
+        ),
+      };
+    case "analysis-start":
+      exactKeys(
+        parsed,
+        ["id", "kind", "profile", "evaluator", "request"],
+        "request",
+      );
+      if (!SEARCH_PROFILES.has(parsed.profile as SearchProfile)) {
+        throw new Error("request.profile is unsupported");
+      }
+      if (!EVALUATOR_CHOICES.has(parsed.evaluator as EvaluatorChoice)) {
+        throw new Error("request.evaluator is unsupported");
+      }
+      return {
+        id,
+        kind,
+        profile: parsed.profile as SearchProfile,
+        evaluator: parsed.evaluator as EvaluatorChoice,
+        request: parseAnalysisStart(parsed.request),
+      };
+    case "analysis-step":
+      exactKeys(parsed, ["id", "kind", "request"], "request");
+      return { id, kind, request: parseAnalysisStep(parsed.request) };
+    case "analysis-stop":
+    case "analysis-worker-failed":
+    case "analysis-restart":
+      exactKeys(parsed, ["id", "kind"], "request");
+      return { id, kind };
     default:
       throw new Error("request.kind is unsupported");
   }

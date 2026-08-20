@@ -1,6 +1,10 @@
+import projectConfiguration from "../project.config.json";
+
 export const projectStatus = {
   release: "candidate",
 } as const;
+
+export const repositoryUrl = projectConfiguration.repositoryUrl;
 
 export const workspaceStatuses = [
   { workspace: "adapter", status: "ready" },

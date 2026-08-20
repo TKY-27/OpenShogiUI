@@ -1,4 +1,8 @@
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
+
+import licenseText from "../LICENSE?raw";
+import thirdPartyNotices from "../THIRD_PARTY.md?raw";
+import pieceAssetNotices from "../THIRD_PARTY_ASSETS.md?raw";
 
 import { BrowserPlay } from "./BrowserPlay";
 import { EvaluationLab } from "./EvaluationLab";
@@ -9,7 +13,14 @@ import {
   Locale,
   localeReducer,
 } from "./localization";
-import { projectStatus, routeForHash, workspaceStatuses } from "./project";
+import {
+  projectStatus,
+  repositoryUrl,
+  routeForHash,
+  workspaceStatuses,
+} from "./project";
+
+type NoticeView = "license" | "third-party" | "piece-credits" | "model-license";
 
 const markedBoardCells = new Map([
   [12, "accent-outline"],
@@ -69,6 +80,73 @@ function WorkspaceHome({ locale }: { locale: Locale }) {
   );
 }
 
+function NoticeDialog({
+  locale,
+  view,
+  onClose,
+}: {
+  locale: Locale;
+  view: NoticeView;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog !== null && !dialog.open) dialog.showModal();
+  }, []);
+
+  const title =
+    view === "license"
+      ? "AGPL-3.0-only"
+      : view === "third-party"
+        ? locale === "ja"
+          ? "第三者通知"
+          : "Third-Party Notices"
+        : view === "piece-credits"
+          ? locale === "ja"
+            ? "駒のクレジット"
+            : "Piece Credits"
+          : locale === "ja"
+            ? "モデルライセンス"
+            : "Model License";
+
+  return (
+    <dialog
+      aria-labelledby="notice-view-title"
+      aria-modal="true"
+      className="notice-view"
+      onCancel={onClose}
+      onClose={onClose}
+      ref={dialogRef}
+    >
+      <article>
+        <header>
+          <h2 id="notice-view-title">{title}</h2>
+          <button onClick={() => dialogRef.current?.close()} type="button">
+            {locale === "ja" ? "閉じる" : "Close"}
+          </button>
+        </header>
+        {view === "model-license" ? (
+          <p>
+            {locale === "ja"
+              ? "モデル重みは同梱されません。完全な由来と条件の審査が終わるまで、ライセンス状態は pending-review です。"
+              : "Model weights are not bundled. Their license status remains pending-review until complete provenance and terms are reviewed."}
+          </p>
+        ) : (
+          <pre>
+            {view === "license"
+              ? licenseText
+              : view === "third-party"
+                ? thirdPartyNotices
+                : pieceAssetNotices}
+          </pre>
+        )}
+      </article>
+    </dialog>
+  );
+}
+
 export function LanguageSwitcher({
   locale,
   onSelect,
@@ -104,6 +182,7 @@ export function LanguageSwitcher({
 function App() {
   const [route, setRoute] = useState(() => routeForHash(window.location.hash));
   const [locale, dispatchLocale] = useReducer(localeReducer, DEFAULT_LOCALE);
+  const [noticeView, setNoticeView] = useState<NoticeView | null>(null);
   const isEvaluationLab = route === "evaluation-lab";
   const isBrowserPlay = route === "browser-play";
   const selectedMessages = getMessages(locale);
@@ -167,7 +246,38 @@ function App() {
         <WorkspaceHome locale={locale} />
       )}
 
-      <footer>{selectedMessages.footer}</footer>
+      <footer className="site-footer">
+        <nav
+          aria-label={
+            locale === "ja" ? "法的情報" : "Legal and source information"
+          }
+        >
+          <a href={repositoryUrl} rel="source">
+            {locale === "ja" ? "ソースコード" : "Source Code"}
+          </a>
+          <button onClick={() => setNoticeView("license")} type="button">
+            AGPL-3.0-only
+          </button>
+          <button onClick={() => setNoticeView("third-party")} type="button">
+            {locale === "ja" ? "第三者通知" : "Third-Party Notices"}
+          </button>
+          <button onClick={() => setNoticeView("piece-credits")} type="button">
+            {locale === "ja" ? "駒のクレジット" : "Piece Credits"}
+          </button>
+          <button onClick={() => setNoticeView("model-license")} type="button">
+            {locale === "ja" ? "モデルライセンス" : "Model License"}
+          </button>
+        </nav>
+        <span>{selectedMessages.footer}</span>
+      </footer>
+
+      {noticeView === null ? null : (
+        <NoticeDialog
+          locale={locale}
+          onClose={() => setNoticeView(null)}
+          view={noticeView}
+        />
+      )}
     </div>
   );
 }

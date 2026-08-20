@@ -77,6 +77,83 @@ if (failures.length > 0) {
     console.log(
       "AI Wasm instantiated and completed the 7g7f legal-move smoke test",
     );
+
+    const timed = JSON.parse(
+      engine.searchWithTimeControl(
+        "eco",
+        "overall-champion",
+        2,
+        JSON.stringify({
+          schema: "open_shogi_time_control/v1",
+          nodes: 120,
+          safetyMarginMs: 50,
+        }),
+      ),
+    );
+    if (
+      timed.timeControlSchema !== "open_shogi_time_control/v1" ||
+      timed.timeControlMode !== "nodes" ||
+      timed.nodes > 120 ||
+      timed.lines?.length !== 2
+    ) {
+      throw new Error("time-control search failed the closed smoke contract");
+    }
+
+    const protocolHash = (digit) => digit.repeat(64);
+    const startRequest = (positionSfen) => ({
+      schema: "open_shogi_analysis/v1",
+      positionSfen,
+      modelHash: protocolHash("1"),
+      evaluatorConfigHash: protocolHash("2"),
+      featureSchemaHash: protocolHash("3"),
+      evaluationSemanticsHash: protocolHash("4"),
+      searchOptionsHash: protocolHash("5"),
+      openingProfileHash: protocolHash("6"),
+      multiPv: 3,
+    });
+    const started = JSON.parse(
+      engine.analysisStart(
+        "eco",
+        "overall-champion",
+        JSON.stringify(startRequest(moved.sfen)),
+      ),
+    );
+    if (started.event !== "started") {
+      throw new Error("analysis start did not acknowledge the active root");
+    }
+    const stepped = JSON.parse(
+      engine.analysisStep(
+        JSON.stringify({
+          schema: "open_shogi_analysis/v1",
+          nodes: 1_500,
+          maxDepth: 3,
+          timestampMs: 9,
+        }),
+      ),
+    );
+    if (
+      stepped.event !== "updates" ||
+      stepped.updates?.length === 0 ||
+      stepped.updates[0].canonicalPosition !== moved.sfen ||
+      stepped.updates[0].multiPv !== 3
+    ) {
+      throw new Error("analysis slice failed position/MultiPV identity checks");
+    }
+    const stopped = JSON.parse(engine.analysisStop());
+    const failed = JSON.parse(engine.analysisWorkerFailed());
+    const restarted = JSON.parse(engine.analysisRestart());
+    if (
+      stopped.event !== "stopped" ||
+      failed.event !== "worker-failed" ||
+      restarted.event !== "restarted"
+    ) {
+      throw new Error(
+        "analysis stop/failure/restart lifecycle is inconsistent",
+      );
+    }
+    console.log(
+      "AI Wasm completed time-control and continuous-analysis lifecycle smoke tests",
+    );
   } catch (error) {
     console.error(`FAIL AI Wasm execution smoke failed: ${error.message}`);
     process.exitCode = 1;

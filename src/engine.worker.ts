@@ -3,8 +3,11 @@
 import initWasm, { WasmBrowserEngine } from "./generated/open_shogi_wasm.js";
 import wasmUrl from "./generated/open_shogi_wasm_bg.wasm?url";
 import {
+  parseAnalysisResponse,
   parseBrowserSnapshot,
   parseModelSummary,
+  parseOpeningBookSummary,
+  parseOpeningPolicySummary,
   parseSearchResponse,
   parseWorkerRequest,
   WORKER_RESPONSE_SCHEMA,
@@ -69,12 +72,66 @@ async function execute(request: WorkerRequest): Promise<unknown> {
       return parseBrowserSnapshot(parseJson(raw, 256 * 1024, "snapshot"));
     }
     case "search": {
-      const raw = requireEngine().search(
+      const raw =
+        request.timeControl === null
+          ? requireEngine().search(
+              request.profile,
+              request.evaluator,
+              request.multiPv,
+            )
+          : requireEngine().searchWithTimeControl(
+              request.profile,
+              request.evaluator,
+              request.multiPv,
+              JSON.stringify(request.timeControl),
+            );
+      return parseSearchResponse(parseJson(raw, 128 * 1024, "search"));
+    }
+    case "load-opening-book": {
+      const raw = requireEngine().loadOpeningBook(
+        new Uint8Array(request.bytes),
+        request.expectedArtifactSha256 ?? undefined,
+      );
+      return parseOpeningBookSummary(parseJson(raw, 16 * 1024, "openingBook"));
+    }
+    case "unload-opening-book": {
+      const raw = requireEngine().unloadOpeningBook();
+      return parseBrowserSnapshot(parseJson(raw, 256 * 1024, "snapshot"));
+    }
+    case "configure-opening": {
+      const raw = requireEngine().configureOpening(
+        request.profile,
+        request.maxPlies,
+        BigInt(request.minimumSampleCount),
+        request.maximumTeacherLossCp,
+      );
+      return parseOpeningPolicySummary(
+        parseJson(raw, 16 * 1024, "openingPolicy"),
+      );
+    }
+    case "analysis-start": {
+      const raw = requireEngine().analysisStart(
         request.profile,
         request.evaluator,
-        request.multiPv,
+        JSON.stringify(request.request),
       );
-      return parseSearchResponse(parseJson(raw, 128 * 1024, "search"));
+      return parseAnalysisResponse(parseJson(raw, 256 * 1024, "analysis"));
+    }
+    case "analysis-step": {
+      const raw = requireEngine().analysisStep(JSON.stringify(request.request));
+      return parseAnalysisResponse(parseJson(raw, 256 * 1024, "analysis"));
+    }
+    case "analysis-stop": {
+      const raw = requireEngine().analysisStop();
+      return parseAnalysisResponse(parseJson(raw, 64 * 1024, "analysis"));
+    }
+    case "analysis-worker-failed": {
+      const raw = requireEngine().analysisWorkerFailed();
+      return parseAnalysisResponse(parseJson(raw, 256 * 1024, "analysis"));
+    }
+    case "analysis-restart": {
+      const raw = requireEngine().analysisRestart();
+      return parseAnalysisResponse(parseJson(raw, 256 * 1024, "analysis"));
     }
   }
 }

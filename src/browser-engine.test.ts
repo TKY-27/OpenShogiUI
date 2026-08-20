@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  parseAnalysisResponse,
+  parseAnalysisStart,
   parseBrowserSnapshot,
   parseSearchResponse,
+  parseWorkerRequest,
   parseWorkerResponse,
   recommendedSearchProfile,
 } from "./browser-engine";
@@ -31,6 +34,13 @@ function snapshot() {
     moves: [],
     terminal: null,
     evaluator: { kind: "handcrafted-only", model: null },
+    openingBook: null,
+    openingPolicy: {
+      profile: "ibisha_strict",
+      maxPlies: 40,
+      minimumSampleCount: 2,
+      maximumTeacherLossCp: 80,
+    },
   };
 }
 
@@ -46,9 +56,12 @@ function search(lineCount: number) {
   }));
   return {
     schema: "open_shogi_browser_search/v1",
+    timeControlSchema: "open_shogi_time_control/v1",
+    timeControlMode: "profile-nodes",
     profile: "eco",
-    evaluator: "handcrafted",
+    evaluator: "overall-champion",
     perspective: "black",
+    source: "search",
     bestMove: "7g7f",
     scoreCp: 20,
     depth: 5,
@@ -69,6 +82,54 @@ function search(lineCount: number) {
       qnodes: 10,
       neuralInferenceCalls: 0,
       neuralInferenceTimeNs: 0,
+    },
+  };
+}
+
+const hash = (digit: string) => digit.repeat(64);
+
+function analysis(lineCount = 3) {
+  const lines = Array.from({ length: lineCount }, (_, index) => ({
+    rank: index + 1,
+    score: 30 - index,
+    mateScore: null,
+    depth: 4,
+    nodes: 500,
+    pv: [`${7 - index}g${7 - index}f`],
+  }));
+  return {
+    schema: "open_shogi_analysis/v1",
+    event: "updates",
+    updates: [
+      {
+        source: "search",
+        canonicalPosition: "startpos",
+        positionHash: "0123456789abcdef",
+        modelHash: hash("1"),
+        evaluatorConfigHash: hash("2"),
+        featureSchemaHash: hash("3"),
+        evaluationSemanticsHash: hash("4"),
+        searchOptionsHash: hash("5"),
+        openingProfileHash: hash("6"),
+        multiPv: lineCount,
+        depth: 4,
+        nodes: 1_500,
+        nps: 15_000,
+        score: 30,
+        mateScore: null,
+        lines,
+        rootMoveStatistics: [
+          { movement: "7g7f", score: 30, depth: 4, nodes: 500, pv: ["7g7f"] },
+        ],
+        timestampMs: 9,
+        engineVersion: "test",
+      },
+    ],
+    slice: {
+      termination: "node-limit",
+      depth: 4,
+      nodes: 1_500,
+      elapsedNs: 10_000,
     },
   };
 }
@@ -113,6 +174,100 @@ describe("browser engine protocol", () => {
         data: null,
       }),
     ).toThrow("successful worker response kind is unsupported");
+  });
+
+  it("accepts bounded continuous MultiPV updates and rejects unknown fields", () => {
+    expect(parseAnalysisResponse(analysis(5)).updates[0].lines).toHaveLength(5);
+    expect(() => parseAnalysisResponse(analysis(11))).toThrow(
+      "lines exceeds the bound",
+    );
+    const unexpected = analysis();
+    Object.assign(unexpected.updates[0], { staleRequestId: 4 });
+    expect(() => parseAnalysisResponse(unexpected)).toThrow(
+      "unsupported key set",
+    );
+  });
+
+  it("binds analysis starts to complete versioned identity", () => {
+    const request = {
+      schema: "open_shogi_analysis/v1",
+      positionSfen: "startpos",
+      modelHash: hash("1"),
+      evaluatorConfigHash: hash("2"),
+      featureSchemaHash: hash("3"),
+      evaluationSemanticsHash: hash("4"),
+      searchOptionsHash: hash("5"),
+      openingProfileHash: hash("6"),
+      multiPv: 3,
+    };
+    expect(parseAnalysisStart(request)).toEqual(request);
+    expect(() =>
+      parseAnalysisStart({ ...request, modelHash: "not-a-hash" }),
+    ).toThrow("lowercase SHA-256");
+  });
+
+  it("accepts book provenance while keeping the response source explicit", () => {
+    const response = search(1);
+    Object.assign(response, {
+      source: "book",
+      termination: "book",
+      depth: 0,
+      seldepth: 0,
+      nodes: 0,
+      elapsedNs: 0,
+      nps: 0,
+      openingBookMove: {
+        sampleCount: 8,
+        teacherScoreCp: 12,
+        teacherDepth: 18,
+        teacherNodes: 50_000,
+        openingClassification: "ibisha",
+        provenanceReferences: [hash("a")],
+      },
+    });
+    response.lines[0].depth = 0;
+    response.lines[0].seldepth = 0;
+    response.lines[0].nodes = 0;
+    const parsed = parseSearchResponse(response);
+    expect(parsed.source).toBe("book");
+    expect(parsed.openingBookMove?.teacherDepth).toBe(18);
+  });
+
+  it("does not apply the profile-node ceiling to engine-managed casual time", () => {
+    const response = search(1);
+    response.timeControlMode = "casual";
+    response.nodes = 50_000;
+    response.lines[0].nodes = 50_000;
+    expect(parseSearchResponse(response).nodes).toBe(50_000);
+
+    response.timeControlMode = "profile-nodes";
+    expect(() => parseSearchResponse(response)).toThrow(
+      "search.lines[0].nodes must be an integer in range",
+    );
+  });
+
+  it("uses the engine's request name for the composite evaluator", () => {
+    const parsed = parseWorkerRequest({
+      id: 1,
+      kind: "search",
+      profile: "eco",
+      evaluator: "model-composite",
+      multiPv: 1,
+      timeControl: null,
+    });
+    expect(parsed.kind === "search" ? parsed.evaluator : null).toBe(
+      "model-composite",
+    );
+    expect(() =>
+      parseWorkerRequest({
+        id: 1,
+        kind: "search",
+        profile: "eco",
+        evaluator: "model-composite-50-50",
+        multiPv: 1,
+        timeControl: null,
+      }),
+    ).toThrow("request.evaluator is unsupported");
   });
 });
 

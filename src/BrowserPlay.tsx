@@ -7,13 +7,21 @@ import {
   useState,
 } from "react";
 
+import { AnalysisSummaryStore, updateMatchesRequest } from "./analysis-cache";
 import {
+  ANALYSIS_SCHEMA,
   MAX_BROWSER_MODEL_BYTES,
+  MAX_BROWSER_OPENING_BOOK_BYTES,
+  type AnalysisStart,
+  type AnalysisUpdate,
   type BrowserSnapshot,
+  type EvaluatorChoice,
   type HandEntry,
   type HandPieceKind,
   type ModelSummary,
   type MoveSummary,
+  type OpeningBookSummary,
+  type OpeningProfile,
   type PieceKind,
   recommendedSearchProfile,
   type SearchProfile,
@@ -21,8 +29,32 @@ import {
   sha256Hex,
   type Side,
 } from "./browser-engine";
-import { EngineWorkerClient, type RestorableModel } from "./engine-client";
+import { type EngineReadyState, WasmEngineAdapter } from "./engine-adapter";
+import type { RestorableModel, RestorableOpeningBook } from "./engine-client";
 import { getMessages, type Locale, type Messages } from "./localization";
+import {
+  PIECE_ASSET_CATALOG,
+  pieceAssetPath,
+  pieceAssetSet,
+  type PieceSetId,
+} from "./pieces/catalog";
+import {
+  type BoardOrientation,
+  consumeMatchClock,
+  DEFAULT_TIME_CONTROL,
+  flippedOrientation,
+  humanControlsSide,
+  initialMatchClock,
+  lastMoveHighlight,
+  type MoveHighlight,
+  type MatchClock,
+  parseUsiMoveShape,
+  resourceBudget,
+  serializeTimeControl,
+  takeOverSide,
+  type HumanRole,
+  type TimeControlSettings,
+} from "./play-settings";
 
 export const BOARD_FILE_LABELS = [9, 8, 7, 6, 5, 4, 3, 2, 1] as const;
 export const BOARD_RANK_LABELS = [
@@ -54,12 +86,120 @@ const PIECE_GLYPHS: Record<PieceKind, string> = {
   dragon: "龍",
 };
 
+export function pieceFallbackGlyph(kind: PieceKind, side: Side): string {
+  return kind === "king" && side === "white" ? "王" : PIECE_GLYPHS[kind];
+}
+
 export type DisplayMode = "match" | "analysis";
-type BusyState = "initializing" | "moving" | "searching" | "engine" | "model";
+type BusyState = "initializing" | "moving" | "engine" | "model" | "book";
+type AnalysisStatus =
+  | "idle"
+  | "cached"
+  | "live"
+  | "stopped"
+  | "invalidated"
+  | "restarting";
 export type BoardSelection =
   | { kind: "board"; index: number }
   | { kind: "hand"; piece: HandPieceKind }
   | null;
+
+interface AnalysisView {
+  status: AnalysisStatus;
+  update: AnalysisUpdate | null;
+  elapsedNs: number | null;
+}
+
+interface AdapterPair {
+  play: WasmEngineAdapter;
+  analysis: WasmEngineAdapter;
+}
+
+const analysisStore = new AnalysisSummaryStore();
+
+function text(locale: Locale) {
+  const ja = locale === "ja";
+  return {
+    history: ja ? "棋譜" : "Move history",
+    initial: ja ? "開始局面" : "Initial position",
+    current: ja ? "現在局面へ" : "Return to live game",
+    first: ja ? "最初" : "First",
+    previous: ja ? "前" : "Previous",
+    next: ja ? "次" : "Next",
+    last: ja ? "最後" : "Last",
+    historical: ja ? "過去局面" : "Historical position",
+    liveGame: ja ? "対局中の現在局面" : "Live game position",
+    realtime: ja ? "リアルタイム解析" : "Real-time analysis",
+    liveAnalysis: ja ? "ライブ解析" : "Live analysis",
+    cached: ja ? "キャッシュ済み" : "Cached result",
+    stopped: ja ? "停止済み解析" : "Stopped analysis",
+    invalidated: ja ? "無効化された結果" : "Invalidated result",
+    restarting: ja ? "解析ワーカーを再起動中" : "Restarting analysis worker",
+    source: ja ? "探索ソース" : "Source",
+    search: ja ? "探索" : "Search",
+    book: "定跡",
+    seldepth: ja ? "選択的深さ" : "Selective depth",
+    nps: "NPS",
+    elapsed: ja ? "経過時間" : "Elapsed",
+    evaluation: ja ? "評価値" : "Evaluation",
+    mate: ja ? "詰み" : "Mate",
+    bestMove: ja ? "現在の最善手" : "Current best move",
+    modelProfile: ja ? "モデル / プロファイル" : "Model / profile",
+    settings: ja ? "設定" : "Settings",
+    humanRole: ja ? "人間の役割" : "Human role",
+    sente: ja ? "先手" : "Sente",
+    gote: ja ? "後手" : "Gote",
+    aiVsAi: ja ? "AI同士" : "AI vs AI",
+    analysisOnly: ja ? "解析のみ" : "Analysis only",
+    orientation: ja ? "盤面の向き" : "Board orientation",
+    senteBottom: ja ? "先手が下" : "Sente at bottom",
+    goteBottom: ja ? "後手が下" : "Gote at bottom",
+    flip: ja ? "反転" : "Flip board",
+    takeover: ja ? "この手番を引き継ぐ" : "Take over this side",
+    takeoverHint: ja
+      ? "手番やSFEN、棋譜は変更しません。"
+      : "Does not change side to move, SFEN, or history.",
+    timeControl: ja ? "時間設定" : "Time control",
+    casual: ja ? "カジュアル（自動・最大20秒）" : "Casual (adaptive, 20s cap)",
+    fixed: ja ? "1手固定" : "Fixed per move",
+    clock: ja ? "持ち時間" : "Match clock",
+    nodes: ja ? "ノード指定" : "Node limit",
+    configuredMaximum: ja ? "設定上限" : "Configured maximum",
+    actualThinking: ja ? "実消費思考時間" : "Actual thinking time",
+    mainMinutes: ja ? "持ち時間（分）" : "Main time (minutes)",
+    byoyomi: ja ? "秒読み（秒）" : "Byoyomi (seconds)",
+    increment: ja ? "加算（秒）" : "Increment (seconds)",
+    advanced: ja ? "詳細設定" : "Advanced",
+    threads: ja ? "スレッド" : "Threads",
+    hash: ja ? "ハッシュ (MB)" : "Hash (MB)",
+    analysisHash: ja ? "解析ハッシュ (MB)" : "Analysis hash (MB)",
+    pauseAnalysis: ja
+      ? "AI思考中は解析を一時停止"
+      : "Pause analysis during AI turn",
+    openingProfile: ja ? "オープニングプロファイル" : "Opening profile",
+    ibishaStrict: ja ? "居飛車厳格" : "Ibisya strict",
+    ibishaPreferred: ja ? "居飛車優先" : "Ibisya preferred",
+    unrestricted: ja ? "無制限" : "Unrestricted",
+    openingHint: ja
+      ? "居飛車プロファイルは定跡選択方針で、合法手を制限しません。"
+      : "Ibisya profiles affect book selection, never legal moves.",
+    chooseBook: ja ? "定跡ファイルを選択" : "Choose opening book",
+    removeBook: ja ? "定跡を外す" : "Remove book",
+    bookNotLoaded: ja ? "定跡未読込" : "No book loaded",
+    pieceSet: ja ? "駒のデザイン" : "Piece set",
+    pieceCredits: ja ? "駒のクレジット" : "Piece Credits",
+    close: ja ? "閉じる" : "Close",
+    newGame: ja ? "新しい対局" : "New game",
+    stopAi: ja ? "AI対局を停止" : "Stop AI play",
+    analysisUnavailable: ja ? "解析結果はまだありません" : "No analysis yet",
+    workerReady: ja ? "準備完了" : "Ready",
+    aiThinking: (side: Side) =>
+      ja
+        ? `${side === "black" ? "先手" : "後手"}AIが考えています…`
+        : `${side === "black" ? "Sente" : "Gote"} AI is thinking…`,
+    workerCrashed: ja ? "ワーカー障害" : "Worker failure",
+  };
+}
 
 function numberLocale(locale: Locale): string {
   return locale === "ja" ? "ja-JP" : "en-US";
@@ -72,6 +212,30 @@ function formatNumber(value: number, locale: Locale): string {
 function formatScore(score: number): string {
   if (score === 0) return "±0";
   return score > 0 ? `+${score}` : String(score);
+}
+
+function formatSecondsFromNs(nanoseconds: number): string {
+  return `${(nanoseconds / 1_000_000_000).toFixed(2)}s`;
+}
+
+function formatClock(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1_000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function configuredMaximum(settings: TimeControlSettings): string {
+  switch (settings.mode) {
+    case "casual":
+      return "20s";
+    case "fixed":
+      return `${settings.fixedSeconds}s`;
+    case "clock":
+      return `${settings.mainMinutes}m + ${settings.byoyomiSeconds}s +${settings.incrementSeconds}s`;
+    case "nodes":
+      return `${settings.nodes.toLocaleString()} nodes`;
+  }
 }
 
 function selectedMoves(
@@ -108,10 +272,6 @@ function destinationIndex(movement: MoveSummary): number {
   return boardIndex(movement.to.file, movement.to.rank);
 }
 
-function modelFileAccepts(file: File): boolean {
-  return file.size > 0 && file.size <= MAX_BROWSER_MODEL_BYTES;
-}
-
 function deviceProfile(): SearchProfile {
   if (typeof navigator === "undefined") return "balanced";
   const extendedNavigator = navigator as Navigator & {
@@ -125,13 +285,51 @@ function deviceProfile(): SearchProfile {
   });
 }
 
-function PieceText({ kind, side }: { kind: PieceKind; side: Side }) {
-  const glyph = kind === "king" && side === "white" ? "王" : PIECE_GLYPHS[kind];
+function persistedPieceSet(): PieceSetId {
+  if (typeof localStorage === "undefined") return "kanji_brown";
+  const value = localStorage.getItem("open-shogi-ui/piece-set");
+  return PIECE_ASSET_CATALOG.some(({ id }) => id === value)
+    ? (value as PieceSetId)
+    : "kanji_brown";
+}
+
+function PieceView({
+  kind,
+  side,
+  setId,
+  flipped,
+}: {
+  kind: PieceKind;
+  side: Side;
+  setId: PieceSetId;
+  flipped: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  const glyph = pieceFallbackGlyph(kind, side);
   return (
-    <span className={`shogi-piece shogi-piece--${side}`} lang="ja">
-      {glyph}
+    <span
+      className={`piece-frame ${flipped ? "piece-frame--flipped" : ""}`}
+      lang="ja"
+    >
+      {failed ? (
+        <span className={`shogi-piece shogi-piece--${side}`}>{glyph}</span>
+      ) : (
+        <img
+          alt={glyph}
+          className="piece-image"
+          draggable={false}
+          height="96"
+          onError={() => setFailed(true)}
+          src={pieceAssetPath(setId, side, kind)}
+          width="84"
+        />
+      )}
     </span>
   );
+}
+
+function squareIndex(square: { file: number; rank: number } | null): number {
+  return square === null ? -1 : boardIndex(square.file, square.rank);
 }
 
 function HandStand({
@@ -141,6 +339,8 @@ function HandStand({
   legalDrops,
   disabled,
   messages,
+  orientation,
+  pieceSet,
   onSelect,
 }: {
   side: Side;
@@ -149,39 +349,42 @@ function HandStand({
   legalDrops: ReadonlySet<HandPieceKind>;
   disabled: boolean;
   messages: Messages;
+  orientation: BoardOrientation;
+  pieceSet: PieceSetId;
   onSelect: (piece: HandPieceKind) => void;
 }) {
   const pieces = entries.filter(({ count }) => count > 0);
-  const heading = <h2>{messages.play.hand(side)}</h2>;
   return (
     <section className={`hand-stand hand-stand--${side}`}>
-      {side === "black" ? heading : null}
+      <h2>{messages.play.hand(side)}</h2>
       <div className="hand-stand__pieces">
         {pieces.length === 0 ? (
           <p>{messages.play.emptyHand}</p>
         ) : (
-          pieces.map(({ piece, count }) => {
-            const isSelected =
-              selection?.kind === "hand" && selection.piece === piece;
-            return (
-              <button
-                aria-pressed={isSelected}
-                className="hand-piece"
-                disabled={disabled || !legalDrops.has(piece)}
-                key={piece}
-                onClick={() => onSelect(piece)}
-                type="button"
-              >
-                <PieceText kind={piece} side={side} />
-                <span aria-label={`${messages.play.pieceName[piece]} ${count}`}>
-                  ×{count}
-                </span>
-              </button>
-            );
-          })
+          pieces.map(({ piece, count }) => (
+            <button
+              aria-pressed={
+                selection?.kind === "hand" && selection.piece === piece
+              }
+              className="hand-piece"
+              disabled={disabled || !legalDrops.has(piece)}
+              key={piece}
+              onClick={() => onSelect(piece)}
+              type="button"
+            >
+              <PieceView
+                flipped={orientation === "gote-bottom"}
+                kind={piece}
+                setId={pieceSet}
+                side={side}
+              />
+              <span aria-label={`${messages.play.pieceName[piece]} ${count}`}>
+                ×{count}
+              </span>
+            </button>
+          ))
         )}
       </div>
-      {side === "white" ? heading : null}
     </section>
   );
 }
@@ -191,84 +394,133 @@ export function ShogiBoard({
   selection,
   disabled,
   messages,
+  orientation = "sente-bottom",
+  lastMove = null,
+  pv = [],
+  pieceSet = "kanji_brown",
   onSquare,
 }: {
   snapshot: BrowserSnapshot;
   selection: BoardSelection;
   disabled: boolean;
   messages: Messages;
+  orientation?: BoardOrientation;
+  lastMove?: MoveHighlight | null;
+  pv?: string[];
+  pieceSet?: PieceSetId;
   onSquare: (index: number) => void;
 }) {
   const destinations = useMemo(
     () => new Set(selectedMoves(snapshot, selection).map(destinationIndex)),
     [selection, snapshot],
   );
-  const rows = Array.from({ length: 9 }, (_, rankIndex) =>
-    snapshot.board.slice(rankIndex * 9, rankIndex * 9 + 9),
+  const pvSquares = useMemo(() => {
+    const squares = new Set<number>();
+    for (const movement of pv.slice(0, 8)) {
+      const parsed = parseUsiMoveShape(movement);
+      if (parsed.from !== null) squares.add(squareIndex(parsed.from));
+      squares.add(squareIndex(parsed.to));
+    }
+    return squares;
+  }, [pv]);
+  const order = Array.from({ length: 81 }, (_, index) =>
+    orientation === "sente-bottom" ? index : 80 - index,
   );
+  const fileLabels =
+    orientation === "sente-bottom"
+      ? BOARD_FILE_LABELS
+      : [...BOARD_FILE_LABELS].reverse();
+  const rankLabels =
+    orientation === "sente-bottom"
+      ? BOARD_RANK_LABELS
+      : [...BOARD_RANK_LABELS].reverse();
+  const lastFrom = squareIndex(lastMove?.from ?? null);
+  const lastTo = squareIndex(lastMove?.to ?? null);
+  const checkedKing =
+    snapshot.terminal?.kind === "checkmate"
+      ? snapshot.board.findIndex(
+          (piece) =>
+            piece?.kind === "king" && piece.side === snapshot.sideToMove,
+        )
+      : -1;
 
   return (
     <div className="board-coordinate-grid">
       <div aria-hidden="true" className="file-coordinates">
-        {BOARD_FILE_LABELS.map((file) => (
+        {fileLabels.map((file) => (
           <span key={file}>{file}</span>
         ))}
       </div>
       <div aria-label={messages.play.title} className="shogi-board" role="grid">
-        {rows.map((row, rankIndex) => (
-          <div
-            className="board-row"
-            key={BOARD_RANK_LABELS[rankIndex]}
-            role="row"
-          >
-            {row.map((piece, fileIndex) => {
-              const index = rankIndex * 9 + fileIndex;
-              const file = BOARD_FILE_LABELS[fileIndex];
-              const rank = BOARD_RANK_LABELS[rankIndex];
+        {Array.from({ length: 9 }, (_, visualRank) => (
+          <div className="board-row" key={rankLabels[visualRank]} role="row">
+            {order.slice(visualRank * 9, visualRank * 9 + 9).map((index) => {
+              const piece = snapshot.board[index];
+              const file = piece?.square.file ?? 9 - (index % 9);
+              const rankNumber =
+                piece?.square.rank ?? Math.floor(index / 9) + 1;
+              const rank = BOARD_RANK_LABELS[rankNumber - 1];
               const isSelected =
                 selection?.kind === "board" && selection.index === index;
               const isDestination = destinations.has(index);
-              const state = [
+              const states = [
                 isSelected ? messages.play.selected : null,
                 isDestination ? messages.play.legalDestination : null,
-              ]
-                .filter(Boolean)
-                .join("、");
+                index === lastFrom ? "last move origin" : null,
+                index === lastTo ? "last move destination" : null,
+                index === checkedKing ? "checked king" : null,
+                pvSquares.has(index) ? "analysis PV preview" : null,
+              ].filter(Boolean);
               const pieceLabel =
                 piece === null
                   ? ""
                   : `${piece.side === "black" ? messages.play.black : messages.play.white}${messages.play.pieceName[piece.kind]}`;
-              const label = [
-                messages.play.squareLabel(file, rank),
-                pieceLabel,
-                state,
+              const classes = [
+                "board-square",
+                isSelected && "board-square--selected",
+                isDestination && "board-square--destination",
+                index === lastFrom && "board-square--last-origin",
+                index === lastTo && "board-square--last-destination",
+                index === lastTo && lastMove?.drop && "board-square--last-drop",
+                index === lastTo &&
+                  lastMove?.capture &&
+                  "board-square--last-capture",
+                (index === lastFrom || index === lastTo) &&
+                  lastMove?.promotion &&
+                  "board-square--last-promotion",
+                index === checkedKing && "board-square--checked-king",
+                pvSquares.has(index) && "board-square--pv",
               ]
                 .filter(Boolean)
-                .join("、");
-
+                .join(" ");
               return (
                 <button
-                  aria-label={label}
-                  aria-selected={isSelected}
-                  className={[
-                    "board-square",
-                    isSelected ? "board-square--selected" : "",
-                    isDestination ? "board-square--destination" : "",
+                  aria-label={[
+                    messages.play.squareLabel(file, rank),
+                    pieceLabel,
+                    states.join(", "),
                   ]
                     .filter(Boolean)
-                    .join(" ")}
+                    .join("、")}
+                  aria-selected={isSelected}
+                  className={classes}
                   data-file={file}
                   data-kind={piece?.kind}
-                  data-rank={rankIndex + 1}
+                  data-rank={rankNumber}
                   data-side={piece?.side}
                   disabled={disabled}
-                  key={`${file}${rank}`}
+                  key={index}
                   onClick={() => onSquare(index)}
                   role="gridcell"
                   type="button"
                 >
                   {piece === null ? null : (
-                    <PieceText kind={piece.kind} side={piece.side} />
+                    <PieceView
+                      flipped={orientation === "gote-bottom"}
+                      kind={piece.kind}
+                      setId={pieceSet}
+                      side={piece.side}
+                    />
                   )}
                   {isDestination ? (
                     <span aria-hidden="true" className="destination-mark" />
@@ -280,7 +532,7 @@ export function ShogiBoard({
         ))}
       </div>
       <div aria-hidden="true" className="rank-coordinates">
-        {BOARD_RANK_LABELS.map((rank) => (
+        {rankLabels.map((rank) => (
           <span key={rank}>{rank}</span>
         ))}
       </div>
@@ -321,636 +573,1440 @@ function SegmentedControl<T extends string | number>({
   );
 }
 
+function Metric({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
 function AnalysisPanel({
   locale,
-  analysis,
+  enabled,
+  view,
+  profile,
+  openingProfile,
+  evaluator,
+  lastSearch,
+  onToggle,
   children,
 }: {
   locale: Locale;
-  analysis: SearchResponse | null;
+  enabled: boolean;
+  view: AnalysisView;
+  profile: SearchProfile;
+  openingProfile: OpeningProfile;
+  evaluator: EvaluatorChoice;
+  lastSearch: SearchResponse | null;
+  onToggle: (enabled: boolean) => void;
   children: ReactNode;
 }) {
-  const messages = getMessages(locale);
+  const labels = text(locale);
+  const update = view.update;
+  const statusLabel =
+    view.status === "live"
+      ? labels.liveAnalysis
+      : view.status === "cached"
+        ? labels.cached
+        : view.status === "invalidated"
+          ? labels.invalidated
+          : view.status === "restarting"
+            ? labels.restarting
+            : view.status === "stopped"
+              ? labels.stopped
+              : labels.analysisUnavailable;
+  const elapsed =
+    view.elapsedNs === null ? null : view.elapsedNs / 1_000_000_000;
   return (
-    <aside className="analysis-panel" aria-label={messages.play.analysisMode}>
-      {children}
-      <section
-        className="analysis-results"
-        aria-labelledby="analysis-lines-title"
-      >
+    <aside className="analysis-panel" aria-label={labels.realtime}>
+      <section className="analysis-results" aria-labelledby="analysis-title">
         <div className="analysis-results__heading">
-          <h2 id="analysis-lines-title">{messages.play.analysisMode}</h2>
-          {analysis === null ? null : (
-            <p>
-              {messages.play.depth} {analysis.depth} · {messages.play.nodes}{" "}
-              {formatNumber(analysis.nodes, locale)}
+          <div>
+            <h2 id="analysis-title">{labels.realtime}</h2>
+            <p className={`analysis-state analysis-state--${view.status}`}>
+              {statusLabel}
             </p>
-          )}
-        </div>
-        {analysis === null ? (
-          <div className="analysis-empty">
-            <p>{messages.play.noAnalysis}</p>
-            <span>{messages.play.analysisHint}</span>
           </div>
+          <label className="toggle-control">
+            <input
+              aria-label={labels.realtime}
+              checked={enabled}
+              onChange={(event) => onToggle(event.currentTarget.checked)}
+              type="checkbox"
+            />
+            <span aria-hidden="true" />
+          </label>
+        </div>
+        {update === null ? (
+          <p className="analysis-empty">{labels.analysisUnavailable}</p>
         ) : (
-          <ol className="analysis-lines">
-            {analysis.lines.map((line) => (
-              <li key={line.rank}>
-                <div className="analysis-line__score">
-                  <span>#{line.rank}</span>
-                  <strong>{formatScore(line.scoreCp)}</strong>
-                </div>
-                <p className="analysis-line__move">{line.bestMove}</p>
-                <dl>
-                  <div>
-                    <dt>{messages.play.depth}</dt>
-                    <dd>{line.depth}</dd>
+          <>
+            <dl className="analysis-metrics">
+              <Metric label={getMessages(locale).play.depth}>
+                {update.depth}
+              </Metric>
+              <Metric label={labels.seldepth}>—</Metric>
+              <Metric label={getMessages(locale).play.nodes}>
+                {formatNumber(update.nodes, locale)}
+              </Metric>
+              <Metric label={labels.nps}>
+                {formatNumber(update.nps, locale)}
+              </Metric>
+              <Metric label={labels.elapsed}>
+                {elapsed === null ? "—" : `${elapsed.toFixed(2)}s`}
+              </Metric>
+              <Metric label={labels.evaluation}>
+                {formatScore(update.score)}
+              </Metric>
+              <Metric label={labels.mate}>{update.mateScore ?? "—"}</Metric>
+              <Metric label={labels.bestMove}>
+                {update.lines[0]?.pv[0] ?? "—"}
+              </Metric>
+              <Metric label={labels.modelProfile}>
+                {evaluator} / {profile}
+              </Metric>
+              <Metric label={labels.source}>{labels.search}</Metric>
+            </dl>
+            <ol className="analysis-lines">
+              {update.lines.map((line) => (
+                <li key={line.rank}>
+                  <div className="analysis-line__score">
+                    <span>#{line.rank}</span>
+                    <strong>
+                      {line.mateScore === null
+                        ? formatScore(line.score)
+                        : `${labels.mate} ${line.mateScore}`}
+                    </strong>
                   </div>
-                  <div>
-                    <dt>{messages.play.nodes}</dt>
-                    <dd>{formatNumber(line.nodes, locale)}</dd>
-                  </div>
-                </dl>
-                <p className="analysis-line__pv">
-                  <span>{messages.play.principalVariation}</span>
-                  {line.pv.join(" ")}
-                </p>
-              </li>
-            ))}
-          </ol>
+                  <p className="analysis-line__pv">{line.pv.join(" ")}</p>
+                  <small>
+                    d{line.depth} · {formatNumber(line.nodes, locale)} nodes
+                  </small>
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
+        {lastSearch === null ? null : (
+          <div
+            className={`last-search-source last-search-source--${lastSearch.source}`}
+          >
+            <strong>
+              {lastSearch.source === "book" ? labels.book : labels.search}
+            </strong>
+            <span>{lastSearch.bestMove ?? "—"}</span>
+            {lastSearch.source === "book" ? (
+              <small>
+                {lastSearch.openingBookMove?.openingClassification} ·{" "}
+                {openingProfile}
+              </small>
+            ) : (
+              <small>
+                d{lastSearch.depth} · {formatNumber(lastSearch.nodes, locale)}{" "}
+                nodes
+              </small>
+            )}
+          </div>
         )}
       </section>
+      {children}
     </aside>
   );
 }
 
+function MoveHistory({
+  locale,
+  snapshots,
+  displayedIndex,
+  moveSources,
+  onSelect,
+}: {
+  locale: Locale;
+  snapshots: BrowserSnapshot[];
+  displayedIndex: number;
+  moveSources: Array<SearchResponse | null>;
+  onSelect: (index: number) => void;
+}) {
+  const labels = text(locale);
+  return (
+    <aside className="history-rail" aria-label={labels.history}>
+      <div className="rail-heading">
+        <h2>{labels.history}</h2>
+        <span>
+          {displayedIndex === snapshots.length - 1
+            ? labels.liveGame
+            : labels.historical}
+        </span>
+      </div>
+      <ol className="move-list">
+        {snapshots.map((snapshot, index) => {
+          const movement = index === 0 ? labels.initial : snapshot.moves.at(-1);
+          return (
+            <li key={`${index}-${movement}`}>
+              <button
+                aria-current={index === displayedIndex ? "step" : undefined}
+                onClick={() => onSelect(index)}
+                type="button"
+              >
+                <span>{index === 0 ? "#" : index}</span>
+                <strong>{movement}</strong>
+                {moveSources[index]?.source === "book" ? (
+                  <em>{labels.book}</em>
+                ) : null}
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      <div className="history-controls">
+        <button
+          aria-label={labels.first}
+          disabled={displayedIndex === 0}
+          onClick={() => onSelect(0)}
+          type="button"
+        >
+          |◀
+        </button>
+        <button
+          aria-label={labels.previous}
+          disabled={displayedIndex === 0}
+          onClick={() => onSelect(displayedIndex - 1)}
+          type="button"
+        >
+          ◀
+        </button>
+        <button
+          aria-label={labels.next}
+          disabled={displayedIndex === snapshots.length - 1}
+          onClick={() => onSelect(displayedIndex + 1)}
+          type="button"
+        >
+          ▶
+        </button>
+        <button
+          aria-label={labels.last}
+          disabled={displayedIndex === snapshots.length - 1}
+          onClick={() => onSelect(snapshots.length - 1)}
+          type="button"
+        >
+          ▶|
+        </button>
+        <button
+          disabled={displayedIndex === snapshots.length - 1}
+          onClick={() => onSelect(snapshots.length - 1)}
+          type="button"
+        >
+          {labels.current}
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function CreditsDialog({
+  locale,
+  onClose,
+}: {
+  locale: Locale;
+  onClose: () => void;
+}) {
+  const labels = text(locale);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog !== null && !dialog.open) dialog.showModal();
+  }, []);
+
+  return (
+    <dialog
+      aria-labelledby="piece-credits-title"
+      aria-modal="true"
+      className="credits-dialog"
+      onCancel={onClose}
+      onClose={onClose}
+      ref={dialogRef}
+    >
+      <div>
+        <header>
+          <h2 id="piece-credits-title">{labels.pieceCredits}</h2>
+          <button onClick={() => dialogRef.current?.close()} type="button">
+            {labels.close}
+          </button>
+        </header>
+        <p>
+          Artwork from WandererXII/lishogi, commit
+          acb3b12286dd41bc88edfa81172e6a5e7f68c52b. CC BY 4.0. Files are
+          unmodified. No endorsement is implied.
+        </p>
+        <ul>
+          {PIECE_ASSET_CATALOG.map((set) => (
+            <li key={set.id}>
+              <strong>{set.label}</strong>
+              <span>
+                {set.creators.join(", ")} · {set.license}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p>
+          <a
+            href="https://github.com/WandererXII/lishogi/tree/acb3b12286dd41bc88edfa81172e6a5e7f68c52b/ui/%40build/pieces/assets/standard"
+            rel="external"
+          >
+            Pinned source
+          </a>
+          {" · "}
+          <a href="/licenses/lishogi-COPYING.md" rel="license">
+            Upstream COPYING.md
+          </a>
+          {" · "}
+          <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">
+            CC BY 4.0
+          </a>
+        </p>
+      </div>
+    </dialog>
+  );
+}
+
+async function sha256Text(value: string): Promise<string> {
+  return sha256Hex(new TextEncoder().encode(value).buffer);
+}
+
+export async function buildAnalysisStart(
+  snapshot: BrowserSnapshot,
+  profile: SearchProfile,
+  evaluator: EvaluatorChoice,
+  model: ModelSummary | null,
+  openingProfile: OpeningProfile,
+  multiPv: number,
+  playHashMegabytes: number,
+  analysisHashMegabytes: number,
+): Promise<AnalysisStart> {
+  return {
+    schema: ANALYSIS_SCHEMA,
+    positionSfen: snapshot.sfen,
+    modelHash:
+      model?.artifactSha256 ??
+      (await sha256Text("open-shogi-overall-champion/v1")),
+    evaluatorConfigHash: await sha256Text(`evaluator:${evaluator}`),
+    featureSchemaHash: await sha256Text(
+      model === null
+        ? "open-shogi-handcrafted-features/v1"
+        : `osaval-feature-schema/${model.featureSchemaVersion}`,
+    ),
+    evaluationSemanticsHash: await sha256Text(
+      `open-shogi-evaluation-semantics/v1:${evaluator}`,
+    ),
+    searchOptionsHash: await sha256Text(
+      JSON.stringify({ profile, playHashMegabytes, analysisHashMegabytes }),
+    ),
+    openingProfileHash: await sha256Text(`opening-profile:${openingProfile}`),
+    multiPv,
+  };
+}
+
 export function BrowserPlay({ locale }: { locale: Locale }) {
   const messages = getMessages(locale);
-  const clientRef = useRef<EngineWorkerClient | null>(null);
+  const labels = text(locale);
+  const errorMessageRef = useRef(messages.play.error);
+  const workerCrashedMessageRef = useRef(labels.workerCrashed);
+  errorMessageRef.current = messages.play.error;
+  workerCrashedMessageRef.current = labels.workerCrashed;
+  const adaptersRef = useRef<AdapterPair | null>(null);
   const operationRef = useRef(0);
-  const [snapshot, setSnapshot] = useState<BrowserSnapshot | null>(null);
-  const [mode, setMode] = useState<DisplayMode>("analysis");
-  const [matchStarted, setMatchStarted] = useState(false);
+  const analysisRequestRef = useRef(0);
+  const aiRequestRef = useRef(false);
+  const turnStartedAtRef = useRef(Date.now());
+  const [history, setHistory] = useState<BrowserSnapshot[]>([]);
+  const [moveSources, setMoveSources] = useState<Array<SearchResponse | null>>(
+    [],
+  );
+  const [displayedIndex, setDisplayedIndex] = useState(0);
   const [busy, setBusy] = useState<BusyState | null>("initializing");
   const [selection, setSelection] = useState<BoardSelection>(null);
   const [promotionMoves, setPromotionMoves] = useState<MoveSummary[] | null>(
     null,
   );
   const [profile, setProfile] = useState<SearchProfile>(deviceProfile);
-  const [multiPv, setMultiPv] = useState<1 | 2 | 3>(1);
-  const [evaluator, setEvaluator] = useState<"handcrafted" | "model">(
-    "handcrafted",
+  const [multiPv, setMultiPv] = useState(3);
+  const [evaluator, setEvaluator] =
+    useState<EvaluatorChoice>("overall-champion");
+  const [humanRole, setHumanRole] = useState<HumanRole>("sente");
+  const [orientation, setOrientation] =
+    useState<BoardOrientation>("sente-bottom");
+  const [timeSettings, setTimeSettings] =
+    useState<TimeControlSettings>(DEFAULT_TIME_CONTROL);
+  const [matchClock, setMatchClock] = useState<MatchClock>(() =>
+    initialMatchClock(DEFAULT_TIME_CONTROL),
   );
-  const [analysis, setAnalysis] = useState<SearchResponse | null>(null);
+  const [openingProfile, setOpeningProfile] =
+    useState<OpeningProfile>("ibisha_strict");
+  const [analysisEnabled, setAnalysisEnabled] = useState(true);
+  const [analysisView, setAnalysisView] = useState<AnalysisView>({
+    status: "idle",
+    update: null,
+    elapsedNs: null,
+  });
+  const [analysisEpoch, setAnalysisEpoch] = useState(0);
+  const [playThinking, setPlayThinking] = useState(false);
+  const [lastSearch, setLastSearch] = useState<SearchResponse | null>(null);
   const [model, setModel] = useState<RestorableModel | null>(null);
   const [modelSummary, setModelSummary] = useState<ModelSummary | null>(null);
   const [modelFileName, setModelFileName] = useState<string | null>(null);
+  const [openingBookSummary, setOpeningBookSummary] =
+    useState<OpeningBookSummary | null>(null);
+  const [openingBookFileName, setOpeningBookFileName] = useState<string | null>(
+    null,
+  );
+  const [openingBook, setOpeningBook] = useState<RestorableOpeningBook | null>(
+    null,
+  );
+  const [pieceSet, setPieceSet] = useState<PieceSetId>(persistedPieceSet);
+  const [pieceCreditsOpen, setPieceCreditsOpen] = useState(false);
+  const [playHash, setPlayHash] = useState(8);
+  const [analysisHash, setAnalysisHash] = useState(8);
+  const [pauseAnalysisDuringAiTurn, setPauseAnalysisDuringAiTurn] =
+    useState(true);
   const [notice, setNotice] = useState<string | null>(null);
+  const [playWorkerState, setPlayWorkerState] =
+    useState<EngineReadyState>("new");
+  const [analysisWorkerState, setAnalysisWorkerState] =
+    useState<EngineReadyState>("new");
+
+  const liveSnapshot = history.at(-1) ?? null;
+  const displayedSnapshot = history[displayedIndex] ?? liveSnapshot;
+  const isLivePosition = displayedIndex === history.length - 1;
+  const currentMoveSource = moveSources[displayedIndex] ?? null;
+  const budget = resourceBudget(
+    playHash,
+    analysisHash,
+    pauseAnalysisDuringAiTurn,
+  );
 
   useEffect(() => {
-    const client = new EngineWorkerClient();
-    const operation = operationRef.current + 1;
-    operationRef.current = operation;
-    clientRef.current = client;
-    void client.initialize().then(
-      (initialized) => {
-        if (operationRef.current !== operation) return;
-        setSnapshot(initialized);
+    const play = new WasmEngineAdapter("play", (state, message) => {
+      setPlayWorkerState(state);
+      if (state === "crashed")
+        setNotice(message ?? workerCrashedMessageRef.current);
+    });
+    const analysis = new WasmEngineAdapter("analysis", (state, message) => {
+      setAnalysisWorkerState(state);
+      if (state === "crashed")
+        setNotice(message ?? workerCrashedMessageRef.current);
+    });
+    adaptersRef.current = { play, analysis };
+    let active = true;
+    void Promise.all([play.initialize(), analysis.initialize()]).then(
+      ([initial]) => {
+        if (!active) return;
+        setHistory([initial]);
+        setMoveSources([null]);
+        setDisplayedIndex(0);
+        turnStartedAtRef.current = Date.now();
         setBusy(null);
       },
       (error: unknown) => {
-        if (operationRef.current !== operation) return;
+        if (!active) return;
         setNotice(
-          error instanceof Error
-            ? error.message
-            : "Engine initialization failed",
+          error instanceof Error ? error.message : errorMessageRef.current,
         );
         setBusy(null);
       },
     );
     return () => {
-      operationRef.current += 1;
-      if (clientRef.current === client) clientRef.current = null;
-      client.dispose();
+      active = false;
+      analysisRequestRef.current += 1;
+      adaptersRef.current = null;
+      play.dispose();
+      analysis.dispose();
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof localStorage !== "undefined")
+      localStorage.setItem("open-shogi-ui/piece-set", pieceSet);
+  }, [pieceSet]);
+
+  useEffect(() => {
+    setMatchClock(initialMatchClock(timeSettings));
+    turnStartedAtRef.current = Date.now();
+  }, [timeSettings.mainMinutes]);
+
+  useEffect(() => {
+    const play = adaptersRef.current?.play;
+    if (play === undefined || play.readyState !== "ready") return;
+    void play.configureOpening(openingProfile).catch((error: unknown) => {
+      setNotice(
+        error instanceof Error ? error.message : errorMessageRef.current,
+      );
+    });
+  }, [openingProfile]);
+
+  useEffect(() => {
+    const adapter = adaptersRef.current?.play;
+    if (
+      playWorkerState !== "crashed" ||
+      adapter === undefined ||
+      liveSnapshot === null
+    )
+      return;
+    const operation = ++operationRef.current;
+    setBusy("initializing");
+    void adapter
+      .restart(
+        { initialSfen: liveSnapshot.initialSfen, moves: liveSnapshot.moves },
+        model,
+        openingBook,
+      )
+      .then(async (restored) => {
+        await adapter.configureOpening(openingProfile);
+        if (operationRef.current !== operation) return;
+        setHistory((current) => [...current.slice(0, -1), restored]);
+        setNotice(null);
+      })
+      .catch((error: unknown) => {
+        if (operationRef.current === operation) {
+          setNotice(
+            error instanceof Error ? error.message : errorMessageRef.current,
+          );
+        }
+      })
+      .finally(() => {
+        if (operationRef.current === operation) setBusy(null);
+      });
+  }, [liveSnapshot, model, openingBook, openingProfile, playWorkerState]);
+
+  useEffect(() => {
+    if (displayedSnapshot === null) return;
+    const adapter = adaptersRef.current?.analysis;
+    if (adapter === undefined) return;
+    const analysisAdapter = adapter;
+    const requestId = ++analysisRequestRef.current;
+    let cancelled = false;
+
+    async function stopAndLabel() {
+      try {
+        if (
+          analysisAdapter.readyState === "ready" ||
+          analysisAdapter.readyState === "busy"
+        )
+          await analysisAdapter.analysisStop();
+      } catch {
+        // Stop before the first start is a harmless closed-protocol error.
+      }
+      if (!cancelled && analysisRequestRef.current === requestId) {
+        setAnalysisView((current) => ({ ...current, status: "stopped" }));
+      }
+    }
+
+    if (
+      !analysisEnabled ||
+      budget.analysisThreads === 0 ||
+      (playThinking && budget.analysisPauseDuringAiTurn)
+    ) {
+      void stopAndLabel();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setAnalysisView((current) => ({
+      status: current.update === null ? "idle" : "invalidated",
+      update: current.update,
+      elapsedNs: null,
+    }));
+
+    async function publish(
+      update: AnalysisUpdate,
+      request: AnalysisStart,
+      status: AnalysisStatus,
+      elapsedNs: number | null = null,
+    ) {
+      if (
+        cancelled ||
+        analysisRequestRef.current !== requestId ||
+        !updateMatchesRequest(update, request)
+      )
+        return;
+      setAnalysisView((current) => ({
+        status,
+        update,
+        elapsedNs: elapsedNs ?? current.elapsedNs,
+      }));
+      await analysisStore.put(request, update);
+    }
+
+    async function startLoop() {
+      const request = await buildAnalysisStart(
+        displayedSnapshot,
+        profile,
+        evaluator,
+        modelSummary,
+        openingProfile,
+        multiPv,
+        playHash,
+        analysisHash,
+      );
+      const persisted = await analysisStore.get(request);
+      if (persisted !== null)
+        await publish(persisted.update, request, "cached");
+      if (cancelled || analysisRequestRef.current !== requestId) return;
+      const started = await analysisAdapter.analysisStart(
+        profile,
+        evaluator,
+        request,
+      );
+      for (const update of started.updates)
+        await publish(
+          update,
+          request,
+          update.source === "cache" ? "cached" : "live",
+        );
+      const sliceNodes =
+        profile === "eco" ? 1_500 : profile === "balanced" ? 4_000 : 12_000;
+      let elapsedNs = 0;
+      while (!cancelled && analysisRequestRef.current === requestId) {
+        const response = await analysisAdapter.analysisStep({
+          schema: ANALYSIS_SCHEMA,
+          nodes: sliceNodes,
+          maxDepth: profile === "eco" ? 5 : profile === "balanced" ? 7 : 9,
+          timestampMs: Date.now(),
+        });
+        elapsedNs += response.slice?.elapsedNs ?? 0;
+        for (const update of response.updates)
+          await publish(update, request, "live", elapsedNs);
+        await new Promise((resolve) => window.setTimeout(resolve, 30));
+      }
+    }
+
+    void startLoop().catch(async (error: unknown) => {
+      if (cancelled || analysisRequestRef.current !== requestId) return;
+      setAnalysisView((current) => ({ ...current, status: "restarting" }));
+      try {
+        const failed = await analysisAdapter.analysisWorkerFailed();
+        const restarted = await analysisAdapter.analysisRestart();
+        const request = await buildAnalysisStart(
+          displayedSnapshot,
+          profile,
+          evaluator,
+          modelSummary,
+          openingProfile,
+          multiPv,
+          playHash,
+          analysisHash,
+        );
+        for (const update of [...failed.updates, ...restarted.updates])
+          await publish(update, request, "cached");
+        setAnalysisEpoch((value) => value + 1);
+      } catch {
+        try {
+          await analysisAdapter.restart(
+            { initialSfen: displayedSnapshot.initialSfen, moves: [] },
+            model,
+          );
+          setAnalysisEpoch((value) => value + 1);
+        } catch (restartError) {
+          setNotice(
+            restartError instanceof Error
+              ? restartError.message
+              : error instanceof Error
+                ? error.message
+                : errorMessageRef.current,
+          );
+          setAnalysisView((current) => ({ ...current, status: "stopped" }));
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+      void analysisAdapter.analysisStop().catch(() => undefined);
+    };
+  }, [
+    analysisEnabled,
+    analysisEpoch,
+    analysisHash,
+    budget.analysisPauseDuringAiTurn,
+    budget.analysisThreads,
+    displayedSnapshot,
+    evaluator,
+    model,
+    modelSummary,
+    multiPv,
+    openingProfile,
+    playHash,
+    playThinking,
+    profile,
+  ]);
+
+  useEffect(() => {
+    const adapter = adaptersRef.current?.play;
+    if (
+      adapter === undefined ||
+      liveSnapshot === null ||
+      busy !== null ||
+      aiRequestRef.current ||
+      liveSnapshot.terminal !== null ||
+      humanRole === "analysis-only" ||
+      humanControlsSide(humanRole, liveSnapshot.sideToMove)
+    )
+      return;
+    aiRequestRef.current = true;
+    const operation = ++operationRef.current;
+    setBusy("engine");
+    setPlayThinking(true);
+    void adapter
+      .search(
+        profile,
+        evaluator,
+        Math.min(multiPv, 3),
+        serializeTimeControl(timeSettings, matchClock),
+      )
+      .then(async (response) => {
+        if (operationRef.current !== operation || response.bestMove === null)
+          return;
+        if (timeSettings.mode === "clock") {
+          setMatchClock((current) =>
+            consumeMatchClock(
+              current,
+              liveSnapshot.sideToMove,
+              response.elapsedNs / 1_000_000,
+              timeSettings.incrementSeconds,
+            ),
+          );
+        }
+        setLastSearch(response);
+        const next = await adapter.playMove(response.bestMove);
+        if (operationRef.current !== operation) return;
+        setHistory((current) => [...current, next]);
+        setMoveSources((current) => [...current, response]);
+        setDisplayedIndex(next.moves.length);
+        turnStartedAtRef.current = Date.now();
+      })
+      .catch((error: unknown) => {
+        if (operationRef.current === operation)
+          setNotice(
+            error instanceof Error ? error.message : errorMessageRef.current,
+          );
+      })
+      .finally(() => {
+        if (operationRef.current === operation) setBusy(null);
+        aiRequestRef.current = false;
+        setPlayThinking(false);
+      });
+  }, [
+    busy,
+    evaluator,
+    humanRole,
+    liveSnapshot,
+    matchClock,
+    multiPv,
+    profile,
+    timeSettings,
+  ]);
+
   const legalSelectionMoves = useMemo(
-    () => (snapshot === null ? [] : selectedMoves(snapshot, selection)),
-    [selection, snapshot],
+    () =>
+      displayedSnapshot === null
+        ? []
+        : selectedMoves(displayedSnapshot, selection),
+    [displayedSnapshot, selection],
   );
   const legalDrops = useMemo(
     () =>
       new Set(
-        snapshot?.legalMoves
+        displayedSnapshot?.legalMoves
           .map(({ drop }) => drop)
           .filter((piece): piece is HandPieceKind => piece !== null) ?? [],
       ),
-    [snapshot],
+    [displayedSnapshot],
   );
-  const focusMode = isBoardOnlyMode(mode, matchStarted);
   const humanCanMove =
-    snapshot !== null &&
+    displayedSnapshot !== null &&
+    isLivePosition &&
     busy === null &&
-    snapshot.terminal === null &&
-    (!matchStarted || snapshot.sideToMove === "black");
+    displayedSnapshot.terminal === null &&
+    humanControlsSide(humanRole, displayedSnapshot.sideToMove);
+  const lastMove = lastMoveHighlight(history, displayedIndex);
+  const pv = analysisView.update?.lines[0]?.pv ?? [];
 
-  function beginOperation(nextBusy: BusyState): number {
-    const operation = operationRef.current + 1;
-    operationRef.current = operation;
-    setBusy(nextBusy);
-    setNotice(null);
+  function selectHistory(index: number) {
+    setDisplayedIndex(Math.max(0, Math.min(index, history.length - 1)));
     setSelection(null);
     setPromotionMoves(null);
-    return operation;
-  }
-
-  function finishOperation(operation: number) {
-    if (operationRef.current === operation) setBusy(null);
-  }
-
-  function reportError(operation: number, error: unknown) {
-    if (operationRef.current !== operation) return;
-    setNotice(error instanceof Error ? error.message : messages.play.error);
-    setBusy(null);
   }
 
   async function applyMove(movement: string) {
-    const client = clientRef.current;
-    if (client === null || snapshot === null || busy !== null) return;
-    const operation = beginOperation("moving");
+    const adapter = adaptersRef.current?.play;
+    if (adapter === undefined || !humanCanMove) return;
+    const operation = ++operationRef.current;
+    const movingSide = displayedSnapshot?.sideToMove ?? "black";
+    const elapsedMs = Date.now() - turnStartedAtRef.current;
+    setBusy("moving");
+    setSelection(null);
+    setPromotionMoves(null);
+    setNotice(null);
     try {
-      const next = await client.playMove(movement);
+      const next = await adapter.playMove(movement);
       if (operationRef.current !== operation) return;
-      setSnapshot(next);
-      setAnalysis(null);
-      if (
-        matchStarted &&
-        next.terminal === null &&
-        next.sideToMove === "white"
-      ) {
-        setBusy("engine");
-        const response = await client.search(profile, evaluator, 1);
-        if (operationRef.current !== operation) return;
-        if (response.bestMove === null) {
-          throw new Error("engine search returned no legal move");
-        }
-        const replied = await client.playMove(response.bestMove);
-        if (operationRef.current !== operation) return;
-        setSnapshot(replied);
+      if (timeSettings.mode === "clock") {
+        setMatchClock((current) =>
+          consumeMatchClock(
+            current,
+            movingSide,
+            elapsedMs,
+            timeSettings.incrementSeconds,
+          ),
+        );
       }
-      finishOperation(operation);
+      setHistory((current) => [...current, next]);
+      setMoveSources((current) => [...current, null]);
+      setDisplayedIndex(next.moves.length);
+      setLastSearch(null);
+      turnStartedAtRef.current = Date.now();
     } catch (error) {
-      reportError(operation, error);
+      if (operationRef.current === operation)
+        setNotice(error instanceof Error ? error.message : messages.play.error);
+    } finally {
+      if (operationRef.current === operation) setBusy(null);
     }
   }
 
   function chooseMove(candidates: MoveSummary[]) {
-    if (candidates.length === 0) return;
-    if (candidates.length === 1) {
-      void applyMove(candidates[0].usi);
-      return;
-    }
-    setPromotionMoves(candidates);
+    if (candidates.length === 1) void applyMove(candidates[0].usi);
+    else if (candidates.length > 1) setPromotionMoves(candidates);
   }
 
   function selectSquare(index: number) {
-    if (!humanCanMove || snapshot === null) return;
+    if (!humanCanMove || displayedSnapshot === null) return;
     const candidates = legalSelectionMoves.filter(
       (movement) => destinationIndex(movement) === index,
     );
-    if (candidates.length > 0) {
-      chooseMove(candidates);
-      return;
-    }
-    const piece = snapshot.board[index];
-    if (piece?.side === snapshot.sideToMove) {
+    if (candidates.length > 0) return chooseMove(candidates);
+    const piece = displayedSnapshot.board[index];
+    if (piece?.side === displayedSnapshot.sideToMove) {
       const nextSelection: BoardSelection = { kind: "board", index };
       setSelection(
-        selectedMoves(snapshot, nextSelection).length > 0
+        selectedMoves(displayedSnapshot, nextSelection).length > 0
           ? nextSelection
           : null,
       );
-      return;
-    }
-    setSelection(null);
+    } else setSelection(null);
   }
 
-  function selectHand(piece: HandPieceKind) {
-    if (!humanCanMove || snapshot === null || !legalDrops.has(piece)) return;
-    setSelection((current) =>
-      current?.kind === "hand" && current.piece === piece
-        ? null
-        : { kind: "hand", piece },
-    );
-  }
-
-  async function resetPosition(startMatch: boolean) {
-    const client = clientRef.current;
-    if (client === null || busy !== null) return;
-    const operation = beginOperation("moving");
+  async function resetGame() {
+    const adapter = adaptersRef.current?.play;
+    if (adapter === undefined || busy !== null) return;
+    setBusy("moving");
+    setNotice(null);
     try {
-      const reset = await client.reset();
-      if (operationRef.current !== operation) return;
-      setSnapshot(reset);
-      setAnalysis(null);
-      setMatchStarted(startMatch);
-      finishOperation(operation);
+      const snapshot = await adapter.reset();
+      setHistory([snapshot]);
+      setMoveSources([null]);
+      setDisplayedIndex(0);
+      setLastSearch(null);
+      setSelection(null);
+      setMatchClock(initialMatchClock(timeSettings));
+      turnStartedAtRef.current = Date.now();
     } catch (error) {
-      reportError(operation, error);
-    }
-  }
-
-  async function analyzePosition() {
-    const client = clientRef.current;
-    if (client === null || snapshot === null || busy !== null) return;
-    const operation = beginOperation("searching");
-    try {
-      const response = await client.search(profile, evaluator, multiPv);
-      if (operationRef.current !== operation) return;
-      setAnalysis(response);
-      finishOperation(operation);
-    } catch (error) {
-      reportError(operation, error);
-    }
-  }
-
-  async function stopSearch() {
-    const client = clientRef.current;
-    if (
-      client === null ||
-      snapshot === null ||
-      (busy !== "searching" && busy !== "engine")
-    ) {
-      return;
-    }
-    const operation = beginOperation("initializing");
-    try {
-      const restored = await client.cancelAndRestore(
-        { initialSfen: snapshot.initialSfen, moves: snapshot.moves },
-        model,
-      );
-      if (operationRef.current !== operation) return;
-      setSnapshot(restored);
-      setAnalysis(null);
-      setMatchStarted(false);
-      finishOperation(operation);
-    } catch (error) {
-      reportError(operation, error);
+      setNotice(error instanceof Error ? error.message : messages.play.error);
+    } finally {
+      setBusy(null);
     }
   }
 
   async function loadModel(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
-    const client = clientRef.current;
-    if (file === undefined || client === null || busy !== null) return;
-    if (!modelFileAccepts(file)) {
-      setNotice(
-        `OSAVAL model must be between 1 byte and ${MAX_BROWSER_MODEL_BYTES} bytes`,
-      );
+    const adapters = adaptersRef.current;
+    if (file === undefined || adapters === null || busy !== null) return;
+    if (file.size === 0 || file.size > MAX_BROWSER_MODEL_BYTES) {
+      setNotice(`OSAVAL model must be 1..${MAX_BROWSER_MODEL_BYTES} bytes`);
       return;
     }
-    const operation = beginOperation("model");
+    setBusy("model");
     try {
       const bytes = await file.arrayBuffer();
       const expectedArtifactSha256 = await sha256Hex(bytes);
-      const summary = await client.loadModel({
-        bytes,
-        expectedArtifactSha256,
-      });
-      if (operationRef.current !== operation) return;
-      setModel({ bytes, expectedArtifactSha256 });
+      const restorable = { bytes, expectedArtifactSha256 };
+      const [summary] = await Promise.all([
+        adapters.play.loadModel(restorable),
+        adapters.analysis.loadModel(restorable),
+      ]);
+      setModel(restorable);
       setModelSummary(summary);
       setModelFileName(file.name);
       setEvaluator("model");
-      setNotice(messages.play.modelReady(file.name));
-      finishOperation(operation);
     } catch (error) {
-      reportError(operation, error);
+      setNotice(error instanceof Error ? error.message : messages.play.error);
+    } finally {
+      setBusy(null);
     }
   }
 
   async function unloadModel() {
-    const client = clientRef.current;
-    if (client === null || busy !== null) return;
-    const operation = beginOperation("model");
+    const adapters = adaptersRef.current;
+    if (adapters === null || busy !== null) return;
+    setBusy("model");
     try {
-      const next = await client.unloadModel();
-      if (operationRef.current !== operation) return;
-      setSnapshot(next);
+      const [snapshot] = await Promise.all([
+        adapters.play.unloadModel(),
+        adapters.analysis.unloadModel(),
+      ]);
+      setHistory((current) => [...current.slice(0, -1), snapshot]);
       setModel(null);
       setModelSummary(null);
       setModelFileName(null);
-      setEvaluator("handcrafted");
-      setAnalysis(null);
-      finishOperation(operation);
+      setEvaluator("overall-champion");
     } catch (error) {
-      reportError(operation, error);
+      setNotice(error instanceof Error ? error.message : messages.play.error);
+    } finally {
+      setBusy(null);
     }
   }
 
-  const status = (() => {
-    if (busy === "initializing") return messages.play.initialization;
-    if (busy === "searching" || busy === "model")
-      return messages.play.searching;
-    if (busy === "engine") return messages.play.engineTurn;
-    if (snapshot?.terminal !== null && snapshot?.terminal !== undefined) {
-      return messages.play.terminal;
+  async function loadOpeningBook(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    const adapter = adaptersRef.current?.play;
+    if (file === undefined || adapter === undefined || busy !== null) return;
+    if (file.size === 0 || file.size > MAX_BROWSER_OPENING_BOOK_BYTES) {
+      setNotice(
+        `Opening book must be 1..${MAX_BROWSER_OPENING_BOOK_BYTES} bytes`,
+      );
+      return;
     }
-    if (matchStarted) return messages.play.yourTurn;
-    return messages.play.ready;
-  })();
+    setBusy("book");
+    try {
+      const bytes = await file.arrayBuffer();
+      const expectedArtifactSha256 = await sha256Hex(bytes);
+      const restorable = {
+        bytes,
+        expectedArtifactSha256,
+      } satisfies RestorableOpeningBook;
+      const summary = await adapter.loadOpeningBook(restorable);
+      setOpeningBook(restorable);
+      setOpeningBookSummary(summary);
+      setOpeningBookFileName(file.name);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : messages.play.error);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function unloadOpeningBook() {
+    const adapter = adaptersRef.current?.play;
+    if (adapter === undefined || busy !== null) return;
+    setBusy("book");
+    try {
+      const snapshot = await adapter.unloadOpeningBook();
+      setHistory((current) => [...current.slice(0, -1), snapshot]);
+      setOpeningBookSummary(null);
+      setOpeningBookFileName(null);
+      setOpeningBook(null);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : messages.play.error);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function stopAiPlay() {
+    const adapter = adaptersRef.current?.play;
+    setHumanRole("analysis-only");
+    if (adapter === undefined || liveSnapshot === null) return;
+    const operation = ++operationRef.current;
+    aiRequestRef.current = false;
+    setPlayThinking(false);
+    setBusy("initializing");
+    try {
+      const restored = await adapter.restart(
+        { initialSfen: liveSnapshot.initialSfen, moves: liveSnapshot.moves },
+        model,
+        openingBook,
+      );
+      await adapter.configureOpening(openingProfile);
+      if (operationRef.current !== operation) return;
+      setHistory((current) => [...current.slice(0, -1), restored]);
+      setNotice(null);
+    } catch (error) {
+      if (operationRef.current === operation) {
+        setNotice(
+          error instanceof Error ? error.message : errorMessageRef.current,
+        );
+      }
+    } finally {
+      if (operationRef.current === operation) setBusy(null);
+    }
+  }
+
+  const status =
+    busy === "initializing"
+      ? messages.play.initialization
+      : busy === "engine"
+        ? labels.aiThinking(liveSnapshot?.sideToMove ?? "white")
+        : busy === "moving" || busy === "model" || busy === "book"
+          ? messages.play.searching
+          : labels.workerReady;
 
   return (
-    <main
-      className={`play-page ${focusMode ? "play-page--focus" : ""}`}
-      aria-labelledby="browser-play-title"
-    >
-      <header className="play-heading">
+    <main className="analysis-workspace" aria-labelledby="browser-play-title">
+      <header className="workspace-commandbar">
         <div>
           <h1 id="browser-play-title">{messages.play.title}</h1>
-          {!focusMode ? (
-            <>
-              <p>{messages.play.description}</p>
-              <span>{messages.play.localNote}</span>
-            </>
-          ) : null}
-        </div>
-        <div className="play-heading__actions">
-          {focusMode ? null : (
-            <SegmentedControl
-              disabled={matchStarted || busy !== null}
-              label={messages.play.modeLabel}
-              onSelect={(selectedMode) => {
-                setMode(selectedMode);
-                setAnalysis(null);
-                setSelection(null);
-              }}
-              options={[
-                { value: "match", label: messages.play.matchMode },
-                { value: "analysis", label: messages.play.analysisMode },
-              ]}
-              value={mode}
-            />
-          )}
-          <p aria-live="polite" className="engine-status" role="status">
-            {status}
+          <p aria-live="polite" role="status">
+            {status} · play {playWorkerState} · analysis {analysisWorkerState}
           </p>
         </div>
+        <div className="commandbar-actions">
+          <button
+            disabled={busy !== null}
+            onClick={() => void resetGame()}
+            type="button"
+          >
+            {labels.newGame}
+          </button>
+          {humanRole === "ai-vs-ai" ? (
+            <button onClick={() => void stopAiPlay()} type="button">
+              {labels.stopAi}
+            </button>
+          ) : null}
+        </div>
       </header>
-
       {notice === null ? null : (
         <p className="play-notice" role="alert">
           {notice}
         </p>
       )}
-
-      <div
-        className={`play-workspace ${focusMode ? "play-workspace--focus" : ""}`}
-      >
+      <div className="analysis-layout">
+        <MoveHistory
+          displayedIndex={displayedIndex}
+          locale={locale}
+          moveSources={moveSources}
+          onSelect={selectHistory}
+          snapshots={history}
+        />
         <section className="board-area" aria-label={messages.play.title}>
-          {snapshot === null ? (
+          {displayedSnapshot === null ? (
             <div className="board-loading">{messages.play.initialization}</div>
           ) : (
-            <div className="board-stage">
-              <HandStand
-                disabled={!humanCanMove || snapshot.sideToMove !== "white"}
-                entries={snapshot.hands.white}
-                legalDrops={legalDrops}
-                messages={messages}
-                onSelect={selectHand}
-                selection={selection}
-                side="white"
-              />
-              <ShogiBoard
-                disabled={!humanCanMove}
-                messages={messages}
-                onSquare={selectSquare}
-                selection={selection}
-                snapshot={snapshot}
-              />
-              <HandStand
-                disabled={!humanCanMove || snapshot.sideToMove !== "black"}
-                entries={snapshot.hands.black}
-                legalDrops={legalDrops}
-                messages={messages}
-                onSelect={selectHand}
-                selection={selection}
-                side="black"
-              />
-            </div>
-          )}
-
-          {snapshot === null ? null : (
-            <div className="board-meta">
-              <p>
-                <span>{messages.play.sideToMove}</span>
-                <strong>
-                  {snapshot.sideToMove === "black"
-                    ? messages.play.black
-                    : messages.play.white}
-                </strong>
-              </p>
-              <p>
-                <span>{messages.play.moveNumber}</span>
-                <strong>{formatNumber(snapshot.moveNumber, locale)}</strong>
-              </p>
-              {matchStarted ? (
-                <button
-                  disabled={busy !== null}
-                  onClick={() => setMatchStarted(false)}
-                  type="button"
-                >
-                  {messages.play.stopMatch}
-                </button>
-              ) : (
-                <button
-                  disabled={busy !== null}
-                  onClick={() => void resetPosition(false)}
-                  type="button"
-                >
-                  {messages.play.newPosition}
-                </button>
-              )}
-            </div>
-          )}
-
-          {promotionMoves === null ? null : (
-            <div
-              aria-labelledby="promotion-question"
-              aria-modal="true"
-              className="promotion-choice"
-              role="dialog"
-            >
-              <p id="promotion-question">{messages.play.promoteQuestion}</p>
-              <div>
-                {promotionMoves.map((movement) => (
-                  <button
-                    key={movement.usi}
-                    onClick={() => void applyMove(movement.usi)}
-                    type="button"
-                  >
-                    {movement.promote
-                      ? messages.play.promote
-                      : messages.play.doNotPromote}
-                  </button>
-                ))}
-                <button onClick={() => setPromotionMoves(null)} type="button">
-                  {messages.play.cancel}
-                </button>
+            <>
+              <div className={`board-stage board-stage--${orientation}`}>
+                <HandStand
+                  disabled={
+                    !humanCanMove || displayedSnapshot.sideToMove !== "white"
+                  }
+                  entries={displayedSnapshot.hands.white}
+                  legalDrops={legalDrops}
+                  messages={messages}
+                  onSelect={(piece) =>
+                    setSelection((current) =>
+                      current?.kind === "hand" && current.piece === piece
+                        ? null
+                        : { kind: "hand", piece },
+                    )
+                  }
+                  orientation={orientation}
+                  pieceSet={pieceSet}
+                  selection={selection}
+                  side="white"
+                />
+                <ShogiBoard
+                  disabled={!humanCanMove}
+                  lastMove={lastMove}
+                  messages={messages}
+                  onSquare={selectSquare}
+                  orientation={orientation}
+                  pieceSet={pieceSet}
+                  pv={pv}
+                  selection={selection}
+                  snapshot={displayedSnapshot}
+                />
+                <HandStand
+                  disabled={
+                    !humanCanMove || displayedSnapshot.sideToMove !== "black"
+                  }
+                  entries={displayedSnapshot.hands.black}
+                  legalDrops={legalDrops}
+                  messages={messages}
+                  onSelect={(piece) =>
+                    setSelection((current) =>
+                      current?.kind === "hand" && current.piece === piece
+                        ? null
+                        : { kind: "hand", piece },
+                    )
+                  }
+                  orientation={orientation}
+                  pieceSet={pieceSet}
+                  selection={selection}
+                  side="black"
+                />
               </div>
+              <div className="board-meta">
+                <p>
+                  <span>{messages.play.sideToMove}</span>
+                  <strong>
+                    {displayedSnapshot.sideToMove === "black"
+                      ? labels.sente
+                      : labels.gote}
+                  </strong>
+                </p>
+                <p>
+                  <span>{messages.play.moveNumber}</span>
+                  <strong>
+                    {formatNumber(displayedSnapshot.moveNumber, locale)}
+                  </strong>
+                </p>
+                <p>
+                  <span>{labels.configuredMaximum}</span>
+                  <strong>{configuredMaximum(timeSettings)}</strong>
+                </p>
+                <p>
+                  <span>{labels.actualThinking}</span>
+                  <strong>
+                    {currentMoveSource === null
+                      ? "—"
+                      : formatSecondsFromNs(currentMoveSource.elapsedNs)}
+                  </strong>
+                </p>
+                {timeSettings.mode === "clock" ? (
+                  <>
+                    <p>
+                      <span>{labels.sente}</span>
+                      <strong>{formatClock(matchClock.blackTimeMs)}</strong>
+                    </p>
+                    <p>
+                      <span>{labels.gote}</span>
+                      <strong>{formatClock(matchClock.whiteTimeMs)}</strong>
+                    </p>
+                  </>
+                ) : null}
+              </div>
+            </>
+          )}
+          <div className="highlight-legend" aria-label="Board highlight legend">
+            <span className="legend-last">Last move</span>
+            <span className="legend-selection">Selection</span>
+            <span className="legend-legal">Legal</span>
+            <span className="legend-check">Check</span>
+            <span className="legend-pv">PV</span>
+          </div>
+          {promotionMoves === null ? null : (
+            <div aria-modal="true" className="promotion-choice" role="dialog">
+              <p>{messages.play.promoteQuestion}</p>
+              {promotionMoves.map((movement) => (
+                <button
+                  key={movement.usi}
+                  onClick={() => void applyMove(movement.usi)}
+                  type="button"
+                >
+                  {movement.promote
+                    ? messages.play.promote
+                    : messages.play.doNotPromote}
+                </button>
+              ))}
+              <button onClick={() => setPromotionMoves(null)} type="button">
+                {messages.play.cancel}
+              </button>
             </div>
           )}
         </section>
-
-        {focusMode ? null : (
-          <AnalysisPanel analysis={analysis} locale={locale}>
-            <section
-              className="play-settings"
-              aria-labelledby="play-settings-title"
-            >
-              <h2 id="play-settings-title">
-                {mode === "match"
-                  ? messages.play.matchSetup
-                  : messages.play.settings}
-              </h2>
-              <p className="settings-note">
-                {mode === "match"
-                  ? messages.play.boardOnlyNote
-                  : messages.play.multiPvHelp}
-              </p>
+        <AnalysisPanel
+          enabled={analysisEnabled}
+          evaluator={evaluator}
+          lastSearch={currentMoveSource ?? (isLivePosition ? lastSearch : null)}
+          locale={locale}
+          onToggle={setAnalysisEnabled}
+          openingProfile={openingProfile}
+          profile={profile}
+          view={analysisView}
+        >
+          <section className="play-settings" aria-labelledby="settings-title">
+            <h2 id="settings-title">{labels.settings}</h2>
+            <SegmentedControl
+              disabled={busy !== null}
+              label={labels.humanRole}
+              onSelect={setHumanRole}
+              options={[
+                { value: "sente", label: labels.sente },
+                { value: "gote", label: labels.gote },
+                { value: "ai-vs-ai", label: labels.aiVsAi },
+                { value: "analysis-only", label: labels.analysisOnly },
+              ]}
+              value={humanRole}
+            />
+            <SegmentedControl
+              label={labels.orientation}
+              onSelect={setOrientation}
+              options={[
+                { value: "sente-bottom", label: labels.senteBottom },
+                { value: "gote-bottom", label: labels.goteBottom },
+              ]}
+              value={orientation}
+            />
+            <div className="inline-actions">
+              <button
+                onClick={() => setOrientation(flippedOrientation)}
+                type="button"
+              >
+                {labels.flip}
+              </button>
+              <button
+                disabled={!isLivePosition || displayedSnapshot === null}
+                onClick={() => {
+                  if (displayedSnapshot !== null)
+                    setHumanRole(takeOverSide(displayedSnapshot.sideToMove));
+                }}
+                type="button"
+              >
+                {labels.takeover}
+              </button>
+            </div>
+            <small>{labels.takeoverHint}</small>
+            <label className="select-field">
+              <span>{labels.timeControl}</span>
+              <select
+                disabled={busy !== null}
+                onChange={(event) => {
+                  const mode = event.currentTarget
+                    .value as TimeControlSettings["mode"];
+                  setTimeSettings((current) => ({
+                    ...current,
+                    mode,
+                  }));
+                }}
+                value={timeSettings.mode}
+              >
+                <option value="casual">{labels.casual}</option>
+                <option value="fixed">{labels.fixed}</option>
+                <option value="clock">{labels.clock}</option>
+                <option value="nodes">{labels.nodes}</option>
+              </select>
+            </label>
+            {timeSettings.mode === "fixed" ? (
+              <SegmentedControl
+                disabled={busy !== null}
+                label={labels.fixed}
+                onSelect={(fixedSeconds) =>
+                  setTimeSettings((current) => ({ ...current, fixedSeconds }))
+                }
+                options={([0.5, 1, 2, 5, 10, 20] as const).map((value) => ({
+                  value,
+                  label: `${value}s`,
+                }))}
+                value={timeSettings.fixedSeconds}
+              />
+            ) : null}
+            {timeSettings.mode === "clock" ? (
+              <div className="numeric-grid">
+                {(
+                  [
+                    ["mainMinutes", labels.mainMinutes],
+                    ["byoyomiSeconds", labels.byoyomi],
+                    ["incrementSeconds", labels.increment],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label key={key}>
+                    <span>{label}</span>
+                    <input
+                      disabled={busy !== null}
+                      min="0"
+                      onChange={(event) => {
+                        const value = Number(event.currentTarget.value);
+                        setTimeSettings((current) => ({
+                          ...current,
+                          [key]: value,
+                        }));
+                      }}
+                      type="number"
+                      value={timeSettings[key]}
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            {timeSettings.mode === "nodes" ? (
+              <label className="number-field">
+                <span>{labels.nodes}</span>
+                <input
+                  disabled={busy !== null}
+                  min="1"
+                  onChange={(event) => {
+                    const nodes = Number(event.currentTarget.value);
+                    setTimeSettings((current) => ({
+                      ...current,
+                      nodes,
+                    }));
+                  }}
+                  type="number"
+                  value={timeSettings.nodes}
+                />
+              </label>
+            ) : null}
+            <label className="select-field">
+              <span>{labels.openingProfile}</span>
+              <select
+                onChange={(event) =>
+                  setOpeningProfile(event.currentTarget.value as OpeningProfile)
+                }
+                value={openingProfile}
+              >
+                <option value="ibisha_strict">{labels.ibishaStrict}</option>
+                <option value="ibisha_preferred">
+                  {labels.ibishaPreferred}
+                </option>
+                <option value="unrestricted">{labels.unrestricted}</option>
+              </select>
+              <small>{labels.openingHint}</small>
+            </label>
+            <details>
+              <summary>{labels.advanced}</summary>
               <label className="select-field">
                 <span>{messages.play.searchProfile}</span>
                 <select
-                  disabled={busy !== null}
                   onChange={(event) =>
                     setProfile(event.currentTarget.value as SearchProfile)
                   }
                   value={profile}
                 >
-                  {(["eco", "balanced", "quality"] as const).map((value) => (
-                    <option key={value} value={value}>
-                      {messages.play.profileName[value]}
+                  <option value="eco">Eco</option>
+                  <option value="balanced">Balanced</option>
+                  <option value="quality">Quality</option>
+                </select>
+              </label>
+              <label className="number-field">
+                <span>MultiPV</span>
+                <input
+                  max="10"
+                  min="1"
+                  onChange={(event) =>
+                    setMultiPv(Number(event.currentTarget.value))
+                  }
+                  type="number"
+                  value={multiPv}
+                />
+              </label>
+              <label className="number-field">
+                <span>{labels.threads}</span>
+                <input disabled type="number" value="1" />
+              </label>
+              <label className="number-field">
+                <span>{labels.hash}</span>
+                <input
+                  min="1"
+                  onChange={(event) =>
+                    setPlayHash(Number(event.currentTarget.value))
+                  }
+                  type="number"
+                  value={playHash}
+                />
+              </label>
+              <label className="number-field">
+                <span>{labels.analysisHash}</span>
+                <input
+                  min="0"
+                  onChange={(event) =>
+                    setAnalysisHash(Number(event.currentTarget.value))
+                  }
+                  type="number"
+                  value={analysisHash}
+                />
+              </label>
+              <label className="check-field">
+                <input
+                  checked={pauseAnalysisDuringAiTurn}
+                  onChange={(event) =>
+                    setPauseAnalysisDuringAiTurn(event.currentTarget.checked)
+                  }
+                  type="checkbox"
+                />
+                {labels.pauseAnalysis}
+              </label>
+            </details>
+            <div className="artifact-control">
+              <div>
+                <span>{messages.play.localModel}</span>
+                <strong>{modelFileName ?? messages.play.modelNotLoaded}</strong>
+              </div>
+              <label htmlFor="model-file">{messages.play.chooseModel}</label>
+              <input
+                accept=".osaval,application/octet-stream"
+                id="model-file"
+                onChange={(event) => void loadModel(event)}
+                type="file"
+              />
+              {modelSummary === null ? null : (
+                <button onClick={() => void unloadModel()} type="button">
+                  {messages.play.removeModel}
+                </button>
+              )}
+            </div>
+            <div className="artifact-control">
+              <div>
+                <span>{labels.book}</span>
+                <strong>{openingBookFileName ?? labels.bookNotLoaded}</strong>
+              </div>
+              <label htmlFor="book-file">{labels.chooseBook}</label>
+              <input
+                accept=".gz,application/gzip,application/octet-stream"
+                id="book-file"
+                onChange={(event) => void loadOpeningBook(event)}
+                type="file"
+              />
+              {openingBookSummary === null ? null : (
+                <button onClick={() => void unloadOpeningBook()} type="button">
+                  {labels.removeBook}
+                </button>
+              )}
+            </div>
+            <div className="piece-set-control">
+              <label className="select-field">
+                <span>{labels.pieceSet}</span>
+                <select
+                  onChange={(event) =>
+                    setPieceSet(event.currentTarget.value as PieceSetId)
+                  }
+                  value={pieceSet}
+                >
+                  {PIECE_ASSET_CATALOG.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.label}
                     </option>
                   ))}
                 </select>
-                <small>{messages.play.deviceChoice}</small>
               </label>
-
-              <SegmentedControl
-                disabled={busy !== null}
-                label={messages.play.evaluator}
-                onSelect={setEvaluator}
-                options={[
-                  { value: "handcrafted", label: messages.play.handcrafted },
-                  { value: "model", label: messages.play.localModel },
-                ]}
-                value={evaluator}
-              />
-
-              <div className="model-control">
-                <div>
-                  <span>{messages.play.localModel}</span>
-                  <strong>
-                    {modelFileName ?? messages.play.modelNotLoaded}
-                  </strong>
-                </div>
-                <div className="model-control__actions">
-                  <label htmlFor="browser-model-file">
-                    {messages.play.chooseModel}
-                  </label>
-                  <input
-                    accept=".osaval,application/octet-stream"
-                    disabled={busy !== null}
-                    id="browser-model-file"
-                    onChange={(event) => void loadModel(event)}
-                    type="file"
-                  />
-                  {modelSummary === null ? null : (
-                    <button
-                      disabled={busy !== null}
-                      onClick={() => void unloadModel()}
-                      type="button"
-                    >
-                      {messages.play.removeModel}
-                    </button>
-                  )}
-                </div>
-                {modelSummary === null ? null : (
-                  <p className="model-identity">
-                    SHA-256 {modelSummary.artifactSha256} ·{" "}
-                    {modelSummary.quantization}
-                  </p>
-                )}
-              </div>
-
-              {mode === "analysis" ? (
-                <SegmentedControl
-                  disabled={busy !== null}
-                  label={messages.play.multiPv}
-                  onSelect={setMultiPv}
-                  options={[1, 2, 3].map((value) => ({
-                    value: value as 1 | 2 | 3,
-                    label: String(value),
-                  }))}
-                  value={multiPv}
+              <div className="piece-preview">
+                <PieceView
+                  flipped={false}
+                  kind="king"
+                  setId={pieceSet}
+                  side="black"
                 />
-              ) : null}
-
-              <div className="primary-actions">
-                {busy === "searching" || busy === "engine" ? (
-                  <button onClick={() => void stopSearch()} type="button">
-                    {messages.play.stopSearch}
-                  </button>
-                ) : mode === "match" ? (
-                  <button
-                    disabled={
-                      busy !== null ||
-                      snapshot === null ||
-                      (evaluator === "model" && modelSummary === null)
-                    }
-                    onClick={() => void resetPosition(true)}
-                    type="button"
-                  >
-                    {messages.play.startMatch}
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      disabled={
-                        busy !== null ||
-                        snapshot === null ||
-                        snapshot.terminal !== null ||
-                        (evaluator === "model" && modelSummary === null)
-                      }
-                      onClick={() => void analyzePosition()}
-                      type="button"
-                    >
-                      {messages.play.analyze}
-                    </button>
-                    <button
-                      disabled={
-                        busy !== null ||
-                        analysis?.bestMove === null ||
-                        analysis === null
-                      }
-                      onClick={() => {
-                        if (analysis?.bestMove !== null && analysis !== null) {
-                          void applyMove(analysis.bestMove);
-                        }
-                      }}
-                      type="button"
-                    >
-                      {messages.play.playBestMove}
-                    </button>
-                  </>
-                )}
+                <PieceView
+                  flipped={false}
+                  kind="rook"
+                  setId={pieceSet}
+                  side="white"
+                />
+                <span>{pieceAssetSet(pieceSet).creators.join(", ")}</span>
               </div>
-            </section>
-          </AnalysisPanel>
-        )}
+              <button onClick={() => setPieceCreditsOpen(true)} type="button">
+                {labels.pieceCredits}
+              </button>
+            </div>
+          </section>
+        </AnalysisPanel>
       </div>
+      {pieceCreditsOpen ? (
+        <CreditsDialog
+          locale={locale}
+          onClose={() => setPieceCreditsOpen(false)}
+        />
+      ) : null}
     </main>
   );
 }

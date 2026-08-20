@@ -8,21 +8,37 @@ parsers do not guess repairs for untrusted data.
 
 ## Engine Worker
 
-`src/engine-client.ts` owns main-thread request correlation and lifecycle. `src/engine.worker.ts`
-is the only module that imports the generated OpenShogiAI binding and owns an engine instance.
-Messages use closed discriminated unions, bounded strings and arrays, and transferable model
-bytes. Search cancellation terminates the Worker so stale work cannot update a newer position.
+`src/engine-adapter.ts` defines the UI-facing boundary. Each adapter owns an
+`EngineWorkerClient`; `src/engine.worker.ts` is the only module that imports the generated
+OpenShogiAI binding. Play and continuous analysis use separate Workers. Messages use closed
+discriminated unions, bounded strings and arrays, and transferable model or opening-book bytes.
+Request correlation, active analysis identity, and physical Worker replacement prevent stale
+work from updating a newer displayed position.
 
 The browser-facing engine supports:
 
 - initialization and immutable engine identity;
 - canonical game snapshots and legal moves;
 - bounded move application and reset;
-- bounded fixed search profiles and one to three analysis lines;
+- engine-backed casual, fixed-movetime, match-clock, and node time controls using
+  `open_shogi_time_control/v1`; the UI maintains per-side remaining clock values while the engine
+  alone allocates each search budget;
+- bounded search profiles and one to ten continuous MultiPV lines;
+- `open_shogi_analysis/v1` start, slice, stop, failure, and restart lifecycle messages;
+- strict, preferred, or disabled opening policy plus local opening-book load/removal;
 - local `OSAVAL01` validation, activation, and removal.
 
 The main thread renders returned snapshots rather than reconstructing rules from visual board
 coordinates.
+
+## Analysis summary cache
+
+`src/analysis-cache.ts` keys summaries by schema, canonical position SFEN, model hash, evaluator
+configuration hash, feature-schema hash, evaluation-semantics hash, search-options hash,
+opening-profile hash, and MultiPV count. A cached or live update is publishable only when every
+identity field still matches. IndexedDB retains at most 128 bounded summaries; memory remains the
+fallback when storage is unavailable. Model bytes, book bytes, and internal search state are not
+cached.
 
 ## Generated WebAssembly snapshot
 
@@ -37,6 +53,15 @@ src/generated/open_shogi_wasm_bg.wasm.d.ts
 
 The AI repository produces the matching set under `bindings/wasm/`. The UI builds only from its
 committed snapshot; `npm run integration:ai` provides an explicit cross-repository drift check.
+`PROVENANCE.md` pins the corresponding engine commit/tree and hashes all four files.
+
+## Piece assets
+
+`src/pieces/catalog.ts` is the closed presentation catalog for the 13 included standard-shogi
+sets. Only the active set is referenced by board/hand images; image elements have fixed intrinsic
+dimensions and fall back to semantic kanji when an asset cannot load. `ASSET_PROVENANCE.json`
+binds every local file to the exact upstream path and SHA-256. `npm run asset-license:audit`
+checks completeness, hashes, path bounds, allowed set IDs, and retained license evidence.
 
 ## Arena report import
 

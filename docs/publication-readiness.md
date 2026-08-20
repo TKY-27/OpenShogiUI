@@ -17,17 +17,21 @@ immutable caching to hashed assets.
 
 ## Browser data boundary
 
-- Engine state, search, and neural inference run in a module Worker.
-- Locally chosen model bytes remain in Worker memory and are never uploaded.
+- Play and continuous analysis run in separate module Workers.
+- Locally chosen model and opening-book bytes remain in memory and are never uploaded.
+- IndexedDB stores only bounded analysis summaries with full request identity; storage failure
+  falls back to memory without weakening live-update validation.
 - Imported report JSON is parsed locally and never causes referenced files to be fetched.
 - The application has no analytics, telemetry, account, payment, or remote-model integration.
 
 ## License and content gate
 
 Project-owned source is AGPL-3.0-only. The generated AI interface and npm dependencies retain all
-applicable project and upstream notices. No trained model, dataset, private record, or private Git
-history is included. Before publication, review the final dependency notices and provide the
-corresponding source required by AGPL-3.0-only.
+applicable project and upstream notices. The 13 bundled standard-shogi piece sets are CC BY 4.0;
+their creators, original license evidence, pinned source commit, and per-file hashes are retained
+in `THIRD_PARTY_ASSETS.md`, `public/licenses/`, and `ASSET_PROVENANCE.json`. No trained model,
+dataset, private record, or private Git history is included. Before publication, review the final
+notices, preserve attribution, and provide corresponding source required by AGPL-3.0-only.
 
 ## Remaining external gate
 

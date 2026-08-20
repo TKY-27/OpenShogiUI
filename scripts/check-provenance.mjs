@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const privateCommit = "5451e02d35abc3efc1fcc29260cdb89acad1d416";
+const analysisProtocolCommit = "1232d015a6b2c3df9abf366137bded245bd14a93";
 const requiredProvenance = [
   privateCommit,
   "21bf0c1fbe02250855b66a96f2fe37bd042650d4",
@@ -15,23 +16,26 @@ const requiredProvenance = [
   "2026-08-21",
   "git archive",
   "does not inherit the private repository's Git history",
+  analysisProtocolCommit,
+  "open_shogi_analysis/v1",
+  "open_shogi_time_control/v1",
 ];
 const expectedBindings = new Map([
   [
     "open_shogi_wasm.d.ts",
-    "be1db38df5cca0a4c55418b1e35bb8107c2a5d2e2a4e834c0ebad270878f7b7a",
+    "19f8a5a9f786666d2a736daff7cedae9fa9c77a55f6e6ed85950882e0e07eee9",
   ],
   [
     "open_shogi_wasm.js",
-    "165ee2cc0a034216d919baa9f0230ba312f837ce223dd1af71a8739e59dd3d4f",
+    "b0862ea56ee808c2feabe2ab67128d317fdbb824856b47fe6fabd5dbfac40d88",
   ],
   [
     "open_shogi_wasm_bg.wasm",
-    "7d3f7f06e0309978eb0f7aa9107721384e14062b724ca00fcee9c626ee8a1caf",
+    "49034d4d1cff1e004eceaf1e62b309d9882516e039457c09a758904217fd3805",
   ],
   [
     "open_shogi_wasm_bg.wasm.d.ts",
-    "3c17285e297fbc61c9e3ad306270ecf7361a5f2032582b56a8524b91877d85c8",
+    "25de209ae4d389487b6b7db0ae895e935fdd84fa62a9bad0dbadf08ec7c910cd",
   ],
 ]);
 const failures = [];
