@@ -11,13 +11,33 @@
 | History | Initial/current positions and every move are keyboard-selectable without mutating the live game |
 | Analysis density | Three lines by default, up to ten bounded live or cached lines |
 | State markings | Selection, legal moves, last origin/destination, drop, capture, promotion, mate king, and PV use shape/pattern as well as color |
-| Responsive structure | Three-column desktop, two-column intermediate, and stacked mobile layout without board overflow |
-| Accessibility | 44px controls, visible focus, labelled controls, live status, dialog and grid semantics |
+| Responsive structure | One mobile-first system on an ascending min-width ladder (48rem / 64rem / 80rem); no max-width query remains |
+| Desktop page scroll | None. The shell is 100dvh from 80rem up and the rail, board, and analysis panes scroll individually |
+| Board sizing | Derived from min(available width, available height, 46rem) via a size query container, so viewport height is an input |
+| Match mode | `#/match` renders board, hands, clocks, move number, and controls only; no evaluation, PV, depth, or node count reaches the DOM |
+| Accessibility | 44px targets scoped to coarse pointers, visible focus, labelled controls, live status, modal `<dialog>` semantics, and keyboard shortcuts that never intercept text entry or IME composition |
 | Visual language | Warm paper shell, ink, muted vermilion, pale indigo, crisp separators, and square geometry |
 | Piece art | One active CC BY 4.0 set loads at a time; fixed frames prevent layout shift and kanji remains the failure fallback |
 
-The target visual was generated as a concept before implementation and is not shipped as an
-asset. Browser QA compares the implementation with that target at desktop and mobile dimensions.
-Decorative motion is intentionally absent: patterns explain board state, controls preserve stable
-geometry, and status copy reports observed engine/cache state without invented strength or timing
-claims.
+Composition follows a dense analysis-tool reference: thin app bar, grouped left rail, board
+flanked by vertical hand stands, and a right analysis column. Only structure and proportion were
+taken from it; no asset, wording, colour, or branding was copied, and the palette remains the
+project's own paper, ink, and vermilion.
+
+The defaults that AI-generated interfaces converge on are avoided deliberately: no Inter, no
+gradients, no centred marketing hero, no three-column card rows, no rounded-card chrome. Square
+geometry and rule-based separation carry the hierarchy instead. Decorative motion is still absent:
+patterns explain board state, controls preserve stable geometry, and status copy reports observed
+engine and cache state without invented strength or timing claims.
+
+Measured on the production build, all four routes, zero horizontal overflow throughout:
+
+| Viewport | Page scroll | Board |
+| --- | --- | --- |
+| 1920x1080 | none | 718px |
+| 1440x900 | none | 614px |
+| 1280x800 | none | 454px |
+| 768x1024 | document flow | 551px |
+| 375x812 | document flow | 333px |
+
+Safari and Firefox remain an external publication gate; these figures are Chromium only.

@@ -15,6 +15,9 @@
 | Piece-art license evidence | [Lishogi `COPYING.md` at pinned commit](https://github.com/WandererXII/lishogi/blob/acb3b12286dd41bc88edfa81172e6a5e7f68c52b/COPYING.md) | 2026-08-21 | Per-set license and creator evidence; exclusion of ShareAlike, NonCommercial, and non-free sets |
 | CC BY 4.0 | [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/) | 2026-08-21 | Attribution requirements for retained piece artwork |
 | Product calm and consistency | [Linear design refresh](https://linear.app/now/behind-the-latest-design-refresh) | 2026-08-20 | Calmer hierarchy and predictable action placement as general design principles |
+| AI-generated UI failure modes | [925studios, *AI Slop Web Design*](https://www.925studios.co/blog/ai-slop-web-design-guide), [vibecodekit, *AI Slop Design*](https://vibecodekit.dev/ai-slop-design), [BSWEN, *AI-Generated UI Anti-Patterns*](https://docs.bswen.com/blog/2026-03-20-ai-generated-ui-anti-patterns/) | 2026-08-21 | Named defaults to avoid: Inter, purple/blue gradients, centred hero, three-column card rows, rounded-card chrome, missing focus and empty states |
+| Dense analysis-tool composition | Kishin Analytics, user-supplied screenshot | 2026-08-21 | Structure and proportion only: thin app bar, grouped left rail, board flanked by hand stands, right analysis column, compact control heights. No asset, wording, colour, or branding was copied |
+| Board sizing | [lichess-org/chessground](https://github.com/lichess-org/chessground) | 2026-08-21 | Sizing a board from the smaller of available width and height rather than width alone |
 | Interaction judgment | [Emil Kowalski, *Train your judgement*](https://emilkowal.ski/ui/train-your-judgement) | 2026-08-20 | Evaluation of whether motion or decoration explains an interaction |
 
 No third-party interface code, shogi-engine source, game records, datasets, or model weights were

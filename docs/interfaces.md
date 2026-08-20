@@ -32,6 +32,30 @@ The browser-facing engine supports:
 The main thread renders returned snapshots rather than reconstructing rules from visual board
 coordinates.
 
+## Routes
+
+`src/project.ts` resolves four hash routes: `workspace`, `match`, `browser-play`, and
+`evaluation-lab`, with unknown hashes falling back to `workspace`. `match` and `browser-play` are
+application routes and run inside a fixed-height shell; the other two use normal document flow.
+
+`src/ShogiBoardView.tsx` owns the board, hand stands, and piece rendering, and is the only place
+those components are defined. Both play routes consume it.
+
+## Match mode time control
+
+`src/match-clock.ts` maps the three presets onto `open_shogi_time_control/v1`. The clocked presets
+forward each side's remaining main time with byoyomi and increment at zero; the untimed preset
+forwards `casual: true`. The UI never emits `movetimeMs`, `nodes`, or `depth`, so the per-move
+budget is decided entirely by the engine. Clock arithmetic uses wall-clock readings rather than an
+accumulated tick count, so a throttled background tab cannot gain time.
+
+## Record export
+
+`src/kifu.ts` renders KIF and USI from snapshots the engine already produced. It re-derives no
+shogi rules: the piece for each ply is read from the board in the preceding position. Output is
+handed to the browser through a Blob object URL, which is not a network request and does not touch
+the same-origin `connect-src` boundary.
+
 ## Analysis summary cache
 
 `src/analysis-cache.ts` keys summaries by schema, canonical position SFEN, model hash, evaluator
