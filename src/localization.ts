@@ -379,10 +379,10 @@ const messages: Record<Locale, Messages> = {
       english: "English",
     },
     workspace: {
-      headline: "端末の中で、将棋を指す、読む、確かめる。",
+      headline: "オープンな将棋のAIです",
       summary:
         "OpenShogiAIのWebAssemblyエンジンで対局・局面解析を行い、ローカルの評価レポートを検証します。",
-      releaseStatus: { candidate: "クリーン履歴リリース候補" },
+      releaseStatus: { candidate: "" },
       title: "OpenShogiAI",
       adapter: "AI連携境界",
       play: "対局と局面解析",
