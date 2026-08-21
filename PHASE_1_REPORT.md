@@ -146,7 +146,7 @@ Observed results:
 - `npm run check`: passed, including formatter check, Oxlint, TypeScript, 70 unit tests, static
   accessibility contract, boundary/license/provenance/asset audits, and production build.
 - `npm audit --audit-level=moderate`: 0 vulnerabilities.
-- `OPENSHOGIAI_ROOT=../OpenShogiAI-final npm run integration:ai`:
+- `OPENSHOGIAI_ROOT=../OpenShogiAI npm run integration:ai`:
   all four generated files byte-identical; Wasm legal move, time-control search, and analysis
   start/step/stop/failure/restart smoke tests passed.
 - In-app browser: clean console; Sente/Gote moves, AI reply, history switching, flip, in-flight
@@ -188,7 +188,7 @@ Open `http://127.0.0.1:5173/#/browser-play`.
 cd OpenShogiUI
 npm run check
 npm audit --audit-level=moderate
-OPENSHOGIAI_ROOT=../OpenShogiAI-final npm run integration:ai
+OPENSHOGIAI_ROOT=../OpenShogiAI npm run integration:ai
 npm run build
 npm run preview
 ```

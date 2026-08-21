@@ -46,7 +46,7 @@ separate OpenShogiAI repository. After regenerating `bindings/wasm/` in the AI r
 all four files together and verify that the snapshots remain byte-identical:
 
 ```sh
-OPENSHOGIAI_ROOT=../OpenShogiAI-final npm run integration:ai
+OPENSHOGIAI_ROOT=../OpenShogiAI npm run integration:ai
 ```
 
 Only `src/engine.worker.ts` imports the generated JavaScript/Wasm interface. The frozen engine

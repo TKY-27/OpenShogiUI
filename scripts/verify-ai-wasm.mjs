@@ -9,7 +9,7 @@ import initWasm, {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const aiRoot = resolve(
-  process.env.OPENSHOGIAI_ROOT ?? join(root, "../OpenShogiAI-final"),
+  process.env.OPENSHOGIAI_ROOT ?? join(root, "../OpenShogiAI"),
 );
 const names = [
   "open_shogi_wasm.d.ts",
