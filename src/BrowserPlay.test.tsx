@@ -171,7 +171,6 @@ describe("browser shogi board", () => {
         onSquare={() => undefined}
         orientation="gote-bottom"
         pieceSet="kanji_brown"
-        pv={["7g7f+", "P*5e"]}
         selection={null}
         snapshot={startPosition()}
       />,
@@ -186,10 +185,8 @@ describe("browser shogi board", () => {
     expect(markup).toMatch(/board-square--last-destination/);
     expect(markup).toMatch(/board-square--last-capture/);
     expect(markup).toMatch(/board-square--last-promotion/);
-    expect(markup).toMatch(/board-square--pv/);
     expect(markup).toContain("last move origin");
     expect(markup).toContain("last move destination");
-    expect(markup).toContain("analysis PV preview");
   });
 
   it("keeps image failure fallback and desktop/mobile layout contracts explicit", () => {
@@ -399,13 +396,37 @@ describe("candidate move arrows", () => {
   });
 
   it("mirrors the arrow coordinates when the board is flipped", () => {
-    const sente = render("sente-bottom");
-    const gote = render("gote-bottom");
-    // 7g7f from black's view starts at column 2, row 6; flipped it is 6, 2.
-    expect(sente).toContain('x1="2.5"');
-    expect(sente).toContain('y1="6.5"');
-    expect(gote).toContain('x1="6.5"');
-    expect(gote).toContain('y1="2.5"');
+    const coords = (markup: string) => {
+      const line =
+        markup.match(/<line[^>]*analysis-arrows__line--best[^>]*>/)?.[0] ?? "";
+      const read = (name: string) =>
+        Number(line.match(new RegExp(`${name}="([-0-9.]+)"`))?.[1]);
+      return { x1: read("x1"), y1: read("y1"), x2: read("x2"), y2: read("y2") };
+    };
+    // 7g7f is a one-square push. Its column is 2 from black's view and 6 when
+    // flipped, and the arrow points the opposite way on screen.
+    const sente = coords(render("sente-bottom"));
+    const gote = coords(render("gote-bottom"));
+    expect(sente.x1).toBeCloseTo(2.5, 5);
+    expect(gote.x1).toBeCloseTo(6.5, 5);
+    expect(sente.y2).toBeLessThan(sente.y1);
+    expect(gote.y2).toBeGreaterThan(gote.y1);
+  });
+
+  it("leaves a gap at the origin and room for the head at the target", () => {
+    const markup = render("sente-bottom");
+    const line =
+      markup.match(/<line[^>]*analysis-arrows__line--best[^>]*>/)?.[0] ?? "";
+    const read = (name: string) =>
+      Number(line.match(new RegExp(`${name}="([-0-9.]+)"`))?.[1]);
+    // Square centres are 6.5 and 5.5; the shaft must stop short of both so the
+    // head sits on the end of the line rather than floating past it.
+    expect(read("y1")).toBeLessThan(6.5);
+    expect(read("y2")).toBeGreaterThan(5.5);
+    // The head is placed by the marker, which must resolve in its own viewBox.
+    expect(markup).toContain('viewBox="0 0 10 10"');
+    expect(markup).toContain('markerUnits="userSpaceOnUse"');
+    expect(markup).toContain('refX="0"');
   });
 
   it("never intercepts clicks meant for the board", () => {

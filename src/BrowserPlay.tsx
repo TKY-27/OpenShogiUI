@@ -9,6 +9,16 @@ import {
 
 import { AnalysisSummaryStore, updateMatchesRequest } from "./analysis-cache";
 import {
+  accumulateSlice,
+  ANALYSIS_MAX_DEPTH,
+  analysisSliceNodes,
+  displayUpdate,
+  emptyProgress,
+  progressElapsedSeconds,
+  progressNps,
+  type AnalysisProgress,
+} from "./analysis-progress";
+import {
   ANALYSIS_SCHEMA,
   MAX_BROWSER_MODEL_BYTES,
   MAX_BROWSER_OPENING_BOOK_BYTES,
@@ -78,7 +88,24 @@ type AnalysisStatus =
 interface AnalysisView {
   status: AnalysisStatus;
   update: AnalysisUpdate | null;
-  elapsedNs: number | null;
+  /**
+   * Session totals. The update's own nodes and nps describe one ~200ms slice,
+   * so they cannot be shown beside a cumulative elapsed time.
+   */
+  progress: AnalysisProgress;
+}
+
+/**
+ * Facts about the displayed position. These used to sit on a permanent shelf
+ * under the board; the board is the primary content and should not carry a
+ * settings rail beneath it.
+ */
+interface PositionFacts {
+  sideToMove: string;
+  moveNumber: string;
+  configuredMaximum: string;
+  actualThinking: string;
+  clock: { sente: string; gote: string } | null;
 }
 
 interface MoveSource {
@@ -183,6 +210,11 @@ function text(locale: Locale) {
         ? `${side === "black" ? "先手" : "後手"}AIが考えています…`
         : `${side === "black" ? "Sente" : "Gote"} AI is thinking…`,
     workerCrashed: ja ? "ワーカー障害" : "Worker failure",
+    positionInfo: ja ? "局面・探索情報" : "Position and search",
+    boardKey: ja ? "盤面の色分け" : "Board colour key",
+    boardKeyBody: ja
+      ? "直前の指し手は移動元を薄い赤、移動先を濃い赤で塗ります。選択中の駒と移動可能なマスは青、王手は点線、読み筋は点模様で示します。"
+      : "The last move fills its origin square in pale red and its destination in a stronger red. The selected piece and its legal targets are blue, check is dotted, and the principal variation is marked with a dot pattern.",
     timeExpired: ja
       ? "持ち時間と秒読みを超過しました。対局を停止しました。"
       : "Main time and byoyomi expired. Play has been stopped.",
@@ -298,6 +330,7 @@ function AnalysisPanel({
   profile,
   evaluator,
   lastSearch,
+  position,
   onToggle,
   children,
 }: {
@@ -307,6 +340,7 @@ function AnalysisPanel({
   profile: SearchProfile;
   evaluator: EvaluatorChoice;
   lastSearch: MoveSource | null;
+  position: PositionFacts | null;
   onToggle: (enabled: boolean) => void;
   children: ReactNode;
 }) {
@@ -325,11 +359,24 @@ function AnalysisPanel({
             : view.status === "stopped"
               ? labels.stopped
               : labels.analysisUnavailable;
+  const progress = view.progress;
   const elapsed =
-    view.elapsedNs === null ? null : view.elapsedNs / 1_000_000_000;
+    progress.slices === 0 ? null : progressElapsedSeconds(progress);
   return (
     <aside className="analysis-panel" aria-label={labels.realtime}>
       <section className="analysis-results" aria-labelledby="analysis-title">
+        {position === null ? null : (
+          <dl className="position-facts">
+            <div>
+              <dt>{getMessages(locale).play.sideToMove}</dt>
+              <dd>{position.sideToMove}</dd>
+            </div>
+            <div>
+              <dt>{getMessages(locale).play.moveNumber}</dt>
+              <dd>{position.moveNumber}</dd>
+            </div>
+          </dl>
+        )}
         <div className="analysis-results__heading">
           <div>
             <h2 id="analysis-title">{labels.realtime}</h2>
@@ -352,15 +399,21 @@ function AnalysisPanel({
         ) : (
           <>
             <dl className="analysis-metrics">
+              {/*
+                Every counter here is a session total derived from the same
+                slice summaries, so depth, nodes, NPS and elapsed agree. The
+                update's own nodes/nps describe one ~200ms slice.
+              */}
               <Metric label={getMessages(locale).play.depth}>
-                {update.depth}
+                {progress.depth === 0 ? update.depth : progress.depth}
               </Metric>
-              <Metric label={labels.seldepth}>—</Metric>
               <Metric label={getMessages(locale).play.nodes}>
-                {formatNumber(update.nodes, locale)}
+                {formatNumber(progress.nodes, locale)}
               </Metric>
               <Metric label={labels.nps}>
-                {formatNumber(update.nps, locale)}
+                {progress.slices === 0
+                  ? "—"
+                  : formatNumber(progressNps(progress), locale)}
               </Metric>
               <Metric label={labels.elapsed}>
                 {elapsed === null ? "—" : `${elapsed.toFixed(2)}s`}
@@ -396,6 +449,39 @@ function AnalysisPanel({
               ))}
             </ol>
           </>
+        )}
+        {position === null ? null : (
+          <details className="position-detail">
+            <summary>{labels.positionInfo}</summary>
+            <dl>
+              <div>
+                <dt>{labels.configuredMaximum}</dt>
+                <dd>{position.configuredMaximum}</dd>
+              </div>
+              <div>
+                <dt>{labels.actualThinking}</dt>
+                <dd>{position.actualThinking}</dd>
+              </div>
+              {position.clock === null ? null : (
+                <>
+                  <div>
+                    <dt>{labels.sente}</dt>
+                    <dd>{position.clock.sente}</dd>
+                  </div>
+                  <div>
+                    <dt>{labels.gote}</dt>
+                    <dd>{position.clock.gote}</dd>
+                  </div>
+                </>
+              )}
+            </dl>
+            {/*
+              The board key replaces the permanent English legend strip that
+              sat under the board in the Japanese interface.
+            */}
+            <h3>{labels.boardKey}</h3>
+            <p>{labels.boardKeyBody}</p>
+          </details>
         )}
         {search === null ? null : (
           <div
@@ -661,7 +747,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   const [analysisView, setAnalysisView] = useState<AnalysisView>({
     status: "idle",
     update: null,
-    elapsedNs: null,
+    progress: emptyProgress(),
   });
   const [analysisEpoch, setAnalysisEpoch] = useState(0);
   const [playThinking, setPlayThinking] = useState(false);
@@ -843,7 +929,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         setAnalysisView((current) => ({
           status: "stopped",
           update: due?.update ?? current.update,
-          elapsedNs: due?.elapsedNs ?? current.elapsedNs,
+          progress: due?.progress ?? current.progress,
         }));
       }
     }
@@ -860,10 +946,11 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     }
 
     analysisGateRef.current.reset();
+    // A new request must not inherit the previous position's totals.
     setAnalysisView((current) => ({
       status: current.update === null ? "idle" : "invalidated",
       update: current.update,
-      elapsedNs: null,
+      progress: emptyProgress(),
     }));
 
     /*
@@ -873,12 +960,33 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
      * gate so a cached or final result is never delayed.
      */
     const gate = analysisGateRef.current;
+    let progress = emptyProgress();
 
-    async function publish(
+    /**
+     * Records every update, displays at most one per second.
+     *
+     * The store and the session totals see all of them; only the screen is
+     * sampled. A stale request is rejected before anything is recorded.
+     */
+    async function record(update: AnalysisUpdate, request: AnalysisStart) {
+      if (
+        cancelled ||
+        analysisRequestRef.current !== requestId ||
+        !updateMatchesRequest(update, request)
+      )
+        return false;
+      await analysisStore.put(request, update);
+      return true;
+    }
+
+    function apply(view: AnalysisView) {
+      setAnalysisView(() => view);
+    }
+
+    function show(
       update: AnalysisUpdate,
       request: AnalysisStart,
       status: AnalysisStatus,
-      elapsedNs: number | null = null,
     ) {
       if (
         cancelled ||
@@ -886,13 +994,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         !updateMatchesRequest(update, request)
       )
         return;
-      const apply = (view: AnalysisView) =>
-        setAnalysisView((current) => ({
-          status: view.status,
-          update: view.update,
-          elapsedNs: view.elapsedNs ?? current.elapsedNs,
-        }));
-      const next: AnalysisView = { status, update, elapsedNs };
+      const next: AnalysisView = { status, update, progress };
       if (status === "live") {
         const due = gate.offer(next, Date.now());
         if (due !== null) apply(due);
@@ -900,7 +1002,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         gate.reset();
         apply(next);
       }
-      await analysisStore.put(request, update);
     }
 
     async function startLoop() {
@@ -915,33 +1016,39 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         analysisHash,
       );
       const persisted = await analysisStore.get(request);
-      if (persisted !== null)
-        await publish(persisted.update, request, "cached");
+      if (persisted !== null) show(persisted.update, request, "cached");
       if (cancelled || analysisRequestRef.current !== requestId) return;
       const started = await analysisAdapter.analysisStart(
         profile,
         evaluator,
         request,
       );
-      for (const update of started.updates)
-        await publish(
-          update,
-          request,
-          update.source === "cache" ? "cached" : "live",
-        );
-      const sliceNodes =
-        profile === "eco" ? 1_500 : profile === "balanced" ? 4_000 : 12_000;
-      let elapsedNs = 0;
+      for (const update of started.updates) await record(update, request);
+      const opening = displayUpdate(started.updates);
+      if (opening !== null) {
+        show(opening, request, opening.source === "cache" ? "cached" : "live");
+      }
+
+      /*
+       * Repeated bounded slices are how the protocol expresses infinite
+       * analysis: the session stays active until stop, a position change, a
+       * worker restart, or an explicit pause for the play worker. Nothing here
+       * imposes a time budget, and no play-side casual or 20s cap applies.
+       */
       while (!cancelled && analysisRequestRef.current === requestId) {
         const response = await analysisAdapter.analysisStep({
           schema: ANALYSIS_SCHEMA,
-          nodes: sliceNodes,
-          maxDepth: profile === "eco" ? 5 : profile === "balanced" ? 7 : 9,
+          nodes: analysisSliceNodes(profile),
+          maxDepth: ANALYSIS_MAX_DEPTH,
           timestampMs: Date.now(),
         });
-        elapsedNs += response.slice?.elapsedNs ?? 0;
-        for (const update of response.updates)
-          await publish(update, request, "live", elapsedNs);
+        for (const update of response.updates) {
+          if (!(await record(update, request))) return;
+        }
+        progress = accumulateSlice(progress, response.slice);
+        // One snapshot per slice: the batch is depths 1..N of the same work.
+        const latest = displayUpdate(response.updates);
+        if (latest !== null) show(latest, request, "live");
         await new Promise((resolve) => window.setTimeout(resolve, 30));
       }
     }
@@ -963,8 +1070,21 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
             playHash,
             analysisHash,
           );
-          for (const update of [...failed.updates, ...restarted.updates])
-            await publish(update, request, "cached");
+          const recovered = [...failed.updates, ...restarted.updates];
+          for (const update of recovered) {
+            if (updateMatchesRequest(update, request)) {
+              await analysisStore.put(request, update);
+            }
+          }
+          const latest = displayUpdate(recovered);
+          if (latest !== null && updateMatchesRequest(latest, request)) {
+            analysisGateRef.current.reset();
+            setAnalysisView((current) => ({
+              status: "cached",
+              update: latest,
+              progress: current.progress,
+            }));
+          }
           setNotice(null);
           setAnalysisEpoch((value) => value + 1);
           return;
@@ -1115,8 +1235,29 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     busy === null &&
     displayedSnapshot.terminal === null &&
     humanControlsSide(humanRole, displayedSnapshot.sideToMove);
+  const positionFacts: PositionFacts | null =
+    displayedSnapshot === null
+      ? null
+      : {
+          sideToMove:
+            displayedSnapshot.sideToMove === "black"
+              ? labels.sente
+              : labels.gote,
+          moveNumber: formatNumber(displayedSnapshot.moveNumber, locale),
+          configuredMaximum: configuredMaximum(timeSettings),
+          actualThinking:
+            currentMoveSource === null
+              ? "—"
+              : formatSecondsFromNs(currentMoveSource.response.elapsedNs),
+          clock:
+            timeSettings.mode === "clock"
+              ? {
+                  sente: formatClock(displayedClock.blackTimeMs),
+                  gote: formatClock(displayedClock.whiteTimeMs),
+                }
+              : null,
+        };
   const lastMove = lastMoveHighlight(history, displayedIndex);
-  const pv = analysisView.update?.lines[0]?.pv ?? [];
 
   /*
    * Candidate moves drawn on the board, best first. Only the first move of each
@@ -1567,7 +1708,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                           }
                     }
                     arrows={arrows}
-                    pv={pv}
                     selection={selection}
                     snapshot={displayedSnapshot}
                   />
@@ -1592,57 +1732,8 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                   />
                 </div>
               </div>
-              <div className="board-meta">
-                <p>
-                  <span>{messages.play.sideToMove}</span>
-                  <strong>
-                    {displayedSnapshot.sideToMove === "black"
-                      ? labels.sente
-                      : labels.gote}
-                  </strong>
-                </p>
-                <p>
-                  <span>{messages.play.moveNumber}</span>
-                  <strong>
-                    {formatNumber(displayedSnapshot.moveNumber, locale)}
-                  </strong>
-                </p>
-                <p>
-                  <span>{labels.configuredMaximum}</span>
-                  <strong>{configuredMaximum(timeSettings)}</strong>
-                </p>
-                <p>
-                  <span>{labels.actualThinking}</span>
-                  <strong>
-                    {currentMoveSource === null
-                      ? "—"
-                      : formatSecondsFromNs(
-                          currentMoveSource.response.elapsedNs,
-                        )}
-                  </strong>
-                </p>
-                {timeSettings.mode === "clock" ? (
-                  <>
-                    <p>
-                      <span>{labels.sente}</span>
-                      <strong>{formatClock(displayedClock.blackTimeMs)}</strong>
-                    </p>
-                    <p>
-                      <span>{labels.gote}</span>
-                      <strong>{formatClock(displayedClock.whiteTimeMs)}</strong>
-                    </p>
-                  </>
-                ) : null}
-              </div>
             </>
           )}
-          <div className="highlight-legend" aria-label="Board highlight legend">
-            <span className="legend-last">Last move</span>
-            <span className="legend-selection">Selection</span>
-            <span className="legend-legal">Legal</span>
-            <span className="legend-check">Check</span>
-            <span className="legend-pv">PV</span>
-          </div>
         </section>
         <MoveHistory
           displayedIndex={displayedIndex}
@@ -1654,6 +1745,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         <AnalysisPanel
           enabled={analysisEnabled}
           evaluator={evaluator}
+          position={positionFacts}
           lastSearch={currentMoveSource ?? (isLivePosition ? lastSearch : null)}
           locale={locale}
           onToggle={setAnalysisEnabled}

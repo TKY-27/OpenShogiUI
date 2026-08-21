@@ -10,6 +10,9 @@
 | Orientation | Board flip is independent from human role; piece names remain semantic text |
 | History | Initial/current positions and every move are keyboard-selectable without mutating the live game |
 | Analysis density | Three lines by default, up to ten bounded live or cached lines |
+| Live analysis | Repeated bounded slices run until stop, position change, worker restart, or an explicit pause for the play worker. No play-side casual or 20s cap applies |
+| Progress counters | Depth, nodes, NPS and elapsed are session totals folded from the same slice summaries, so they agree. The engine's per-update nodes and NPS describe one slice and are not displayed as totals |
+| Display sampling | One snapshot per completed slice, sampled at 1Hz, with the final value flushed on stop |
 | State markings | Selection and last origin/destination are area fills only: a ring on a 9x9 grid sits on the 1px rules and reads as a broken border. Legal moves, drop, capture, promotion, mate king, and PV each keep a shape or pattern channel |
 | Promotion | Offered beside the destination square, showing the piece each option produces. Not modal: covering the board hides the position the choice depends on |
 | Candidate moves | Drawn on the board, best in the accent colour and the rest in the analysis blue, each labelled with its evaluation. Only the first move of each line is drawn |
@@ -17,6 +20,7 @@
 | Desktop page scroll | None. The shell is 100dvh from 80rem up and the rail, board, and analysis panes scroll individually |
 | Board sizing | Derived from min(available width, available height, 46rem) via a size query container, so viewport height is an input |
 | Match mode | `#/match` renders board, hands, clocks, move number, and controls only; no evaluation, PV, depth, or node count reaches the DOM |
+| Board surroundings | Nothing sits permanently under the board. Turn and move number are in the analysis pane, search detail is behind a disclosure, and the colour key is prose in the reader's language |
 | Accessibility | 44px targets scoped to coarse pointers, visible focus, labelled controls, live status, modal `<dialog>` semantics, and keyboard shortcuts that never intercept text entry or IME composition |
 | Visual language | Warm paper shell, ink, muted vermilion, pale indigo, crisp separators, and square geometry |
 | Piece art | One active CC BY 4.0 set loads at a time; fixed frames prevent layout shift and kanji remains the failure fallback |

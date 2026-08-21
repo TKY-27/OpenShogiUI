@@ -700,7 +700,7 @@ input[type="number"] {
   min-width: 0;
   min-height: 0;
   padding: var(--space-3);
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--space-2);
 }
 
@@ -887,14 +887,6 @@ input[type="number"] {
   outline-offset: -5px;
 }
 
-.board-square--pv {
-  background-image: radial-gradient(
-    circle at 12% 12%,
-    #6268cf 0 2px,
-    transparent 3px
-  );
-}
-
 .piece-frame {
   display: grid;
   width: 100%;
@@ -945,44 +937,47 @@ input[type="number"] {
   pointer-events: none;
 }
 
+/*
+ * The shaft and the head are faded together, as one group. Fading them
+ * separately renders the marker at a different effective alpha from the line
+ * it terminates, so the arrow reads as two disconnected shapes.
+ */
+.analysis-arrows__arrow {
+  opacity: 0.4;
+}
+
 .analysis-arrows__line {
   fill: none;
-  stroke-width: 0.17;
-  stroke-linecap: round;
+  stroke-width: 0.16;
+  stroke-linecap: butt;
 }
 
 .analysis-arrows__line--best {
   stroke: var(--accent);
-  opacity: 0.4;
 }
 
 .analysis-arrows__line--alt {
   stroke: var(--analysis);
-  opacity: 0.34;
 }
 
 .analysis-arrows__head--best {
   fill: var(--accent);
-  opacity: 0.4;
 }
 
 .analysis-arrows__head--alt {
   fill: var(--analysis);
-  opacity: 0.34;
 }
 
 .analysis-arrows__drop--best {
   fill: none;
   stroke: var(--accent);
   stroke-width: 0.14;
-  opacity: 0.55;
 }
 
 .analysis-arrows__drop--alt {
   fill: none;
   stroke: var(--analysis);
   stroke-width: 0.14;
-  opacity: 0.45;
 }
 
 .analysis-arrows__label {
@@ -1109,46 +1104,86 @@ input[type="number"] {
   opacity: 0.5;
 }
 
-/* Board metadata and legend ----------------------------------------------- */
+/* Position facts and detail ------------------------------------------------ */
 
-.highlight-legend {
-  display: flex;
+/*
+ * The board used to carry a permanent shelf of turn, move number, configured
+ * maximum, actual thinking time, and an English colour legend. The board is the
+ * primary content; these live in the analysis pane now, with the detail behind
+ * a disclosure and the colour key written as prose rather than a strip of
+ * untranslated swatches.
+ */
+.position-facts {
+  display: grid;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--rule);
+  margin: 0 0 var(--space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.position-facts > div {
+  display: grid;
   min-width: 0;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
+  gap: 0;
+}
+
+.position-facts dt {
   color: var(--muted);
   font-size: 0.6875rem;
 }
 
-.highlight-legend span::before {
-  display: inline-block;
-  width: 0.8125rem;
-  height: 0.625rem;
-  border: 1px solid currentcolor;
-  margin-right: var(--space-1);
-  content: "";
-  vertical-align: -0.1em;
+.position-facts dd {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
-.legend-last::before {
-  background: var(--last-to);
+.position-detail {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+  margin-top: var(--space-2);
 }
 
-.legend-selection::before {
-  background: var(--selected-square);
+.position-detail summary {
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-.legend-legal::before {
-  border-radius: 50%;
-  background: var(--analysis-pale);
+.position-detail dl {
+  display: grid;
+  margin: var(--space-2) 0 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
 }
 
-.legend-check::before {
-  border: 2px dotted #7b1713 !important;
+.position-detail dl > div {
+  display: grid;
+  min-width: 0;
+  gap: 0;
 }
 
-.legend-pv::before {
-  background-image: radial-gradient(circle, #6268cf 0 2px, transparent 3px);
+.position-detail dt {
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+
+.position-detail dd {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.position-detail h3 {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: 0.6875rem;
+}
+
+.position-detail p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  line-height: 1.6;
 }
 
 .board-meta {

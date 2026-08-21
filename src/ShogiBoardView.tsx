@@ -80,6 +80,11 @@ export interface PromotionPrompt {
   onCancel: () => void;
 }
 
+/** Arrow head length, in board squares. */
+const ARROW_HEAD = 0.32;
+/** Gap left at the origin so the shaft starts clear of the piece. */
+const ARROW_TAIL_GAP = 0.26;
+
 /** One candidate move drawn over the board, ranked best first. */
 export interface AnalysisArrow {
   usi: string;
@@ -228,7 +233,6 @@ export function ShogiBoard({
   messages,
   orientation = "sente-bottom",
   lastMove = null,
-  pv = [],
   pieceSet = DEFAULT_PIECE_SET,
   promotion = null,
   arrows = [],
@@ -240,7 +244,6 @@ export function ShogiBoard({
   messages: Messages;
   orientation?: BoardOrientation;
   lastMove?: MoveHighlight | null;
-  pv?: string[];
   pieceSet?: PieceSetId;
   promotion?: PromotionPrompt | null;
   arrows?: AnalysisArrow[];
@@ -250,15 +253,6 @@ export function ShogiBoard({
     () => new Set(selectedMoves(snapshot, selection).map(destinationIndex)),
     [selection, snapshot],
   );
-  const pvSquares = useMemo(() => {
-    const squares = new Set<number>();
-    for (const movement of pv.slice(0, 8)) {
-      const parsed = parseUsiMoveShape(movement);
-      if (parsed.from !== null) squares.add(squareIndex(parsed.from));
-      squares.add(squareIndex(parsed.to));
-    }
-    return squares;
-  }, [pv]);
   const order = Array.from({ length: 81 }, (_, index) =>
     orientation === "sente-bottom" ? index : 80 - index,
   );
@@ -309,7 +303,6 @@ export function ShogiBoard({
                 index === lastFrom ? "last move origin" : null,
                 index === lastTo ? "last move destination" : null,
                 index === checkedKing ? "checked king" : null,
-                pvSquares.has(index) ? "analysis PV preview" : null,
               ].filter(Boolean);
               const pieceLabel =
                 piece === null
@@ -329,7 +322,6 @@ export function ShogiBoard({
                   lastMove?.promotion &&
                   "board-square--last-promotion",
                 index === checkedKing && "board-square--checked-king",
-                pvSquares.has(index) && "board-square--pv",
               ]
                 .filter(Boolean)
                 .join(" ");
@@ -425,20 +417,28 @@ function AnalysisArrows({
       xmlns="http://www.w3.org/2000/svg"
     >
       <defs>
+        {/*
+          viewBox plus userSpaceOnUse. Without a viewBox, refX/refY are not in
+          the path's own coordinates and the head lands off the shaft; without
+          userSpaceOnUse the head is scaled by stroke width instead of board
+          squares. refX=0 puts the base of the head at the end of the line, so
+          the shaft and the head form one continuous arrow.
+        */}
         {["best", "alt"].map((variant) => (
           <marker
             id={`arrowhead-${variant}`}
             key={variant}
-            markerHeight="3"
-            markerUnits="strokeWidth"
-            markerWidth="3"
+            markerHeight={ARROW_HEAD}
+            markerUnits="userSpaceOnUse"
+            markerWidth={ARROW_HEAD}
             orient="auto"
-            refX="2.4"
-            refY="1.5"
+            refX="0"
+            refY="5"
+            viewBox="0 0 10 10"
           >
             <path
               className={`analysis-arrows__head analysis-arrows__head--${variant}`}
-              d="M0,0 L3,1.5 L0,3 z"
+              d="M0,0 L10,5 L0,10 z"
             />
           </marker>
         ))}
@@ -451,16 +451,20 @@ function AnalysisArrows({
           return null;
         }
         const variant = arrow.rank === 1 ? "best" : "alt";
+        // Opacity belongs on the group. Fading the line and the marker
+        // separately renders them at different effective alphas, which is why
+        // the head looked detached from its shaft.
+
         const to = centre(boardIndex(shape.to.file, shape.to.rank));
         const from =
           shape.from === null
             ? null
             : centre(boardIndex(shape.from.file, shape.from.rank));
-        // Keep the label inside the board at the edges.
-        const labelX = Math.min(Math.max(to.x, 0.62), 8.38);
-        const labelY = Math.min(Math.max(to.y - 0.34, 0.3), 8.7);
         return (
-          <g key={`${arrow.rank}-${arrow.usi}`}>
+          <g
+            className={`analysis-arrows__arrow analysis-arrows__arrow--${variant}`}
+            key={`${arrow.rank}-${arrow.usi}`}
+          >
             {from === null ? (
               <circle
                 className={`analysis-arrows__drop analysis-arrows__drop--${variant}`}
@@ -469,23 +473,51 @@ function AnalysisArrows({
                 r={0.34}
               />
             ) : (
-              <line
-                className={`analysis-arrows__line analysis-arrows__line--${variant}`}
-                markerEnd={`url(#arrowhead-${variant})`}
-                x1={from.x}
-                x2={to.x - (to.x - from.x) * 0.28}
-                y1={from.y}
-                y2={to.y - (to.y - from.y) * 0.28}
-              />
+              (() => {
+                /*
+                 * Trim by a fixed distance along the direction, not by a
+                 * fraction of it. A percentage leaves the head stranded in the
+                 * middle of a one-square move and overshoots a long one.
+                 */
+                const dx = to.x - from.x;
+                const dy = to.y - from.y;
+                const length = Math.hypot(dx, dy) || 1;
+                const ux = dx / length;
+                const uy = dy / length;
+                return (
+                  <line
+                    className={`analysis-arrows__line analysis-arrows__line--${variant}`}
+                    markerEnd={`url(#arrowhead-${variant})`}
+                    x1={from.x + ux * ARROW_TAIL_GAP}
+                    x2={to.x - ux * ARROW_HEAD}
+                    y1={from.y + uy * ARROW_TAIL_GAP}
+                    y2={to.y - uy * ARROW_HEAD}
+                  />
+                );
+              })()
             )}
-            <text
-              className={`analysis-arrows__label analysis-arrows__label--${variant}`}
-              x={labelX}
-              y={labelY}
-            >
-              {arrow.label}
-            </text>
           </g>
+        );
+      })}
+      {arrows.map((arrow) => {
+        let shape;
+        try {
+          shape = parseUsiMoveShape(arrow.usi);
+        } catch {
+          return null;
+        }
+        const to = centre(boardIndex(shape.to.file, shape.to.rank));
+        return (
+          <text
+            className={`analysis-arrows__label analysis-arrows__label--${
+              arrow.rank === 1 ? "best" : "alt"
+            }`}
+            key={`label-${arrow.rank}-${arrow.usi}`}
+            x={Math.min(Math.max(to.x, 0.62), 8.38)}
+            y={Math.min(Math.max(to.y - 0.34, 0.3), 8.7)}
+          >
+            {arrow.label}
+          </text>
         );
       })}
     </svg>

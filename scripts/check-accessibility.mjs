@@ -88,7 +88,6 @@ for (const selector of [
   ".board-square--last-destination",
   ".board-square--last-capture",
   ".board-square--checked-king",
-  ".board-square--pv",
   "@media (prefers-reduced-motion: reduce)",
 ]) {
   if (!styles.includes(selector)) failures.push(`CSS is missing ${selector}`);
@@ -114,7 +113,6 @@ const shapeChannels = [
   [".board-square--last-capture", "repeating-linear-gradient"],
   [".board-square--last-drop::after", "rotate("],
   [".board-square--last-promotion::before", "border-top"],
-  [".board-square--pv", "radial-gradient"],
 ];
 for (const [selector, property] of shapeChannels) {
   const at = styles.indexOf(selector);
