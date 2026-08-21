@@ -101,10 +101,13 @@ describe("match mode clock and dialog contracts", () => {
     expect(source).not.toContain("movetimeMs");
   });
 
-  it("uses modal dialogs for promotion and for the result", () => {
-    // Promotion, resignation confirmation, and the result are all modal.
-    expect(source.match(/aria-modal="true"/g)).toHaveLength(3);
-    expect(source.match(/showModal\(\)/g)).toHaveLength(3);
+  it("reserves modal dialogs for the two irreversible moments", () => {
+    // Resignation confirmation and the result. Promotion is deliberately not
+    // modal: covering the board hides the position the choice depends on.
+    expect(source.match(/aria-modal="true"/g)).toHaveLength(2);
+    expect(source.match(/showModal\(\)/g)).toHaveLength(2);
+    expect(source).not.toContain("PromotionDialog");
+    expect(source).toContain("promotion={");
     expect(source).toContain('role="status"');
     expect(source).toContain('aria-live="polite"');
   });

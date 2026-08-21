@@ -227,7 +227,7 @@ function App() {
     >
       <header className="app-bar">
         <a className="wordmark" href="#/workspace">
-          Open<span>ShogiUI</span>
+          Open<span>ShogiAI</span>
         </a>
         <nav
           className="app-nav"

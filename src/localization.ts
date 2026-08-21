@@ -383,7 +383,7 @@ const messages: Record<Locale, Messages> = {
       summary:
         "OpenShogiAIのWebAssemblyエンジンで対局・局面解析を行い、ローカルの評価レポートを検証します。",
       releaseStatus: { candidate: "クリーン履歴リリース候補" },
-      title: "OpenShogiUI",
+      title: "OpenShogiAI",
       adapter: "AI連携境界",
       play: "対局と局面解析",
       delivery: "静的サイト配信",
@@ -631,7 +631,7 @@ const messages: Record<Locale, Messages> = {
       summary:
         "Play and analyze with the OpenShogiAI WebAssembly engine, then inspect local evaluation reports.",
       releaseStatus: { candidate: "Clean-history release candidate" },
-      title: "OpenShogiUI",
+      title: "OpenShogiAI",
       adapter: "AI integration boundary",
       play: "Play and position analysis",
       delivery: "Static site delivery",

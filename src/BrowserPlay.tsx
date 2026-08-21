@@ -57,6 +57,7 @@ import {
   type TimeControlSettings,
 } from "./play-settings";
 import {
+  type AnalysisArrow,
   destinationIndex,
   HandStand,
   PieceView,
@@ -627,7 +628,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   const analysisRequestRef = useRef(0);
   const aiRequestRef = useRef(false);
   const turnStartedAtRef = useRef(Date.now());
-  const promotionDialogRef = useRef<HTMLDialogElement | null>(null);
   const promotionFocusRef = useRef<HTMLElement | null>(null);
   const [history, setHistory] = useState<BrowserSnapshot[]>([]);
   const [moveSources, setMoveSources] = useState<Array<MoveSource | null>>([]);
@@ -747,13 +747,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     if (typeof localStorage !== "undefined")
       localStorage.setItem("open-shogi-ui/piece-set", pieceSet);
   }, [pieceSet]);
-
-  useEffect(() => {
-    const dialog = promotionDialogRef.current;
-    if (dialog === null) return;
-    if (promotionMoves !== null && !dialog.open) dialog.showModal();
-    if (promotionMoves === null && dialog.open) dialog.close();
-  }, [promotionMoves]);
 
   useEffect(() => {
     if (timeLocked) return;
@@ -1125,6 +1118,29 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   const lastMove = lastMoveHighlight(history, displayedIndex);
   const pv = analysisView.update?.lines[0]?.pv ?? [];
 
+  /*
+   * Candidate moves drawn on the board, best first. Only the first move of each
+   * line is drawn: the rest of the principal variation is not playable from the
+   * current position, so an arrow for it would invite an illegal click.
+   */
+  const arrows: AnalysisArrow[] = useMemo(() => {
+    const lines = analysisView.update?.lines ?? [];
+    return lines.flatMap((line) => {
+      const movement = line.pv[0];
+      if (movement === undefined) return [];
+      return [
+        {
+          usi: movement,
+          rank: line.rank,
+          label:
+            line.mateScore === null
+              ? formatScore(line.score)
+              : `${labels.mate} ${line.mateScore}`,
+        },
+      ];
+    });
+  }, [analysisView.update, labels.mate]);
+
   function exportRecord(format: "kif" | "usi") {
     if (history.length === 0) return;
     const record = {
@@ -1236,6 +1252,13 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     } finally {
       if (operationRef.current === operation) setBusy(null);
     }
+  }
+
+  /** Returns focus to the square that opened the picker. */
+  function cancelPromotion() {
+    setPromotionMoves(null);
+    promotionFocusRef.current?.focus();
+    promotionFocusRef.current = null;
   }
 
   function chooseMove(candidates: MoveSummary[]) {
@@ -1428,9 +1451,16 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     }
   }
 
-  // Each busy state gets its own label. Reporting "Searching" while a model or
-  // opening book loads describes work the engine is not doing.
+  /*
+   * One stable sentence. The previous line appended the raw play and analysis
+   * worker states, which cycle through new/initializing/ready/busy on every
+   * search slice and made the header flicker constantly. Worker lifecycle is
+   * only surfaced when it is actually a fault the user can act on.
+   */
   const status = (() => {
+    if (playWorkerState === "crashed" || analysisWorkerState === "crashed") {
+      return labels.workerCrashed;
+    }
     switch (busy) {
       case "initializing":
         return messages.play.initialization;
@@ -1453,7 +1483,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         <div>
           <h1 id="browser-play-title">{messages.play.title}</h1>
           <p aria-live="polite" role="status">
-            {status} · play {playWorkerState} · analysis {analysisWorkerState}
+            {status}
           </p>
         </div>
         <div className="commandbar-actions">
@@ -1527,6 +1557,16 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                     onSquare={selectSquare}
                     orientation={orientation}
                     pieceSet={pieceSet}
+                    promotion={
+                      promotionMoves === null
+                        ? null
+                        : {
+                            moves: promotionMoves,
+                            onCancel: cancelPromotion,
+                            onChoose: (usi) => void applyMove(usi),
+                          }
+                    }
+                    arrows={arrows}
                     pv={pv}
                     selection={selection}
                     snapshot={displayedSnapshot}
@@ -1603,39 +1643,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
             <span className="legend-check">Check</span>
             <span className="legend-pv">PV</span>
           </div>
-          <dialog
-            aria-labelledby="promotion-choice-title"
-            aria-modal="true"
-            className="promotion-choice"
-            onCancel={() => setPromotionMoves(null)}
-            onClose={() => {
-              setPromotionMoves(null);
-              promotionFocusRef.current?.focus();
-              promotionFocusRef.current = null;
-            }}
-            ref={promotionDialogRef}
-          >
-            <div>
-              <p id="promotion-choice-title">{messages.play.promoteQuestion}</p>
-              <div className="dialog-actions">
-                {promotionMoves?.map((movement, index) => (
-                  <button
-                    autoFocus={index === 0}
-                    key={movement.usi}
-                    onClick={() => void applyMove(movement.usi)}
-                    type="button"
-                  >
-                    {movement.promote
-                      ? messages.play.promote
-                      : messages.play.doNotPromote}
-                  </button>
-                ))}
-                <button onClick={() => setPromotionMoves(null)} type="button">
-                  {messages.play.cancel}
-                </button>
-              </div>
-            </div>
-          </dialog>
         </section>
         <MoveHistory
           displayedIndex={displayedIndex}

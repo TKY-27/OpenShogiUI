@@ -24,6 +24,12 @@
   --positive: #236e43;
   --wood: #e8c98e;
   --wood-rule: #765a35;
+  /* Where the piece is now, and the square it left. The origin is a clearly
+     lighter wash of the same hue so the pair reads as one move. */
+  --last-to: #f0c3bc;
+  --last-from: #f9e6e3;
+  /* Selected square and its legal targets, in the analysis blue. */
+  --selected-square: #c9cbf0;
   --rule: rgb(33 29 26 / 18%);
   --rule-strong: rgb(33 29 26 / 32%);
   --field: #938b82;
@@ -778,6 +784,7 @@ input[type="number"] {
 }
 
 .shogi-board {
+  position: relative;
   display: grid;
   min-width: 0;
   aspect-ratio: 1;
@@ -814,10 +821,12 @@ input[type="number"] {
   opacity: 1;
 }
 
+/*
+ * Selection is an area fill, not a ring. Rings on a 9x9 grid sit on top of the
+ * 1px rules and read as a broken border on the neighbouring squares.
+ */
 .board-square--selected {
-  z-index: 2;
-  outline: 3px double var(--analysis);
-  outline-offset: -4px;
+  background-color: var(--selected-square);
 }
 
 .board-square--destination .destination-mark {
@@ -829,13 +838,17 @@ input[type="number"] {
   pointer-events: none;
 }
 
+/*
+ * Both last-move squares are area fills. An inset ring on the origin and a
+ * thick bottom border on the destination replaced the 1px grid line, which
+ * left a stray rule hanging off the side of the square.
+ */
 .board-square--last-origin {
-  box-shadow: inset 0 0 0 3px rgb(185 58 50 / 72%);
+  background-color: var(--last-from);
 }
 
 .board-square--last-destination {
-  border-bottom: 4px solid var(--accent);
-  background-color: #f3c4bd;
+  background-color: var(--last-to);
 }
 
 .board-square--last-drop::after,
@@ -854,7 +867,7 @@ input[type="number"] {
   background-image: repeating-linear-gradient(
     135deg,
     transparent 0 5px,
-    rgb(185 58 50 / 25%) 5px 8px
+    rgb(185 58 50 / 28%) 5px 8px
   );
 }
 
@@ -916,6 +929,129 @@ input[type="number"] {
   transform: none;
 }
 
+/*
+ * Candidate-move arrows.
+ *
+ * The overlay never receives pointer events, so the squares underneath stay
+ * clickable. Arrow strokes are translucent; labels are opaque because a small
+ * number at 40% over the wood grain cannot be read.
+ */
+.analysis-arrows {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.analysis-arrows__line {
+  fill: none;
+  stroke-width: 0.17;
+  stroke-linecap: round;
+}
+
+.analysis-arrows__line--best {
+  stroke: var(--accent);
+  opacity: 0.4;
+}
+
+.analysis-arrows__line--alt {
+  stroke: var(--analysis);
+  opacity: 0.34;
+}
+
+.analysis-arrows__head--best {
+  fill: var(--accent);
+  opacity: 0.4;
+}
+
+.analysis-arrows__head--alt {
+  fill: var(--analysis);
+  opacity: 0.34;
+}
+
+.analysis-arrows__drop--best {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 0.14;
+  opacity: 0.55;
+}
+
+.analysis-arrows__drop--alt {
+  fill: none;
+  stroke: var(--analysis);
+  stroke-width: 0.14;
+  opacity: 0.45;
+}
+
+.analysis-arrows__label {
+  font: 700 0.34px var(--ui-font);
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 0.12;
+  stroke-linejoin: round;
+  text-anchor: middle;
+}
+
+.analysis-arrows__label--best {
+  fill: var(--accent);
+}
+
+.analysis-arrows__label--alt {
+  fill: var(--analysis);
+}
+
+/*
+ * Promotion picker.
+ *
+ * Sits beside the destination square rather than over the board, so the
+ * position stays visible while the choice is made. Each option shows the piece
+ * it produces, which is the actual difference between the two moves.
+ */
+.promotion-picker {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  min-width: max-content;
+  padding: var(--space-1);
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgb(33 29 26 / 28%);
+  gap: 2px;
+}
+
+.promotion-picker button {
+  display: grid;
+  min-height: 2.5rem;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  background: transparent;
+  grid-template-columns: 1.75rem auto;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font: 0.75rem/1.2 var(--ui-font);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.promotion-picker button:hover {
+  border-color: var(--accent);
+  background: var(--accent-pale);
+}
+
+.promotion-picker .piece-frame {
+  width: 1.75rem;
+  height: 2rem;
+}
+
+@media (pointer: coarse) {
+  .promotion-picker button {
+    min-height: 2.75rem;
+  }
+}
+
 /* Hand stands ------------------------------------------------------------- */
 
 .hand-stand {
@@ -965,8 +1101,7 @@ input[type="number"] {
 }
 
 .hand-piece[aria-pressed="true"] {
-  border: 2px double var(--analysis);
-  background: var(--analysis-pale);
+  background: var(--selected-square);
 }
 
 .hand-piece:disabled {
@@ -996,12 +1131,11 @@ input[type="number"] {
 }
 
 .legend-last::before {
-  border-bottom: 3px solid var(--accent) !important;
-  background: #f3c4bd;
+  background: var(--last-to);
 }
 
 .legend-selection::before {
-  border: 3px double var(--analysis) !important;
+  background: var(--selected-square);
 }
 
 .legend-legal::before {
@@ -1248,6 +1382,9 @@ input[type="number"] {
 /*
  * Flex rather than grid rows: the error notice is conditional, so fixed row
  * placement would put the board in the wrong track whenever it is absent.
+ *
+ * Scrolling stays on below the desktop breakpoint. Clipping here cut the
+ * controls off the bottom of a phone screen.
  */
 .match-page--playing {
   display: flex;
@@ -1255,7 +1392,6 @@ input[type="number"] {
   align-items: center;
   flex-direction: column;
   gap: var(--space-2);
-  overflow: hidden;
 }
 
 .match-page--playing > .play-notice {
@@ -1355,15 +1491,24 @@ input[type="number"] {
   width: 100%;
 }
 
+/*
+ * Two columns with the actions on their own row. As a single three-column row
+ * the five action buttons took every available pixel and squeezed the status
+ * text down to one character per line.
+ */
 .match-controls {
   display: grid;
   width: min(100%, var(--board-max));
   flex: 0 0 auto;
   padding-top: var(--space-2);
   border-top: 1px solid var(--rule);
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
+}
+
+.match-controls .inline-actions {
+  grid-column: 1 / -1;
 }
 
 .match-status {
@@ -2164,6 +2309,18 @@ td {
 
   .analysis-metrics {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .match-page--playing {
+    overflow: hidden;
+  }
+
+  .match-controls {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .match-controls .inline-actions {
+    grid-column: auto;
   }
 
   /* The shell now has a definite height, so the board can use both axes. */

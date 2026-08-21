@@ -44,6 +44,19 @@ const requiredMatchEvidence = [
   "aria-label={remainingLabel(formatMatchClock(remainingMs))}",
   'type="button"',
 ];
+
+// The promotion picker is inline, not modal, so it must still be labelled and
+// focusable and must still handle Escape.
+for (const marker of [
+  'role="group"',
+  "aria-label={messages.play.promoteQuestion}",
+  "autoFocus={index === 0}",
+  'event.key === "Escape"',
+]) {
+  if (!boardView.includes(marker)) {
+    failures.push(`ShogiBoardView promotion picker is missing ${marker}`);
+  }
+}
 for (const marker of requiredMatchEvidence) {
   if (!matchPlay.includes(marker))
     failures.push(`MatchPlay is missing ${marker}`);
@@ -85,13 +98,36 @@ for (const selector of [".match-clock--active", ".match-clock--urgent"]) {
   if (!styles.includes(selector)) failures.push(`CSS is missing ${selector}`);
 }
 
-if (
-  !styles.includes("repeating-linear-gradient") ||
-  !styles.includes("double")
-) {
-  failures.push(
-    "board state indicators must use pattern and shape, not color alone",
-  );
+/*
+ * Selection and last-move are area fills by product decision: rings on a 9x9
+ * grid sit on the 1px rules and read as broken borders. The states a player
+ * must act on keep a non-colour channel, and that is what is enforced here.
+ *
+ *   legal destination  -> a drawn mark inside the square
+ *   capture            -> hatching
+ *   drop, checked king -> a rotated square mark
+ *   promotion          -> a corner triangle
+ *   analysis PV        -> a dot pattern
+ */
+const shapeChannels = [
+  [".board-square--destination .destination-mark", "border-radius"],
+  [".board-square--last-capture", "repeating-linear-gradient"],
+  [".board-square--last-drop::after", "rotate("],
+  [".board-square--last-promotion::before", "border-top"],
+  [".board-square--pv", "radial-gradient"],
+];
+for (const [selector, property] of shapeChannels) {
+  const at = styles.indexOf(selector);
+  if (at === -1) {
+    failures.push(`CSS is missing ${selector}`);
+    continue;
+  }
+  const block = styles.slice(at, styles.indexOf("}", at));
+  if (!block.includes(property)) {
+    failures.push(
+      `${selector} must convey state with shape or pattern, not colour alone`,
+    );
+  }
 }
 
 if (failures.length > 0) {

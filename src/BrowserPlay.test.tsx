@@ -15,6 +15,7 @@ import {
   BOARD_FILE_LABELS,
   BOARD_RANK_LABELS,
   boardIndex,
+  promotedKind,
   ShogiBoard,
 } from "./ShogiBoardView";
 import { getMessages } from "./localization";
@@ -224,6 +225,168 @@ describe("browser shogi board", () => {
     // Hand stands flank the board once there is width for them.
     expect(styles).toMatch(
       /\.board-stage\s*\{[^}]*grid-template-areas:\s*"gote board sente"/s,
+    );
+  });
+});
+
+describe("promotion picker", () => {
+  const promotionMoves = [
+    {
+      usi: "8h2b",
+      from: { file: 8, rank: 8 },
+      to: { file: 2, rank: 2 },
+      drop: null,
+      promote: false,
+    },
+    {
+      usi: "8h2b+",
+      from: { file: 8, rank: 8 },
+      to: { file: 2, rank: 2 },
+      drop: null,
+      promote: true,
+    },
+  ];
+
+  function render() {
+    return renderToStaticMarkup(
+      <ShogiBoard
+        disabled={false}
+        messages={getMessages("ja")}
+        onSquare={() => undefined}
+        promotion={{
+          moves: promotionMoves,
+          onCancel: () => undefined,
+          onChoose: () => undefined,
+        }}
+        selection={null}
+        snapshot={startPosition()}
+      />,
+    );
+  }
+
+  it("maps every promotable kind to the piece it becomes", () => {
+    expect(promotedKind("pawn")).toBe("promoted-pawn");
+    expect(promotedKind("lance")).toBe("promoted-lance");
+    expect(promotedKind("knight")).toBe("promoted-knight");
+    expect(promotedKind("silver")).toBe("promoted-silver");
+    expect(promotedKind("bishop")).toBe("horse");
+    expect(promotedKind("rook")).toBe("dragon");
+    // A gold or king never promotes and must map to itself.
+    expect(promotedKind("gold")).toBe("gold");
+    expect(promotedKind("king")).toBe("king");
+    expect(promotedKind("horse")).toBe("horse");
+  });
+
+  it("shows the resulting piece for each option rather than only words", () => {
+    const markup = render();
+    // 0KA is the bishop and 0UM the horse it becomes.
+    expect(markup).toContain("0KA.svg");
+    expect(markup).toContain("0UM.svg");
+    expect(markup).toContain("成る");
+    expect(markup).toContain("成らない");
+  });
+
+  it("offers promotion first", () => {
+    const markup = render();
+    expect(markup.indexOf("成る")).toBeLessThan(markup.indexOf("成らない"));
+  });
+
+  it("stays a labelled, focusable group instead of a modal dialog", () => {
+    const markup = render();
+    expect(markup).toContain('role="group"');
+    expect(markup).toContain('aria-label="成りますか？"');
+    expect(markup).not.toContain("<dialog");
+  });
+
+  it("anchors to the destination square and flips near the right edge", () => {
+    // 2b sits in the right-hand columns, so the picker opens leftwards.
+    expect(render()).toContain("promotion-picker--left");
+  });
+});
+
+describe("candidate move arrows", () => {
+  function render(orientation: "sente-bottom" | "gote-bottom") {
+    return renderToStaticMarkup(
+      <ShogiBoard
+        arrows={[
+          { usi: "7g7f", rank: 1, label: "+40" },
+          { usi: "2g2f", rank: 2, label: "+38" },
+          { usi: "P*5e", rank: 3, label: "-12" },
+        ]}
+        disabled={false}
+        messages={getMessages("ja")}
+        onSquare={() => undefined}
+        orientation={orientation}
+        selection={null}
+        snapshot={startPosition()}
+      />,
+    );
+  }
+
+  it("marks the best move apart from the rest", () => {
+    const markup = render("sente-bottom");
+    expect(markup.match(/analysis-arrows__line--best/g)).toHaveLength(1);
+    expect(markup.match(/analysis-arrows__line--alt/g)).toHaveLength(1);
+  });
+
+  it("carries the evaluation on every arrow", () => {
+    const markup = render("sente-bottom");
+    for (const label of ["+40", "+38", "-12"]) {
+      expect(markup).toContain(`>${label}</text>`);
+    }
+  });
+
+  it("draws a drop as a marker, since it has no origin square", () => {
+    const markup = render("sente-bottom");
+    expect(markup).toContain("analysis-arrows__drop");
+    // Two normal moves plus one drop means only two lines.
+    expect(markup.match(/<line/g)).toHaveLength(2);
+  });
+
+  it("mirrors the arrow coordinates when the board is flipped", () => {
+    const sente = render("sente-bottom");
+    const gote = render("gote-bottom");
+    // 7g7f from black's view starts at column 2, row 6; flipped it is 6, 2.
+    expect(sente).toContain('x1="2.5"');
+    expect(sente).toContain('y1="6.5"');
+    expect(gote).toContain('x1="6.5"');
+    expect(gote).toContain('y1="2.5"');
+  });
+
+  it("never intercepts clicks meant for the board", () => {
+    const styles = readFileSync(
+      new URL("./index.css", import.meta.url),
+      "utf8",
+    );
+    expect(styles).toMatch(
+      /\.analysis-arrows\s*\{[^}]*pointer-events:\s*none/s,
+    );
+  });
+});
+
+describe("board state is shown by area colour, not rings", () => {
+  const styles = readFileSync(new URL("./index.css", import.meta.url), "utf8");
+
+  it("fills the selected square instead of outlining it", () => {
+    expect(styles).toMatch(
+      /\.board-square--selected\s*\{[^}]*background-color:\s*var\(--selected-square\)/s,
+    );
+    expect(styles).not.toMatch(/\.board-square--selected\s*\{[^}]*outline:/s);
+  });
+
+  it("fills both last-move squares, with the origin clearly lighter", () => {
+    expect(styles).toMatch(
+      /\.board-square--last-origin\s*\{[^}]*background-color:\s*var\(--last-from\)/s,
+    );
+    expect(styles).toMatch(
+      /\.board-square--last-destination\s*\{[^}]*background-color:\s*var\(--last-to\)/s,
+    );
+    // The stray rule that hung off the side of the destination square.
+    expect(styles).not.toMatch(
+      /\.board-square--last-destination\s*\{[^}]*border-bottom:/s,
+    );
+    expect(styles).not.toMatch(
+      /\.board-square--last-origin\s*\{[^}]*box-shadow:/s,
     );
   });
 });

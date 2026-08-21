@@ -54,21 +54,45 @@ type Busy = "preparing" | "moving" | "engine" | null;
  *  from wall-clock readings, so this only controls how often it repaints. */
 const CLOCK_TICK_MS = 100;
 
+/**
+ * Owns its own tick.
+ *
+ * The countdown used to live in MatchPlay state, so every 100ms repaint
+ * re-rendered all 81 squares and 40 piece images. Besides the waste, a
+ * re-render landing between mousedown and mouseup drops the click, which is
+ * what made pieces intermittently refuse to move. Only this panel repaints now.
+ */
 function MatchClockPanel({
   label,
   name,
-  remainingMs,
+  baseMs,
+  runningSince,
   showClock,
   active,
   remainingLabel,
 }: {
   label: string;
   name: string;
-  remainingMs: number;
+  baseMs: number;
+  runningSince: number | null;
   showClock: boolean;
   active: boolean;
   remainingLabel: (clock: string) => string;
 }) {
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    if (runningSince === null || !showClock) return;
+    const timer = window.setInterval(
+      () => forceTick((value) => value + 1),
+      CLOCK_TICK_MS,
+    );
+    return () => window.clearInterval(timer);
+  }, [runningSince, showClock]);
+
+  const remainingMs =
+    runningSince === null
+      ? baseMs
+      : Math.max(0, baseMs - Math.max(0, Date.now() - runningSince));
   const urgent = showClock && clockIsUrgent(remainingMs);
   return (
     <div
@@ -123,7 +147,6 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     initialClockFor("blitz3"),
   );
   const [turnStartedAt, setTurnStartedAt] = useState(() => Date.now());
-  const [now, setNow] = useState(() => Date.now());
   const [outcome, setOutcome] = useState<MatchOutcome | null>(null);
   const [confirmingResign, setConfirmingResign] = useState(false);
   const [undone, setUndone] = useState<UndoneStep[]>([]);
@@ -162,14 +185,6 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Repaint the running clock. `now` only drives presentation; every decision
-  // reads Date.now() directly so a throttled background tab cannot gain time.
-  useEffect(() => {
-    if (phase !== "playing" || !clocked) return;
-    const timer = window.setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
-    return () => window.clearInterval(timer);
-  }, [phase, clocked]);
-
   const finish = useCallback((result: MatchOutcome) => {
     setOutcome(result);
     setPhase("finished");
@@ -178,16 +193,27 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     setPromotionMoves(null);
   }, []);
 
-  // Flag fall while a side is still thinking. Symmetric for both players.
+  /*
+   * Flag fall while a side is still thinking, symmetric for both players.
+   *
+   * This polls rather than deriving from render state so it costs nothing until
+   * a flag actually falls. Date.now() is read on each check, so a throttled
+   * background tab cannot buy time.
+   */
   useEffect(() => {
     if (phase !== "playing" || !clocked) return;
-    if (!hasFlagFallen(clock, sideToMove, turnStartedAt, now)) return;
-    finish({
-      kind: "timeout",
-      winner: opposing(sideToMove),
-      loser: sideToMove,
-    });
-  }, [phase, clocked, clock, sideToMove, turnStartedAt, now, finish]);
+    const check = () => {
+      if (!hasFlagFallen(clock, sideToMove, turnStartedAt, Date.now())) return;
+      finish({
+        kind: "timeout",
+        winner: opposing(sideToMove),
+        loser: sideToMove,
+      });
+    };
+    check();
+    const timer = window.setInterval(check, CLOCK_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [phase, clocked, clock, sideToMove, turnStartedAt, finish]);
 
   function terminalOutcome(next: BrowserSnapshot): MatchOutcome | null {
     if (next.terminal === null) return null;
@@ -255,7 +281,6 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     setMoveTimesMs((current) => [...current, Date.now() - startedAt]);
     setClock(afterEngine);
     setTurnStartedAt(Date.now());
-    setNow(Date.now());
     const ended = terminalOutcome(replied);
     if (ended !== null) {
       finish(ended);
@@ -296,7 +321,6 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       setUndone([]);
       setClock(afterHuman);
       setTurnStartedAt(Date.now());
-      setNow(Date.now());
       const ended = terminalOutcome(next);
       if (ended !== null) {
         finish(ended);
@@ -370,7 +394,6 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       setPhase("playing");
       const startedAt = Date.now();
       setTurnStartedAt(startedAt);
-      setNow(startedAt);
       if (fresh.sideToMove === humanSide) {
         setBusy(null);
         return;
@@ -424,7 +447,6 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       setOutcome(null);
       setPhase("playing");
       setTurnStartedAt(Date.now());
-      setNow(Date.now());
       setBusy(null);
     } catch (error) {
       if (operationRef.current !== operation) return;
@@ -464,7 +486,6 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       setMoveTimesMs((current) => [...current, ...replay.map((s) => s.timeMs)]);
       setUndone(undone.slice(0, -2));
       setTurnStartedAt(Date.now());
-      setNow(Date.now());
       setBusy(null);
     } catch (error) {
       if (operationRef.current !== operation) return;
@@ -542,13 +563,13 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       ? null
       : lastMoveHighlight([previous, snapshot], 1);
 
-  const remainingFor = (side: Side) => {
-    if (!clocked) return 0;
-    const base = clock[side === "black" ? "blackTimeMs" : "whiteTimeMs"];
-    return side === sideToMove && phase === "playing"
-      ? Math.max(0, base - Math.max(0, now - turnStartedAt))
-      : base;
-  };
+  const baseFor = (side: Side) =>
+    clocked ? clock[side === "black" ? "blackTimeMs" : "whiteTimeMs"] : 0;
+  /** Non-null only for the side whose clock is actually running. */
+  const runningSinceFor = (side: Side) =>
+    clocked && phase === "playing" && side === sideToMove
+      ? turnStartedAt
+      : null;
 
   const status =
     busy === "preparing"
@@ -670,8 +691,9 @@ export function MatchPlay({ locale }: { locale: Locale }) {
           active={phase === "playing" && sideToMove === topSide}
           label={sideLabel(topSide)}
           name={sideName(topSide)}
+          baseMs={baseFor(topSide)}
           remainingLabel={match.remainingTime}
-          remainingMs={remainingFor(topSide)}
+          runningSince={runningSinceFor(topSide)}
           showClock={clocked}
         />
 
@@ -698,6 +720,15 @@ export function MatchPlay({ locale }: { locale: Locale }) {
                 onSquare={selectSquare}
                 orientation={orientation}
                 pieceSet={pieceSet}
+                promotion={
+                  promotionMoves === null
+                    ? null
+                    : {
+                        moves: promotionMoves,
+                        onCancel: () => setPromotionMoves(null),
+                        onChoose: (usi) => void applyMove(usi),
+                      }
+                }
                 selection={selection}
                 snapshot={snapshot}
               />
@@ -720,8 +751,9 @@ export function MatchPlay({ locale }: { locale: Locale }) {
           active={phase === "playing" && sideToMove === bottomSide}
           label={sideLabel(bottomSide)}
           name={sideName(bottomSide)}
+          baseMs={baseFor(bottomSide)}
           remainingLabel={match.remainingTime}
-          remainingMs={remainingFor(bottomSide)}
+          runningSince={runningSinceFor(bottomSide)}
           showClock={clocked}
         />
       </div>
@@ -780,15 +812,6 @@ export function MatchPlay({ locale }: { locale: Locale }) {
         </div>
       </div>
 
-      {promotionMoves === null ? null : (
-        <PromotionDialog
-          messages={messages}
-          moves={promotionMoves}
-          onCancel={() => setPromotionMoves(null)}
-          onChoose={(movement) => void applyMove(movement)}
-        />
-      )}
-
       {confirmingResign ? (
         <ConfirmDialog
           cancelLabel={match.cancel}
@@ -846,54 +869,6 @@ function ConfirmDialog({
           </button>
           <button onClick={() => ref.current?.close()} type="button">
             {cancelLabel}
-          </button>
-        </div>
-      </div>
-    </dialog>
-  );
-}
-
-function PromotionDialog({
-  messages,
-  moves,
-  onChoose,
-  onCancel,
-}: {
-  messages: ReturnType<typeof getMessages>;
-  moves: MoveSummary[];
-  onChoose: (movement: string) => void;
-  onCancel: () => void;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current;
-    if (dialog !== null && !dialog.open) dialog.showModal();
-  }, []);
-  return (
-    <dialog
-      aria-labelledby="match-promotion-title"
-      aria-modal="true"
-      className="promotion-choice"
-      onCancel={onCancel}
-      onClose={onCancel}
-      ref={ref}
-    >
-      <div>
-        <p id="match-promotion-title">{messages.play.promoteQuestion}</p>
-        <div className="dialog-actions">
-          {moves.map((movement) => (
-            <button
-              key={movement.usi}
-              onClick={() => onChoose(movement.usi)}
-              type="button"
-            >
-              {movement.promote
-                ? messages.play.promote
-                : messages.play.doNotPromote}
-            </button>
-          ))}
-          <button onClick={() => ref.current?.close()} type="button">
-            {messages.play.cancel}
           </button>
         </div>
       </div>

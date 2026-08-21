@@ -60,6 +60,33 @@ export function pieceFallbackGlyph(kind: PieceKind, side: Side): string {
   return kind === "king" && side === "white" ? "王" : PIECE_GLYPHS[kind];
 }
 
+const PROMOTED_KIND: Partial<Record<PieceKind, PieceKind>> = {
+  pawn: "promoted-pawn",
+  lance: "promoted-lance",
+  knight: "promoted-knight",
+  silver: "promoted-silver",
+  bishop: "horse",
+  rook: "dragon",
+};
+
+/** The piece a kind becomes on promotion, or itself when it cannot promote. */
+export function promotedKind(kind: PieceKind): PieceKind {
+  return PROMOTED_KIND[kind] ?? kind;
+}
+
+export interface PromotionPrompt {
+  moves: MoveSummary[];
+  onChoose: (usi: string) => void;
+  onCancel: () => void;
+}
+
+/** One candidate move drawn over the board, ranked best first. */
+export interface AnalysisArrow {
+  usi: string;
+  rank: number;
+  label: string;
+}
+
 export type BoardSelection =
   | { kind: "board"; index: number }
   | { kind: "hand"; piece: HandPieceKind }
@@ -203,6 +230,8 @@ export function ShogiBoard({
   lastMove = null,
   pv = [],
   pieceSet = DEFAULT_PIECE_SET,
+  promotion = null,
+  arrows = [],
   onSquare,
 }: {
   snapshot: BrowserSnapshot;
@@ -213,6 +242,8 @@ export function ShogiBoard({
   lastMove?: MoveHighlight | null;
   pv?: string[];
   pieceSet?: PieceSetId;
+  promotion?: PromotionPrompt | null;
+  arrows?: AnalysisArrow[];
   onSquare: (index: number) => void;
 }) {
   const destinations = useMemo(
@@ -339,12 +370,211 @@ export function ShogiBoard({
             })}
           </div>
         ))}
+        {/*
+          Both overlays live inside .shogi-board because they are positioned in
+          board coordinates. As siblings they resolved against .board-area, the
+          nearest positioned ancestor, and landed off the grid.
+        */}
+        {arrows.length === 0 ? null : (
+          <AnalysisArrows arrows={arrows} orientation={orientation} />
+        )}
+        {promotion === null ? null : (
+          <PromotionPicker
+            messages={messages}
+            orientation={orientation}
+            pieceSet={pieceSet}
+            prompt={promotion}
+            snapshot={snapshot}
+          />
+        )}
       </div>
       <div aria-hidden="true" className="rank-coordinates">
         {rankLabels.map((rank) => (
           <span key={rank}>{rank}</span>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Candidate-move overlay.
+ *
+ * The best move is drawn in the accent colour and the rest in the analysis
+ * blue, each carrying its own evaluation. Arrows are translucent so the pieces
+ * underneath stay readable; the labels are not, because a number at 40% opacity
+ * over a wooden board is unreadable.
+ */
+function AnalysisArrows({
+  arrows,
+  orientation,
+}: {
+  arrows: AnalysisArrow[];
+  orientation: BoardOrientation;
+}) {
+  const centre = (index: number) => {
+    const visual = orientation === "sente-bottom" ? index : 80 - index;
+    return { x: (visual % 9) + 0.5, y: Math.floor(visual / 9) + 0.5 };
+  };
+
+  return (
+    <svg
+      aria-hidden="true"
+      className="analysis-arrows"
+      viewBox="0 0 9 9"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        {["best", "alt"].map((variant) => (
+          <marker
+            id={`arrowhead-${variant}`}
+            key={variant}
+            markerHeight="3"
+            markerUnits="strokeWidth"
+            markerWidth="3"
+            orient="auto"
+            refX="2.4"
+            refY="1.5"
+          >
+            <path
+              className={`analysis-arrows__head analysis-arrows__head--${variant}`}
+              d="M0,0 L3,1.5 L0,3 z"
+            />
+          </marker>
+        ))}
+      </defs>
+      {arrows.map((arrow) => {
+        let shape;
+        try {
+          shape = parseUsiMoveShape(arrow.usi);
+        } catch {
+          return null;
+        }
+        const variant = arrow.rank === 1 ? "best" : "alt";
+        const to = centre(boardIndex(shape.to.file, shape.to.rank));
+        const from =
+          shape.from === null
+            ? null
+            : centre(boardIndex(shape.from.file, shape.from.rank));
+        // Keep the label inside the board at the edges.
+        const labelX = Math.min(Math.max(to.x, 0.62), 8.38);
+        const labelY = Math.min(Math.max(to.y - 0.34, 0.3), 8.7);
+        return (
+          <g key={`${arrow.rank}-${arrow.usi}`}>
+            {from === null ? (
+              <circle
+                className={`analysis-arrows__drop analysis-arrows__drop--${variant}`}
+                cx={to.x}
+                cy={to.y}
+                r={0.34}
+              />
+            ) : (
+              <line
+                className={`analysis-arrows__line analysis-arrows__line--${variant}`}
+                markerEnd={`url(#arrowhead-${variant})`}
+                x1={from.x}
+                x2={to.x - (to.x - from.x) * 0.28}
+                y1={from.y}
+                y2={to.y - (to.y - from.y) * 0.28}
+              />
+            )}
+            <text
+              className={`analysis-arrows__label analysis-arrows__label--${variant}`}
+              x={labelX}
+              y={labelY}
+            >
+              {arrow.label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/**
+ * Promotion picker, anchored beside the destination square.
+ *
+ * A modal dialog for this question stops the board being visible at the moment
+ * the answer depends on it. Showing the two resulting pieces next to the square
+ * keeps the position in view and makes the choice a direct comparison.
+ */
+function PromotionPicker({
+  prompt,
+  snapshot,
+  orientation,
+  pieceSet,
+  messages,
+}: {
+  prompt: PromotionPrompt;
+  snapshot: BrowserSnapshot;
+  orientation: BoardOrientation;
+  pieceSet: PieceSetId;
+  messages: Messages;
+}) {
+  // Promote first: it is the usual intent, and it matches how shogi clients
+  // conventionally order the pair.
+  const options = [...prompt.moves].sort(
+    (left, right) => Number(right.promote) - Number(left.promote),
+  );
+  const sample = options[0];
+  if (sample === undefined) return null;
+  const destination = boardIndex(sample.to.file, sample.to.rank);
+  const origin =
+    sample.from === null
+      ? null
+      : boardIndex(sample.from.file, sample.from.rank);
+  const moving = origin === null ? null : snapshot.board[origin];
+  if (moving === null || moving === undefined) return null;
+
+  const visual =
+    orientation === "sente-bottom" ? destination : 80 - destination;
+  const column = visual % 9;
+  const row = Math.floor(visual / 9);
+  // Flip to the left of the square when there is no room on the right.
+  const anchorRight = column >= 6;
+
+  return (
+    <div
+      aria-label={messages.play.promoteQuestion}
+      className={`promotion-picker ${anchorRight ? "promotion-picker--left" : ""}`}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation();
+          prompt.onCancel();
+        }
+      }}
+      role="group"
+      style={{
+        insetInlineStart: anchorRight
+          ? undefined
+          : `calc(${column + 1} * (100% / 9))`,
+        insetInlineEnd: anchorRight
+          ? `calc(${9 - column} * (100% / 9))`
+          : undefined,
+        insetBlockStart: `calc(${row} * (100% / 9))`,
+      }}
+    >
+      {options.map((movement, index) => (
+        <button
+          autoFocus={index === 0}
+          key={movement.usi}
+          onClick={() => prompt.onChoose(movement.usi)}
+          type="button"
+        >
+          <PieceView
+            flipped={orientation === "gote-bottom"}
+            kind={movement.promote ? promotedKind(moving.kind) : moving.kind}
+            setId={pieceSet}
+            side={moving.side}
+          />
+          <span>
+            {movement.promote
+              ? messages.play.promote
+              : messages.play.doNotPromote}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }
