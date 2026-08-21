@@ -1235,11 +1235,16 @@ input[type="number"] {
   font-size: 0.6875rem;
 }
 
+/*
+ * One metric per row until there is width for two. Paired on a 375px screen
+ * each cell was about 180px, which broke "モデル / プロファイル" to one
+ * character per line.
+ */
 .analysis-metrics {
   display: grid;
   border-block: 1px solid var(--rule);
   margin: var(--space-2) 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 0 var(--space-3);
 }
 
@@ -1256,11 +1261,17 @@ input[type="number"] {
   min-width: 0;
   margin: 0;
   font-size: 0.6875rem;
+}
+
+/* Values can be hashes with no break opportunity; labels are known phrases and
+   must never be broken mid-word. */
+.analysis-metrics dd {
   overflow-wrap: anywhere;
 }
 
 .analysis-metrics dt {
   color: var(--muted);
+  overflow-wrap: normal;
 }
 
 .analysis-lines {
@@ -2206,6 +2217,10 @@ td {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .analysis-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .numeric-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -2245,8 +2260,10 @@ td {
  * route.
  */
 @media (min-width: 64rem) {
+  /* A narrower cap here; the full panel width only pays for itself once the
+     three-region desktop layout has the room for it. */
   .analysis-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(18rem, var(--panel-width));
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem);
   }
 
   .history-rail {

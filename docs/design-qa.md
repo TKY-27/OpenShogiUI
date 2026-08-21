@@ -10,7 +10,9 @@
 | Orientation | Board flip is independent from human role; piece names remain semantic text |
 | History | Initial/current positions and every move are keyboard-selectable without mutating the live game |
 | Analysis density | Three lines by default, up to ten bounded live or cached lines |
-| State markings | Selection, legal moves, last origin/destination, drop, capture, promotion, mate king, and PV use shape/pattern as well as color |
+| State markings | Selection and last origin/destination are area fills only: a ring on a 9x9 grid sits on the 1px rules and reads as a broken border. Legal moves, drop, capture, promotion, mate king, and PV each keep a shape or pattern channel |
+| Promotion | Offered beside the destination square, showing the piece each option produces. Not modal: covering the board hides the position the choice depends on |
+| Candidate moves | Drawn on the board, best in the accent colour and the rest in the analysis blue, each labelled with its evaluation. Only the first move of each line is drawn |
 | Responsive structure | One mobile-first system on an ascending min-width ladder (48rem / 64rem / 80rem); no max-width query remains |
 | Desktop page scroll | None. The shell is 100dvh from 80rem up and the rail, board, and analysis panes scroll individually |
 | Board sizing | Derived from min(available width, available height, 46rem) via a size query container, so viewport height is an input |

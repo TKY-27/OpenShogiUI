@@ -302,6 +302,61 @@ describe("promotion picker", () => {
     // 2b sits in the right-hand columns, so the picker opens leftwards.
     expect(render()).toContain("promotion-picker--left");
   });
+
+  it("opens rightwards and downwards away from the edges", () => {
+    // 7c is column 2, row 2: room on both sides.
+    const markup = renderToStaticMarkup(
+      <ShogiBoard
+        disabled={false}
+        messages={getMessages("ja")}
+        onSquare={() => undefined}
+        promotion={{
+          moves: [
+            {
+              usi: "7g7c+",
+              from: { file: 7, rank: 7 },
+              to: { file: 7, rank: 3 },
+              drop: null,
+              promote: true,
+            },
+          ],
+          onCancel: () => undefined,
+          onChoose: () => undefined,
+        }}
+        selection={null}
+        snapshot={startPosition()}
+      />,
+    );
+    expect(markup).not.toContain("promotion-picker--left");
+    expect(markup).not.toContain("promotion-picker--up");
+  });
+
+  it("opens upwards on the near ranks so it stays on the board", () => {
+    // A drop on 5h is row 7, close enough to the bottom edge to flip.
+    const markup = renderToStaticMarkup(
+      <ShogiBoard
+        disabled={false}
+        messages={getMessages("ja")}
+        onSquare={() => undefined}
+        promotion={{
+          moves: [
+            {
+              usi: "5i5h",
+              from: { file: 5, rank: 9 },
+              to: { file: 5, rank: 8 },
+              drop: null,
+              promote: false,
+            },
+          ],
+          onCancel: () => undefined,
+          onChoose: () => undefined,
+        }}
+        selection={null}
+        snapshot={startPosition()}
+      />,
+    );
+    expect(markup).toContain("promotion-picker--up");
+  });
 });
 
 describe("candidate move arrows", () => {

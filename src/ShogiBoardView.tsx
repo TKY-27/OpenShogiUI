@@ -531,13 +531,24 @@ function PromotionPicker({
     orientation === "sente-bottom" ? destination : 80 - destination;
   const column = visual % 9;
   const row = Math.floor(visual / 9);
-  // Flip to the left of the square when there is no room on the right.
-  const anchorRight = column >= 6;
+  /*
+   * Anchor away from whichever edge is close. The board can be as narrow as
+   * 333px on a phone, where the panel is a third of its width, so opening
+   * rightwards from column 5 already runs off the board.
+   */
+  const anchorRight = column >= 5;
+  const anchorBottom = row >= 6;
 
   return (
     <div
       aria-label={messages.play.promoteQuestion}
-      className={`promotion-picker ${anchorRight ? "promotion-picker--left" : ""}`}
+      className={[
+        "promotion-picker",
+        anchorRight ? "promotion-picker--left" : "",
+        anchorBottom ? "promotion-picker--up" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.stopPropagation();
@@ -552,7 +563,10 @@ function PromotionPicker({
         insetInlineEnd: anchorRight
           ? `calc(${9 - column} * (100% / 9))`
           : undefined,
-        insetBlockStart: `calc(${row} * (100% / 9))`,
+        insetBlockStart: anchorBottom ? undefined : `calc(${row} * (100% / 9))`,
+        insetBlockEnd: anchorBottom
+          ? `calc(${8 - row} * (100% / 9))`
+          : undefined,
       }}
     >
       {options.map((movement, index) => (
