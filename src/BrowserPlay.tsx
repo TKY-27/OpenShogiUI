@@ -7,23 +7,21 @@ import {
   useState,
 } from "react";
 
-import { AnalysisSummaryStore, updateMatchesRequest } from "./analysis-cache";
+import { AnalysisSummaryStore } from "./analysis-cache";
 import {
-  accumulateSlice,
-  ANALYSIS_MAX_DEPTH,
-  analysisSliceNodes,
-  displayUpdate,
   emptyProgress,
   progressElapsedSeconds,
   progressNps,
-  type AnalysisProgress,
 } from "./analysis-progress";
+import {
+  AnalysisSessionController,
+  type AnalysisView,
+} from "./analysis-session";
 import {
   ANALYSIS_SCHEMA,
   MAX_BROWSER_MODEL_BYTES,
   MAX_BROWSER_OPENING_BOOK_BYTES,
   type AnalysisStart,
-  type AnalysisUpdate,
   type BrowserSnapshot,
   type EvaluatorChoice,
   type HandPieceKind,
@@ -37,11 +35,23 @@ import {
   sha256Hex,
   type Side,
 } from "./browser-engine";
-import { type EngineReadyState, WasmEngineAdapter } from "./engine-adapter";
-import type { RestorableModel, RestorableOpeningBook } from "./engine-client";
+import {
+  EngineWorkerClient,
+  type EngineReadyState,
+  type RestorableModel,
+  type RestorableOpeningBook,
+} from "./engine-client";
+import {
+  appendGameTimeline,
+  createGameTimeline,
+  mapTimelineClocks,
+  replaceLiveEntry,
+  selectGameTimeline,
+  timelineSnapshots,
+  type GameTimeline,
+} from "./game-timeline";
 import { resolveShortcut } from "./keyboard";
 import { downloadText, kifuFileName, toKif, toUsi } from "./kifu";
-import { PublishGate } from "./publish-throttle";
 import { getMessages, type Locale } from "./localization";
 import {
   PIECE_ASSET_CATALOG,
@@ -54,6 +64,7 @@ import {
   browserProfileNodeLimit,
   consumeMatchClock,
   DEFAULT_TIME_CONTROL,
+  elapsedTurnMs,
   flippedOrientation,
   humanControlsSide,
   initialMatchClock,
@@ -68,32 +79,16 @@ import {
 } from "./play-settings";
 import {
   type AnalysisArrow,
-  destinationIndex,
   HandStand,
   PieceView,
   persistedPieceSet,
-  selectedMoves,
+  resolveBoardClick,
   ShogiBoard,
   type BoardSelection,
+  toggleHandSelection,
 } from "./ShogiBoardView";
 
 type BusyState = "initializing" | "moving" | "engine" | "model" | "book";
-type AnalysisStatus =
-  | "idle"
-  | "cached"
-  | "live"
-  | "stopped"
-  | "invalidated"
-  | "restarting";
-interface AnalysisView {
-  status: AnalysisStatus;
-  update: AnalysisUpdate | null;
-  /**
-   * Session totals. The update's own nodes and nps describe one ~200ms slice,
-   * so they cannot be shown beside a cumulative elapsed time.
-   */
-  progress: AnalysisProgress;
-}
 
 /**
  * Facts about the displayed position. These used to sit on a permanent shelf
@@ -114,8 +109,8 @@ interface MoveSource {
 }
 
 interface AdapterPair {
-  play: WasmEngineAdapter;
-  analysis: WasmEngineAdapter;
+  play: EngineWorkerClient;
+  analysis: EngineWorkerClient;
 }
 
 const analysisStore = new AnalysisSummaryStore();
@@ -710,14 +705,14 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   errorMessageRef.current = messages.play.error;
   workerCrashedMessageRef.current = labels.workerCrashed;
   const adaptersRef = useRef<AdapterPair | null>(null);
+  const analysisControllerRef = useRef<AnalysisSessionController | null>(null);
   const operationRef = useRef(0);
-  const analysisRequestRef = useRef(0);
   const aiRequestRef = useRef(false);
   const turnStartedAtRef = useRef(Date.now());
   const promotionFocusRef = useRef<HTMLElement | null>(null);
-  const [history, setHistory] = useState<BrowserSnapshot[]>([]);
-  const [moveSources, setMoveSources] = useState<Array<MoveSource | null>>([]);
-  const [displayedIndex, setDisplayedIndex] = useState(0);
+  const [timeline, setTimeline] = useState<GameTimeline<MoveSource> | null>(
+    null,
+  );
   const [busy, setBusy] = useState<BusyState | null>("initializing");
   const [selection, setSelection] = useState<BoardSelection>(null);
   const [promotionMoves, setPromotionMoves] = useState<MoveSummary[] | null>(
@@ -737,21 +732,15 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   const [matchClock, setMatchClock] = useState<MatchClock>(() =>
     initialMatchClock(DEFAULT_TIME_CONTROL),
   );
-  const [clockHistory, setClockHistory] = useState<MatchClock[]>(() => [
-    initialMatchClock(DEFAULT_TIME_CONTROL),
-  ]);
   const [openingProfile, setOpeningProfile] =
     useState<OpeningProfile>("ibisha_strict");
   const [analysisEnabled, setAnalysisEnabled] = useState(true);
-  const analysisGateRef = useRef(new PublishGate<AnalysisView>());
   const [analysisView, setAnalysisView] = useState<AnalysisView>({
     status: "idle",
     update: null,
     progress: emptyProgress(),
   });
-  const [analysisEpoch, setAnalysisEpoch] = useState(0);
   const [playThinking, setPlayThinking] = useState(false);
-  const [lastSearch, setLastSearch] = useState<MoveSource | null>(null);
   const [model, setModel] = useState<RestorableModel | null>(null);
   const [modelSummary, setModelSummary] = useState<ModelSummary | null>(null);
   const [modelFileName, setModelFileName] = useState<string | null>(null);
@@ -774,14 +763,19 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     useState<EngineReadyState>("new");
   const appliedOpeningProfileRef = useRef<OpeningProfile | null>(null);
 
-  const liveSnapshot = history.at(-1) ?? null;
-  const displayedSnapshot = history[displayedIndex] ?? liveSnapshot;
-  const isLivePosition = displayedIndex === history.length - 1;
-  const currentMoveSource = moveSources[displayedIndex] ?? null;
-  const displayedClock = clockHistory[displayedIndex] ?? matchClock;
+  const history = timeline === null ? [] : timelineSnapshots(timeline);
+  const moveSources = timeline?.entries.map(({ source }) => source) ?? [];
+  const displayedIndex = timeline?.displayedIndex ?? 0;
+  const liveSnapshot = timeline?.entries.at(-1)?.snapshot ?? null;
+  const displayedEntry = timeline?.entries[displayedIndex];
+  const displayedSnapshot = displayedEntry?.snapshot ?? liveSnapshot;
+  const isLivePosition =
+    timeline !== null && displayedIndex === timeline.entries.length - 1;
+  const currentMoveSource = displayedEntry?.source ?? null;
+  const displayedClock = displayedEntry?.clock ?? matchClock;
   const playHash = browserProfileHashMegabytes(profile);
   const analysisHash = playHash;
-  const timeLocked = history.length > 1;
+  const timeLocked = (timeline?.entries.length ?? 0) > 1;
   const budget = resourceBudget(
     playHash,
     analysisHash,
@@ -790,25 +784,34 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   );
 
   useEffect(() => {
-    const play = new WasmEngineAdapter("play", (state, message) => {
+    const play = new EngineWorkerClient("play", (state, message) => {
       setPlayWorkerState(state);
       if (state === "crashed")
         setNotice(message ?? workerCrashedMessageRef.current);
     });
-    const analysis = new WasmEngineAdapter("analysis", (state, message) => {
+    const analysis = new EngineWorkerClient("analysis", (state, message) => {
       setAnalysisWorkerState(state);
       if (state === "crashed")
         setNotice(message ?? workerCrashedMessageRef.current);
     });
+    const analysisController = new AnalysisSessionController(
+      analysis,
+      analysisStore,
+      setAnalysisView,
+      (error) =>
+        setNotice(
+          error instanceof Error ? error.message : errorMessageRef.current,
+        ),
+    );
     adaptersRef.current = { play, analysis };
+    analysisControllerRef.current = analysisController;
     let active = true;
     void Promise.all([play.initialize(), analysis.initialize()]).then(
       ([initial]) => {
         if (!active) return;
-        setHistory([initial]);
-        setMoveSources([null]);
-        setClockHistory([initialMatchClock(DEFAULT_TIME_CONTROL)]);
-        setDisplayedIndex(0);
+        setTimeline(
+          createGameTimeline(initial, initialMatchClock(DEFAULT_TIME_CONTROL)),
+        );
         turnStartedAtRef.current = Date.now();
         setBusy(null);
       },
@@ -822,7 +825,8 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     );
     return () => {
       active = false;
-      analysisRequestRef.current += 1;
+      analysisController.dispose();
+      analysisControllerRef.current = null;
       adaptersRef.current = null;
       play.dispose();
       analysis.dispose();
@@ -838,7 +842,9 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     if (timeLocked) return;
     const initial = initialMatchClock(timeSettings);
     setMatchClock(initial);
-    setClockHistory((current) => current.map(() => initial));
+    setTimeline((current) =>
+      current === null ? null : mapTimelineClocks(current, initial),
+    );
     turnStartedAtRef.current = Date.now();
   }, [
     timeLocked,
@@ -853,6 +859,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     if (
       play === undefined ||
       play.readyState !== "ready" ||
+      busy !== null ||
       appliedOpeningProfileRef.current === openingProfile
     )
       return;
@@ -868,7 +875,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
           error instanceof Error ? error.message : errorMessageRef.current,
         );
       });
-  }, [openingProfile, playWorkerState]);
+  }, [busy, openingProfile, playWorkerState]);
 
   useEffect(() => {
     const adapter = adaptersRef.current?.play;
@@ -891,7 +898,9 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         await adapter.configureOpening(openingProfile);
         appliedOpeningProfileRef.current = openingProfile;
         if (operationRef.current !== operation) return;
-        setHistory((current) => [...current.slice(0, -1), restored]);
+        setTimeline((current) =>
+          current === null ? null : replaceLiveEntry(current, restored),
+        );
         setNotice(null);
       })
       .catch((error: unknown) => {
@@ -908,221 +917,40 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
 
   useEffect(() => {
     if (displayedSnapshot === null) return;
-    const adapter = adaptersRef.current?.analysis;
-    if (adapter === undefined) return;
-    const analysisAdapter = adapter;
-    const requestId = ++analysisRequestRef.current;
-    let cancelled = false;
-
-    async function stopAndLabel() {
-      try {
-        if (
-          analysisAdapter.readyState === "ready" ||
-          analysisAdapter.readyState === "busy"
-        )
-          await analysisAdapter.analysisStop();
-      } catch {
-        // Stop before the first start is a harmless closed-protocol error.
-      }
-      if (!cancelled && analysisRequestRef.current === requestId) {
-        const due = analysisGateRef.current.flush(Date.now());
-        setAnalysisView((current) => ({
-          status: "stopped",
-          update: due?.update ?? current.update,
-          progress: due?.progress ?? current.progress,
-        }));
-      }
-    }
+    const controller = analysisControllerRef.current;
+    if (controller === null) return;
 
     if (
       !analysisEnabled ||
       budget.analysisThreads === 0 ||
       (playThinking && budget.analysisPauseDuringAiTurn)
     ) {
-      void stopAndLabel();
-      return () => {
-        cancelled = true;
-      };
+      controller.pause();
+      return;
     }
-
-    analysisGateRef.current.reset();
-    // A new request must not inherit the previous position's totals.
-    setAnalysisView((current) => ({
-      status: current.update === null ? "idle" : "invalidated",
-      update: current.update,
-      progress: emptyProgress(),
-    }));
-
-    /*
-     * Live slices arrive every few tens of milliseconds. The display is gated
-     * to one update per second so the evaluation stays readable; the search
-     * and the summary store are unaffected, and non-live states bypass the
-     * gate so a cached or final result is never delayed.
-     */
-    const gate = analysisGateRef.current;
-    let progress = emptyProgress();
-
-    /**
-     * Records every update, displays at most one per second.
-     *
-     * The store and the session totals see all of them; only the screen is
-     * sampled. A stale request is rejected before anything is recorded.
-     */
-    async function record(update: AnalysisUpdate, request: AnalysisStart) {
-      if (
-        cancelled ||
-        analysisRequestRef.current !== requestId ||
-        !updateMatchesRequest(update, request)
-      )
-        return false;
-      await analysisStore.put(request, update);
-      return true;
-    }
-
-    function apply(view: AnalysisView) {
-      setAnalysisView(() => view);
-    }
-
-    function show(
-      update: AnalysisUpdate,
-      request: AnalysisStart,
-      status: AnalysisStatus,
-    ) {
-      if (
-        cancelled ||
-        analysisRequestRef.current !== requestId ||
-        !updateMatchesRequest(update, request)
-      )
-        return;
-      const next: AnalysisView = { status, update, progress };
-      if (status === "live") {
-        const due = gate.offer(next, Date.now());
-        if (due !== null) apply(due);
-      } else {
-        gate.reset();
-        apply(next);
-      }
-    }
-
-    async function startLoop() {
-      const request = await buildAnalysisStart(
-        displayedSnapshot,
-        profile,
-        evaluator,
-        modelSummary,
-        openingProfile,
-        multiPv,
-        playHash,
-        analysisHash,
-      );
-      const persisted = await analysisStore.get(request);
-      if (persisted !== null) show(persisted.update, request, "cached");
-      if (cancelled || analysisRequestRef.current !== requestId) return;
-      const started = await analysisAdapter.analysisStart(
-        profile,
-        evaluator,
-        request,
-      );
-      for (const update of started.updates) await record(update, request);
-      const opening = displayUpdate(started.updates);
-      if (opening !== null) {
-        show(opening, request, opening.source === "cache" ? "cached" : "live");
-      }
-
-      /*
-       * Repeated bounded slices are how the protocol expresses infinite
-       * analysis: the session stays active until stop, a position change, a
-       * worker restart, or an explicit pause for the play worker. Nothing here
-       * imposes a time budget, and no play-side casual or 20s cap applies.
-       */
-      while (!cancelled && analysisRequestRef.current === requestId) {
-        const response = await analysisAdapter.analysisStep({
-          schema: ANALYSIS_SCHEMA,
-          nodes: analysisSliceNodes(profile),
-          maxDepth: ANALYSIS_MAX_DEPTH,
-          timestampMs: Date.now(),
-        });
-        for (const update of response.updates) {
-          if (!(await record(update, request))) return;
-        }
-        progress = accumulateSlice(progress, response.slice);
-        // One snapshot per slice: the batch is depths 1..N of the same work.
-        const latest = displayUpdate(response.updates);
-        if (latest !== null) show(latest, request, "live");
-        await new Promise((resolve) => window.setTimeout(resolve, 30));
-      }
-    }
-
-    void startLoop().catch(async (error: unknown) => {
-      if (cancelled || analysisRequestRef.current !== requestId) return;
-      setAnalysisView((current) => ({ ...current, status: "restarting" }));
-      if (analysisAdapter.readyState !== "crashed") {
-        try {
-          const failed = await analysisAdapter.analysisWorkerFailed();
-          const restarted = await analysisAdapter.analysisRestart();
-          const request = await buildAnalysisStart(
-            displayedSnapshot,
-            profile,
-            evaluator,
-            modelSummary,
-            openingProfile,
-            multiPv,
-            playHash,
-            analysisHash,
-          );
-          const recovered = [...failed.updates, ...restarted.updates];
-          for (const update of recovered) {
-            if (updateMatchesRequest(update, request)) {
-              await analysisStore.put(request, update);
-            }
-          }
-          const latest = displayUpdate(recovered);
-          if (latest !== null && updateMatchesRequest(latest, request)) {
-            analysisGateRef.current.reset();
-            setAnalysisView((current) => ({
-              status: "cached",
-              update: latest,
-              progress: current.progress,
-            }));
-          }
-          setNotice(null);
-          setAnalysisEpoch((value) => value + 1);
-          return;
-        } catch {
-          // A protocol-level recovery failure falls through to physical restart.
-        }
-      }
-      try {
-        await analysisAdapter.restart(
-          {
-            initialSfen: displayedSnapshot.initialSfen,
-            moves: displayedSnapshot.moves,
-          },
-          model,
-        );
-        if (!cancelled && analysisRequestRef.current === requestId) {
-          setNotice(null);
-          setAnalysisEpoch((value) => value + 1);
-        }
-      } catch (restartError) {
-        if (cancelled || analysisRequestRef.current !== requestId) return;
-        setNotice(
-          restartError instanceof Error
-            ? restartError.message
-            : error instanceof Error
-              ? error.message
-              : errorMessageRef.current,
-        );
-        setAnalysisView((current) => ({ ...current, status: "stopped" }));
-      }
+    setNotice(null);
+    return controller.start({
+      profile,
+      evaluator,
+      model,
+      engineSession: {
+        initialSfen: displayedSnapshot.initialSfen,
+        moves: displayedSnapshot.moves,
+      },
+      buildRequest: () =>
+        buildAnalysisStart(
+          displayedSnapshot,
+          profile,
+          evaluator,
+          modelSummary,
+          openingProfile,
+          multiPv,
+          playHash,
+          analysisHash,
+        ),
     });
-    return () => {
-      cancelled = true;
-      void analysisAdapter.analysisStop().catch(() => undefined);
-    };
   }, [
     analysisEnabled,
-    analysisEpoch,
     analysisHash,
     budget.analysisPauseDuringAiTurn,
     budget.analysisThreads,
@@ -1169,12 +997,13 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
       .then(async (response) => {
         if (operationRef.current !== operation || response.bestMove === null)
           return;
+        const elapsedMs = elapsedTurnMs(turnStartedAtRef.current, Date.now());
         const updatedClock =
           timeSettings.mode === "clock"
             ? consumeMatchClock(
                 matchClock,
                 liveSnapshot.sideToMove,
-                response.elapsedNs / 1_000_000,
+                elapsedMs,
                 timeSettings.incrementSeconds,
               )
             : null;
@@ -1182,11 +1011,16 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         const next = await adapter.playMove(response.bestMove);
         if (operationRef.current !== operation) return;
         if (updatedClock !== null) setMatchClock(updatedClock);
-        setLastSearch(source);
-        setHistory((current) => [...current, next]);
-        setMoveSources((current) => [...current, source]);
-        setClockHistory((current) => [...current, updatedClock ?? matchClock]);
-        setDisplayedIndex(next.moves.length);
+        setTimeline((current) =>
+          current === null
+            ? createGameTimeline(next, updatedClock ?? matchClock)
+            : appendGameTimeline(current, {
+                snapshot: next,
+                source,
+                clock: updatedClock ?? matchClock,
+                moveTimeMs: elapsedMs,
+              }),
+        );
         turnStartedAtRef.current = Date.now();
       })
       .catch((error: unknown) => {
@@ -1213,13 +1047,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     timeSettings,
   ]);
 
-  const legalSelectionMoves = useMemo(
-    () =>
-      displayedSnapshot === null
-        ? []
-        : selectedMoves(displayedSnapshot, selection),
-    [displayedSnapshot, selection],
-  );
   const legalDrops = useMemo(
     () =>
       new Set(
@@ -1297,7 +1124,9 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   }
 
   function selectHistory(index: number) {
-    setDisplayedIndex(Math.max(0, Math.min(index, history.length - 1)));
+    setTimeline((current) =>
+      current === null ? null : selectGameTimeline(current, index),
+    );
     setSelection(null);
     setPromotionMoves(null);
   }
@@ -1349,7 +1178,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     const adapter = adaptersRef.current?.play;
     if (adapter === undefined || !humanCanMove) return;
     const movingSide = displayedSnapshot?.sideToMove ?? "black";
-    const elapsedMs = Date.now() - turnStartedAtRef.current;
+    const elapsedMs = elapsedTurnMs(turnStartedAtRef.current, Date.now());
     if (
       timeSettings.mode === "clock" &&
       matchClockExpired(
@@ -1381,11 +1210,16 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
       const next = await adapter.playMove(movement);
       if (operationRef.current !== operation) return;
       if (updatedClock !== null) setMatchClock(updatedClock);
-      setHistory((current) => [...current, next]);
-      setMoveSources((current) => [...current, null]);
-      setClockHistory((current) => [...current, updatedClock ?? matchClock]);
-      setDisplayedIndex(next.moves.length);
-      setLastSearch(null);
+      setTimeline((current) =>
+        current === null
+          ? createGameTimeline(next, updatedClock ?? matchClock)
+          : appendGameTimeline(current, {
+              snapshot: next,
+              source: null,
+              clock: updatedClock ?? matchClock,
+              moveTimeMs: elapsedMs,
+            }),
+      );
       turnStartedAtRef.current = Date.now();
     } catch (error) {
       if (operationRef.current === operation)
@@ -1416,19 +1250,9 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
 
   function selectSquare(index: number) {
     if (!humanCanMove || displayedSnapshot === null) return;
-    const candidates = legalSelectionMoves.filter(
-      (movement) => destinationIndex(movement) === index,
-    );
-    if (candidates.length > 0) return chooseMove(candidates);
-    const piece = displayedSnapshot.board[index];
-    if (piece?.side === displayedSnapshot.sideToMove) {
-      const nextSelection: BoardSelection = { kind: "board", index };
-      setSelection(
-        selectedMoves(displayedSnapshot, nextSelection).length > 0
-          ? nextSelection
-          : null,
-      );
-    } else setSelection(null);
+    const result = resolveBoardClick(displayedSnapshot, selection, index);
+    if (result.kind === "move") chooseMove(result.candidates);
+    else setSelection(result.selection);
   }
 
   async function resetGame() {
@@ -1438,14 +1262,10 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     setNotice(null);
     try {
       const snapshot = await adapter.reset();
-      setHistory([snapshot]);
-      setMoveSources([null]);
-      setDisplayedIndex(0);
-      setLastSearch(null);
       setSelection(null);
       const initial = initialMatchClock(timeSettings);
       setMatchClock(initial);
-      setClockHistory([initial]);
+      setTimeline(createGameTimeline(snapshot, initial));
       turnStartedAtRef.current = Date.now();
     } catch (error) {
       setNotice(error instanceof Error ? error.message : messages.play.error);
@@ -1492,7 +1312,9 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         adapters.play.unloadModel(),
         adapters.analysis.unloadModel(),
       ]);
-      setHistory((current) => [...current.slice(0, -1), snapshot]);
+      setTimeline((current) =>
+        current === null ? null : replaceLiveEntry(current, snapshot),
+      );
       setModel(null);
       setModelSummary(null);
       setModelFileName(null);
@@ -1540,7 +1362,9 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     setBusy("book");
     try {
       const snapshot = await adapter.unloadOpeningBook();
-      setHistory((current) => [...current.slice(0, -1), snapshot]);
+      setTimeline((current) =>
+        current === null ? null : replaceLiveEntry(current, snapshot),
+      );
       setOpeningBookSummary(null);
       setOpeningBookFileName(null);
       setOpeningBook(null);
@@ -1569,7 +1393,9 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
       await adapter.configureOpening(openingProfile);
       appliedOpeningProfileRef.current = openingProfile;
       if (operationRef.current !== operation) return;
-      setHistory((current) => [...current.slice(0, -1), restored]);
+      setTimeline((current) =>
+        current === null ? null : replaceLiveEntry(current, restored),
+      );
       setNotice(null);
     } catch (error) {
       if (operationRef.current === operation) {
@@ -1681,9 +1507,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                     messages={messages}
                     onSelect={(piece) =>
                       setSelection((current) =>
-                        current?.kind === "hand" && current.piece === piece
-                          ? null
-                          : { kind: "hand", piece },
+                        toggleHandSelection(current, piece),
                       )
                     }
                     orientation={orientation}
@@ -1720,9 +1544,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                     messages={messages}
                     onSelect={(piece) =>
                       setSelection((current) =>
-                        current?.kind === "hand" && current.piece === piece
-                          ? null
-                          : { kind: "hand", piece },
+                        toggleHandSelection(current, piece),
                       )
                     }
                     orientation={orientation}
@@ -1746,7 +1568,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
           enabled={analysisEnabled}
           evaluator={evaluator}
           position={positionFacts}
-          lastSearch={currentMoveSource ?? (isLivePosition ? lastSearch : null)}
+          lastSearch={currentMoveSource}
           locale={locale}
           onToggle={setAnalysisEnabled}
           profile={profile}

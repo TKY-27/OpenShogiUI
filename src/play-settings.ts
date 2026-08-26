@@ -119,6 +119,12 @@ export function consumeMatchClock(
   };
 }
 
+/** Elapsed turn time from two wall-clock readings, clamped for clock jumps. */
+export function elapsedTurnMs(startedAtMs: number, nowMs: number): number {
+  if (!Number.isFinite(startedAtMs) || !Number.isFinite(nowMs)) return 0;
+  return Math.max(0, Math.round(nowMs - startedAtMs));
+}
+
 export function matchClockExpired(
   clock: MatchClock,
   side: Side,

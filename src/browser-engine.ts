@@ -331,9 +331,7 @@ export type WorkerRequest =
       request: AnalysisStart;
     }
   | { id: number; kind: "analysis-step"; request: AnalysisStep }
-  | { id: number; kind: "analysis-stop" }
-  | { id: number; kind: "analysis-worker-failed" }
-  | { id: number; kind: "analysis-restart" };
+  | { id: number; kind: "analysis-stop" };
 
 export type WorkerSuccess = {
   schema: typeof WORKER_RESPONSE_SCHEMA;
@@ -387,8 +385,6 @@ const WORKER_KINDS = new Set<WorkerRequest["kind"]>([
   "analysis-start",
   "analysis-step",
   "analysis-stop",
-  "analysis-worker-failed",
-  "analysis-restart",
 ]);
 const PIECE_KINDS = new Set<PieceKind>([
   "pawn",
@@ -1692,8 +1688,6 @@ export function parseWorkerRequest(value: unknown): WorkerRequest {
       exactKeys(parsed, ["id", "kind", "request"], "request");
       return { id, kind, request: parseAnalysisStep(parsed.request) };
     case "analysis-stop":
-    case "analysis-worker-failed":
-    case "analysis-restart":
       exactKeys(parsed, ["id", "kind"], "request");
       return { id, kind };
     default:

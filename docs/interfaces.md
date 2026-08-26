@@ -2,18 +2,20 @@
 
 ## Compatibility policy
 
-Every value crossing a Worker, file, generated-code, or presentation boundary uses a documented,
-versioned, bounded representation. Unknown schema versions and unknown object fields are rejected;
-parsers do not guess repairs for untrusted data.
+Every value crossing a file, generated-code, persistence, or presentation boundary uses a
+documented, versioned, bounded representation. Unknown schema versions and unknown object fields
+are rejected; parsers do not guess repairs for untrusted data. Internal Worker responses validate
+their correlation envelope on the main thread after their generated JSON payload has been deeply
+validated once in the Worker.
 
 ## Engine Worker
 
-`src/engine-adapter.ts` defines the UI-facing boundary. Each adapter owns an
-`EngineWorkerClient`; `src/engine.worker.ts` is the only module that imports the generated
-OpenShogiAI binding. Play and continuous analysis use separate Workers. Messages use closed
-discriminated unions, bounded strings and arrays, and transferable model or opening-book bytes.
-Request correlation, active analysis identity, and physical Worker replacement prevent stale
-work from updating a newer displayed position.
+`src/engine-client.ts` defines the UI-facing boundary and owns the Worker lifecycle directly;
+`src/engine.worker.ts` is the only module that imports the generated OpenShogiAI binding. Play and
+continuous analysis use separate Workers. Messages use discriminated unions and transferable model
+or opening-book bytes. Request correlation, one active analysis generation, complete analysis
+identity, and physical Worker replacement prevent stale work from updating a newer displayed
+position.
 
 The browser-facing engine supports:
 
@@ -25,7 +27,7 @@ The browser-facing engine supports:
   rejects expired human moves before changing the Worker position, and leaves every AI search
   budget allocation to the engine;
 - bounded search profiles and one to ten continuous MultiPV lines;
-- `open_shogi_analysis/v1` start, slice, stop, failure, and restart lifecycle messages;
+- `open_shogi_analysis/v1` start, bounded slice, and stop lifecycle messages;
 - strict, preferred, or disabled opening policy plus local opening-book load/removal;
 - local `OSAVAL01` validation, activation, and removal.
 

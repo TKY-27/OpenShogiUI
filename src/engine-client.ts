@@ -1,24 +1,18 @@
 import {
-  AnalysisResponse,
-  AnalysisStart,
-  AnalysisStep,
-  BrowserSnapshot,
-  EvaluatorChoice,
-  ModelSummary,
-  OpeningBookSummary,
-  OpeningPolicySummary,
-  OpeningProfile,
-  parseAnalysisResponse,
-  parseBrowserSnapshot,
-  parseModelSummary,
-  parseOpeningBookSummary,
-  parseOpeningPolicySummary,
-  parseSearchResponse,
+  type AnalysisResponse,
+  type AnalysisStart,
+  type AnalysisStep,
+  type BrowserSnapshot,
+  type EvaluatorChoice,
+  type ModelSummary,
+  type OpeningBookSummary,
+  type OpeningPolicySummary,
+  type OpeningProfile,
   parseWorkerResponse,
-  SearchProfile,
-  SearchResponse,
-  TimeControl,
-  WorkerRequest,
+  type SearchProfile,
+  type SearchResponse,
+  type TimeControl,
+  type WorkerRequest,
 } from "./browser-engine";
 
 type RequestPayload = WorkerRequest extends infer Request
@@ -48,53 +42,88 @@ export interface RestorableOpeningBook {
   expectedArtifactSha256: string | null;
 }
 
+export type EngineRole = "play" | "analysis";
+export type EngineReadyState =
+  | "new"
+  | "initializing"
+  | "ready"
+  | "crashed"
+  | "disposed";
+
+export type EngineStateListener = (
+  state: EngineReadyState,
+  message?: string,
+) => void;
+
 export class EngineWorkerClient {
   private worker: Worker;
+  private workerGeneration = 0;
   private nextId = 1;
   private readonly pending = new Map<number, PendingRequest>();
+  private state: EngineReadyState = "new";
 
   constructor(
-    private readonly role: "play" | "analysis" = "play",
-    private readonly onCrash?: (message: string) => void,
+    readonly role: EngineRole = "play",
+    private readonly onStateChange?: EngineStateListener,
   ) {
     this.worker = this.createWorker();
   }
 
+  get readyState(): EngineReadyState {
+    return this.state;
+  }
+
   async initialize(session?: EngineSession): Promise<BrowserSnapshot> {
-    const data = await this.request({
-      kind: "initialize",
-      initialSfen: session?.initialSfen ?? null,
-      moves: session?.moves ?? [],
-    });
-    return parseBrowserSnapshot(data);
+    this.assertNotDisposed();
+    const generation = this.workerGeneration;
+    this.transition("initializing");
+    try {
+      const data = await this.request({
+        kind: "initialize",
+        initialSfen: session?.initialSfen ?? null,
+        moves: session?.moves ?? [],
+      });
+      if (this.isCurrentWorker(generation) && !this.isDisposed()) {
+        this.transition("ready");
+      }
+      return data as BrowserSnapshot;
+    } catch (error) {
+      if (
+        this.isCurrentWorker(generation) &&
+        !this.isDisposed() &&
+        this.readyState !== "crashed"
+      ) {
+        this.transition("crashed", messageFor(error));
+      }
+      throw error;
+    }
   }
 
   async reset(): Promise<BrowserSnapshot> {
-    return parseBrowserSnapshot(
-      await this.request({ kind: "reset", sfen: null }),
+    return this.run(
+      async () =>
+        (await this.request({ kind: "reset", sfen: null })) as BrowserSnapshot,
     );
   }
 
   async loadModel(model: RestorableModel): Promise<ModelSummary> {
-    const transferable = model.bytes.slice(0);
-    const data = await this.request(
-      {
-        kind: "load-model",
-        bytes: transferable,
-        expectedArtifactSha256: model.expectedArtifactSha256,
-      },
-      [transferable],
-    );
-    return parseModelSummary(data);
+    return this.run(() => this.requestModelLoad(model));
   }
 
   async unloadModel(): Promise<BrowserSnapshot> {
-    return parseBrowserSnapshot(await this.request({ kind: "unload-model" }));
+    return this.run(
+      async () =>
+        (await this.request({ kind: "unload-model" })) as BrowserSnapshot,
+    );
   }
 
   async playMove(movement: string): Promise<BrowserSnapshot> {
-    return parseBrowserSnapshot(
-      await this.request({ kind: "play-move", movement }),
+    return this.run(
+      async () =>
+        (await this.request({
+          kind: "play-move",
+          movement,
+        })) as BrowserSnapshot,
     );
   }
 
@@ -104,36 +133,30 @@ export class EngineWorkerClient {
     multiPv: number,
     timeControl: TimeControl | null = null,
   ): Promise<SearchResponse> {
-    return parseSearchResponse(
-      await this.request({
-        kind: "search",
-        profile,
-        evaluator,
-        multiPv,
-        timeControl,
-      }),
+    return this.run(
+      async () =>
+        (await this.request({
+          kind: "search",
+          profile,
+          evaluator,
+          multiPv,
+          timeControl,
+        })) as SearchResponse,
     );
   }
 
   async loadOpeningBook(
     openingBook: RestorableOpeningBook,
   ): Promise<OpeningBookSummary> {
-    const transferable = openingBook.bytes.slice(0);
-    return parseOpeningBookSummary(
-      await this.request(
-        {
-          kind: "load-opening-book",
-          bytes: transferable,
-          expectedArtifactSha256: openingBook.expectedArtifactSha256,
-        },
-        [transferable],
-      ),
-    );
+    return this.run(() => this.requestOpeningBookLoad(openingBook));
   }
 
   async unloadOpeningBook(): Promise<BrowserSnapshot> {
-    return parseBrowserSnapshot(
-      await this.request({ kind: "unload-opening-book" }),
+    return this.run(
+      async () =>
+        (await this.request({
+          kind: "unload-opening-book",
+        })) as BrowserSnapshot,
     );
   }
 
@@ -143,14 +166,15 @@ export class EngineWorkerClient {
     minimumSampleCount = 2,
     maximumTeacherLossCp = 80,
   ): Promise<OpeningPolicySummary> {
-    return parseOpeningPolicySummary(
-      await this.request({
-        kind: "configure-opening",
-        profile,
-        maxPlies,
-        minimumSampleCount,
-        maximumTeacherLossCp,
-      }),
+    return this.run(
+      async () =>
+        (await this.request({
+          kind: "configure-opening",
+          profile,
+          maxPlies,
+          minimumSampleCount,
+          maximumTeacherLossCp,
+        })) as OpeningPolicySummary,
     );
   }
 
@@ -159,65 +183,83 @@ export class EngineWorkerClient {
     evaluator: EvaluatorChoice,
     request: AnalysisStart,
   ): Promise<AnalysisResponse> {
-    return parseAnalysisResponse(
-      await this.request({
-        kind: "analysis-start",
-        profile,
-        evaluator,
-        request,
-      }),
+    return this.run(
+      async () =>
+        (await this.request({
+          kind: "analysis-start",
+          profile,
+          evaluator,
+          request,
+        })) as AnalysisResponse,
     );
   }
 
   async analysisStep(request: AnalysisStep): Promise<AnalysisResponse> {
-    return parseAnalysisResponse(
-      await this.request({ kind: "analysis-step", request }),
+    return this.run(
+      async () =>
+        (await this.request({
+          kind: "analysis-step",
+          request,
+        })) as AnalysisResponse,
     );
   }
 
   async analysisStop(): Promise<AnalysisResponse> {
-    return parseAnalysisResponse(await this.request({ kind: "analysis-stop" }));
-  }
-
-  async analysisWorkerFailed(): Promise<AnalysisResponse> {
-    return parseAnalysisResponse(
-      await this.request({ kind: "analysis-worker-failed" }),
+    return this.run(
+      async () =>
+        (await this.request({ kind: "analysis-stop" })) as AnalysisResponse,
     );
   }
 
-  async analysisRestart(): Promise<AnalysisResponse> {
-    return parseAnalysisResponse(
-      await this.request({ kind: "analysis-restart" }),
-    );
-  }
-
-  async cancelAndRestore(
+  async restart(
     session: EngineSession,
-    model: RestorableModel | null,
+    model: RestorableModel | null = null,
     openingBook: RestorableOpeningBook | null = null,
   ): Promise<BrowserSnapshot> {
+    this.assertNotDisposed();
+    this.transition("initializing");
     this.terminatePending("search cancelled");
     this.worker = this.createWorker();
-    const snapshot = await this.initialize(session);
-    if (model !== null) {
-      await this.loadModel(model);
+    const generation = this.workerGeneration;
+    try {
+      const snapshot = (await this.request({
+        kind: "initialize",
+        initialSfen: session.initialSfen,
+        moves: session.moves,
+      })) as BrowserSnapshot;
+      if (model !== null) await this.requestModelLoad(model);
+      if (openingBook !== null) {
+        await this.requestOpeningBookLoad(openingBook);
+      }
+      if (this.isCurrentWorker(generation) && !this.isDisposed()) {
+        this.transition("ready");
+      }
+      return snapshot;
+    } catch (error) {
+      if (
+        this.isCurrentWorker(generation) &&
+        !this.isDisposed() &&
+        this.readyState !== "crashed"
+      ) {
+        this.transition("crashed", messageFor(error));
+      }
+      throw error;
     }
-    if (openingBook !== null) {
-      await this.loadOpeningBook(openingBook);
-    }
-    return snapshot;
   }
 
   dispose() {
     this.terminatePending("engine worker disposed");
+    this.transition("disposed");
   }
 
   private createWorker(): Worker {
+    const generation = this.workerGeneration;
     const worker = new Worker(new URL("./engine.worker.ts", import.meta.url), {
       type: "module",
       name: `open-shogi-${this.role}`,
     });
     worker.addEventListener("message", (event: MessageEvent<unknown>) => {
+      if (!this.isCurrentWorker(generation)) return;
       let response;
       try {
         response = parseWorkerResponse(event.data);
@@ -225,7 +267,7 @@ export class EngineWorkerClient {
         const message =
           error instanceof Error ? error.message : "invalid worker response";
         this.terminatePending(message);
-        this.onCrash?.(message);
+        this.transition("crashed", message);
         return;
       }
       const pending = this.pending.get(response.id);
@@ -233,7 +275,7 @@ export class EngineWorkerClient {
       if (response.kind !== pending.kind) {
         const message = `worker response kind mismatch: expected ${pending.kind}, received ${response.kind}`;
         this.terminatePending(message);
-        this.onCrash?.(message);
+        this.transition("crashed", message);
         return;
       }
       this.pending.delete(response.id);
@@ -244,14 +286,16 @@ export class EngineWorkerClient {
       }
     });
     worker.addEventListener("error", (event) => {
+      if (!this.isCurrentWorker(generation)) return;
       const message = event.message || `${this.role} engine worker crashed`;
       this.terminatePending(message);
-      this.onCrash?.(message);
+      this.transition("crashed", message);
     });
     worker.addEventListener("messageerror", () => {
+      if (!this.isCurrentWorker(generation)) return;
       const message = `${this.role} engine worker message could not be decoded`;
       this.terminatePending(message);
-      this.onCrash?.(message);
+      this.transition("crashed", message);
     });
     return worker;
   }
@@ -269,11 +313,69 @@ export class EngineWorkerClient {
     });
   }
 
+  private async requestModelLoad(
+    model: RestorableModel,
+  ): Promise<ModelSummary> {
+    const transferable = model.bytes.slice(0);
+    return (await this.request(
+      {
+        kind: "load-model",
+        bytes: transferable,
+        expectedArtifactSha256: model.expectedArtifactSha256,
+      },
+      [transferable],
+    )) as ModelSummary;
+  }
+
+  private async requestOpeningBookLoad(
+    openingBook: RestorableOpeningBook,
+  ): Promise<OpeningBookSummary> {
+    const transferable = openingBook.bytes.slice(0);
+    return (await this.request(
+      {
+        kind: "load-opening-book",
+        bytes: transferable,
+        expectedArtifactSha256: openingBook.expectedArtifactSha256,
+      },
+      [transferable],
+    )) as OpeningBookSummary;
+  }
+
   private terminatePending(message: string) {
     this.worker.terminate();
+    this.workerGeneration += 1;
     for (const pending of this.pending.values()) {
       pending.reject(new Error(message));
     }
     this.pending.clear();
   }
+
+  private async run<T>(operation: () => Promise<T>): Promise<T> {
+    this.assertNotDisposed();
+    if (this.state === "crashed") {
+      throw new Error(`${this.role} engine has crashed`);
+    }
+    return operation();
+  }
+
+  private assertNotDisposed(): void {
+    if (this.isDisposed()) throw new Error(`${this.role} engine is disposed`);
+  }
+
+  private isDisposed(): boolean {
+    return this.state === "disposed";
+  }
+
+  private isCurrentWorker(generation: number): boolean {
+    return generation === this.workerGeneration;
+  }
+
+  private transition(state: EngineReadyState, message?: string): void {
+    this.state = state;
+    this.onStateChange?.(state, message);
+  }
+}
+
+function messageFor(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

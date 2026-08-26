@@ -12,6 +12,7 @@ import {
   browserProfileNodeLimit,
   consumeMatchClock,
   DEFAULT_TIME_CONTROL,
+  elapsedTurnMs,
   flippedOrientation,
   humanControlsSide,
   initialMatchClock,
@@ -141,6 +142,9 @@ describe("play settings", () => {
   });
 
   it("maintains remaining match clocks without allocating search time", () => {
+    expect(elapsedTurnMs(1_000, 3_500)).toBe(2_500);
+    expect(elapsedTurnMs(3_500, 1_000)).toBe(0);
+    expect(elapsedTurnMs(Number.NaN, 1_000)).toBe(0);
     expect(initialMatchClock(timeSettings({ mainMinutes: 3 }))).toEqual({
       blackTimeMs: 180_000,
       whiteTimeMs: 180_000,

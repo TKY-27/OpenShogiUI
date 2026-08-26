@@ -1,6 +1,7 @@
 import type { Side, TimeControl } from "./browser-engine";
 import {
   consumeMatchClock,
+  elapsedTurnMs,
   initialMatchClock,
   serializeTimeControl,
   type MatchClock,
@@ -101,7 +102,7 @@ export function remainingAt(
   if (!Number.isFinite(turnStartedAtMs) || !Number.isFinite(nowMs)) {
     return budget;
   }
-  const spent = Math.max(0, nowMs - turnStartedAtMs);
+  const spent = elapsedTurnMs(turnStartedAtMs, nowMs);
   return Math.max(0, budget - spent);
 }
 

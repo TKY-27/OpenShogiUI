@@ -16,7 +16,9 @@ import {
   BOARD_RANK_LABELS,
   boardIndex,
   promotedKind,
+  resolveBoardClick,
   ShogiBoard,
+  toggleHandSelection,
 } from "./ShogiBoardView";
 import { getMessages } from "./localization";
 
@@ -94,6 +96,40 @@ function startPosition(): BrowserSnapshot {
 }
 
 describe("browser shogi board", () => {
+  it("shares board and hand selection decisions across both play routes", () => {
+    const position = startPosition();
+    position.legalMoves = [
+      {
+        usi: "7g7f",
+        from: { file: 7, rank: 7 },
+        to: { file: 7, rank: 6 },
+        drop: null,
+        promote: false,
+      },
+    ];
+    const origin = boardIndex(7, 7);
+    const destination = boardIndex(7, 6);
+    const selected = resolveBoardClick(position, null, origin);
+    expect(selected).toEqual({
+      kind: "selection",
+      selection: { kind: "board", index: origin },
+    });
+    expect(
+      resolveBoardClick(
+        position,
+        selected.kind === "selection" ? selected.selection : null,
+        destination,
+      ),
+    ).toMatchObject({ kind: "move", candidates: [{ usi: "7g7f" }] });
+    expect(toggleHandSelection(null, "pawn")).toEqual({
+      kind: "hand",
+      piece: "pawn",
+    });
+    expect(toggleHandSelection({ kind: "hand", piece: "pawn" }, "pawn")).toBe(
+      null,
+    );
+  });
+
   it("renders all coordinates and the canonical 40-piece start geometry", () => {
     const markup = renderToStaticMarkup(
       <ShogiBoard

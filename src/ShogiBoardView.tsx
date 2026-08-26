@@ -129,6 +129,39 @@ export function destinationIndex(movement: MoveSummary): number {
   return boardIndex(movement.to.file, movement.to.rank);
 }
 
+export type BoardClickResult =
+  | { kind: "move"; candidates: MoveSummary[] }
+  | { kind: "selection"; selection: BoardSelection };
+
+export function resolveBoardClick(
+  snapshot: BrowserSnapshot,
+  selection: BoardSelection,
+  index: number,
+): BoardClickResult {
+  const candidates = selectedMoves(snapshot, selection).filter(
+    (movement) => destinationIndex(movement) === index,
+  );
+  if (candidates.length > 0) return { kind: "move", candidates };
+  const piece = snapshot.board[index];
+  if (piece?.side !== snapshot.sideToMove) {
+    return { kind: "selection", selection: null };
+  }
+  const next = { kind: "board", index } satisfies BoardSelection;
+  return {
+    kind: "selection",
+    selection: selectedMoves(snapshot, next).length > 0 ? next : null,
+  };
+}
+
+export function toggleHandSelection(
+  current: BoardSelection,
+  piece: HandPieceKind,
+): BoardSelection {
+  return current?.kind === "hand" && current.piece === piece
+    ? null
+    : { kind: "hand", piece };
+}
+
 function squareIndex(square: { file: number; rank: number } | null): number {
   return square === null ? -1 : boardIndex(square.file, square.rank);
 }

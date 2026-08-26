@@ -7,7 +7,15 @@ import type {
   SearchProfile,
   Side,
 } from "./browser-engine";
-import { WasmEngineAdapter } from "./engine-adapter";
+import { EngineWorkerClient } from "./engine-client";
+import {
+  appendGameTimeline,
+  createGameTimeline,
+  redoGameTimeline,
+  rewindGameTimeline,
+  timelineSnapshots,
+  type GameTimeline,
+} from "./game-timeline";
 import { getMessages, type Locale } from "./localization";
 import {
   chargeTurn,
@@ -32,20 +40,13 @@ import {
 import { resolveShortcut } from "./keyboard";
 import { downloadText, kifuFileName, toKif, toUsi } from "./kifu";
 import {
-  destinationIndex,
   HandStand,
   persistedPieceSet,
-  selectedMoves,
+  resolveBoardClick,
   ShogiBoard,
   type BoardSelection,
+  toggleHandSelection,
 } from "./ShogiBoardView";
-
-/** One ply removed by a takeback, kept whole so redo can restore the record. */
-interface UndoneStep {
-  movement: string;
-  position: BrowserSnapshot;
-  timeMs: number;
-}
 
 type Phase = "setup" | "playing" | "finished";
 type Busy = "preparing" | "moving" | "engine" | null;
@@ -125,7 +126,7 @@ function MatchClockPanel({
 export function MatchPlay({ locale }: { locale: Locale }) {
   const messages = getMessages(locale);
   const match = messages.match;
-  const adapterRef = useRef<WasmEngineAdapter | null>(null);
+  const adapterRef = useRef<EngineWorkerClient | null>(null);
   const operationRef = useRef(0);
 
   const [phase, setPhase] = useState<Phase>("setup");
@@ -136,8 +137,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     useState<BoardOrientation>("sente-bottom");
   const [pieceSet] = useState(persistedPieceSet);
 
-  const [snapshot, setSnapshot] = useState<BrowserSnapshot | null>(null);
-  const [previous, setPrevious] = useState<BrowserSnapshot | null>(null);
+  const [timeline, setTimeline] = useState<GameTimeline<never> | null>(null);
   const [busy, setBusy] = useState<Busy>("preparing");
   const [selection, setSelection] = useState<BoardSelection>(null);
   const [promotionMoves, setPromotionMoves] = useState<MoveSummary[] | null>(
@@ -149,25 +149,28 @@ export function MatchPlay({ locale }: { locale: Locale }) {
   const [turnStartedAt, setTurnStartedAt] = useState(() => Date.now());
   const [outcome, setOutcome] = useState<MatchOutcome | null>(null);
   const [confirmingResign, setConfirmingResign] = useState(false);
-  const [undone, setUndone] = useState<UndoneStep[]>([]);
-  const [positions, setPositions] = useState<BrowserSnapshot[]>([]);
-  const [moveTimesMs, setMoveTimesMs] = useState<number[]>([]);
   const [matchStartedAt, setMatchStartedAt] = useState<Date | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const snapshot = timeline?.entries.at(-1)?.snapshot ?? null;
+  const previous = timeline?.entries.at(-2)?.snapshot ?? null;
+  const positions = timeline === null ? [] : timelineSnapshots(timeline);
+  const moveTimesMs =
+    timeline?.entries.slice(1).map(({ moveTimeMs }) => moveTimeMs) ?? [];
+  const undone = timeline?.undone ?? [];
   const clocked = presetIsClocked(preset);
   const sideToMove = snapshot?.sideToMove ?? "black";
   const humanToMove = phase === "playing" && sideToMove === humanSide;
 
   useEffect(() => {
-    const adapter = new WasmEngineAdapter("play");
+    const adapter = new EngineWorkerClient("play");
     adapterRef.current = adapter;
     const operation = operationRef.current + 1;
     operationRef.current = operation;
     void adapter.initialize().then(
       (initialized) => {
         if (operationRef.current !== operation) return;
-        setSnapshot(initialized);
+        setTimeline(createGameTimeline(initialized, initialClockFor("blitz3")));
         setBusy(null);
       },
       (error: unknown) => {
@@ -222,7 +225,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
   }
 
   async function runEngineTurn(
-    adapter: WasmEngineAdapter,
+    adapter: EngineWorkerClient,
     operation: number,
     position: BrowserSnapshot,
     clockAtTurn: MatchClock,
@@ -273,12 +276,18 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       });
       return;
     }
-    setPrevious(position);
     const replied = await adapter.playMove(response.bestMove);
     if (operationRef.current !== operation) return;
-    setSnapshot(replied);
-    setPositions((current) => [...current, replied]);
-    setMoveTimesMs((current) => [...current, Date.now() - startedAt]);
+    setTimeline((current) =>
+      current === null
+        ? createGameTimeline(replied, afterEngine)
+        : appendGameTimeline(current, {
+            snapshot: replied,
+            source: null,
+            clock: afterEngine,
+            moveTimeMs: Date.now() - startedAt,
+          }),
+    );
     setClock(afterEngine);
     setTurnStartedAt(Date.now());
     const ended = terminalOutcome(replied);
@@ -312,13 +321,18 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       const afterHuman = clocked
         ? chargeTurn(clock, humanSide, movedAt - turnStartedAt)
         : clock;
-      setPrevious(snapshot);
       const next = await adapter.playMove(movement);
       if (operationRef.current !== operation) return;
-      setSnapshot(next);
-      setPositions((current) => [...current, next]);
-      setMoveTimesMs((current) => [...current, movedAt - turnStartedAt]);
-      setUndone([]);
+      setTimeline((current) =>
+        current === null
+          ? createGameTimeline(next, afterHuman)
+          : appendGameTimeline(current, {
+              snapshot: next,
+              source: null,
+              clock: afterHuman,
+              moveTimeMs: movedAt - turnStartedAt,
+            }),
+      );
       setClock(afterHuman);
       setTurnStartedAt(Date.now());
       const ended = terminalOutcome(next);
@@ -345,29 +359,14 @@ export function MatchPlay({ locale }: { locale: Locale }) {
 
   function selectSquare(index: number) {
     if (!humanToMove || busy !== null || snapshot === null) return;
-    const candidates = selectedMoves(snapshot, selection).filter(
-      (movement) => destinationIndex(movement) === index,
-    );
-    if (candidates.length > 0) {
-      chooseMove(candidates);
-      return;
-    }
-    const piece = snapshot.board[index];
-    if (piece?.side === snapshot.sideToMove) {
-      const next: BoardSelection = { kind: "board", index };
-      setSelection(selectedMoves(snapshot, next).length > 0 ? next : null);
-      return;
-    }
-    setSelection(null);
+    const result = resolveBoardClick(snapshot, selection, index);
+    if (result.kind === "move") chooseMove(result.candidates);
+    else setSelection(result.selection);
   }
 
   function selectHand(piece: HandPieceKind) {
     if (!humanToMove || busy !== null) return;
-    setSelection((current) =>
-      current?.kind === "hand" && current.piece === piece
-        ? null
-        : { kind: "hand", piece },
-    );
+    setSelection((current) => toggleHandSelection(current, piece));
   }
 
   async function startMatch() {
@@ -378,17 +377,13 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     setBusy("moving");
     setNotice(null);
     setOutcome(null);
-    setPrevious(null);
     setSelection(null);
     try {
       const fresh = await adapter.reset();
       if (operationRef.current !== operation) return;
       const startingClock = initialClockFor(preset);
-      setSnapshot(fresh);
-      setPositions([fresh]);
-      setMoveTimesMs([]);
+      setTimeline(createGameTimeline(fresh, startingClock));
       setMatchStartedAt(new Date());
-      setUndone([]);
       setClock(startingClock);
       setOrientation(humanSide === "black" ? "sente-bottom" : "gote-bottom");
       setPhase("playing");
@@ -432,18 +427,11 @@ export function MatchPlay({ locale }: { locale: Locale }) {
         null,
       );
       if (operationRef.current !== operation) return;
-      const removed: UndoneStep[] = snapshot.moves
-        .slice(-count)
-        .map((movement, offset) => ({
-          movement,
-          position: positions[positions.length - count + offset],
-          timeMs: moveTimesMs[moveTimesMs.length - count + offset] ?? 0,
-        }));
-      setSnapshot(restored);
-      setPrevious(null);
-      setPositions((current) => current.slice(0, current.length - count));
-      setMoveTimesMs((current) => current.slice(0, current.length - count));
-      setUndone((current) => [...current, ...removed]);
+      setTimeline((current) =>
+        current === null
+          ? createGameTimeline(restored, clock)
+          : rewindGameTimeline(current, count, restored),
+      );
       setOutcome(null);
       setPhase("playing");
       setTurnStartedAt(Date.now());
@@ -469,22 +457,27 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     setNotice(null);
     try {
       const replay = undone.slice(-2);
+      const replayMoves = replay.map(({ snapshot: position }) => {
+        const movement = position.moves.at(-1);
+        if (movement === undefined) throw new Error("redo move is missing");
+        return movement;
+      });
       const restored = await adapter.restart(
         {
           initialSfen: snapshot.initialSfen,
-          moves: [...snapshot.moves, ...replay.map((step) => step.movement)],
+          moves: [...snapshot.moves, ...replayMoves],
         },
         null,
         null,
       );
       if (operationRef.current !== operation) return;
-      setSnapshot(restored);
-      setPrevious(null);
-      // Restore the exact positions and times the takeback removed, so the
-      // exported record stays byte-identical to the game as it was played.
-      setPositions((current) => [...current, ...replay.map((s) => s.position)]);
-      setMoveTimesMs((current) => [...current, ...replay.map((s) => s.timeMs)]);
-      setUndone(undone.slice(0, -2));
+      // Restore complete timeline entries so clocks and exported move times
+      // remain byte-identical to the game as it was played.
+      setTimeline((current) =>
+        current === null
+          ? createGameTimeline(restored, clock)
+          : redoGameTimeline(current, 2, restored),
+      );
       setTurnStartedAt(Date.now());
       setBusy(null);
     } catch (error) {

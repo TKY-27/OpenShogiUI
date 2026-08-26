@@ -125,14 +125,6 @@ async function execute(request: WorkerRequest): Promise<unknown> {
       const raw = requireEngine().analysisStop();
       return parseAnalysisResponse(parseJson(raw, 64 * 1024, "analysis"));
     }
-    case "analysis-worker-failed": {
-      const raw = requireEngine().analysisWorkerFailed();
-      return parseAnalysisResponse(parseJson(raw, 256 * 1024, "analysis"));
-    }
-    case "analysis-restart": {
-      const raw = requireEngine().analysisRestart();
-      return parseAnalysisResponse(parseJson(raw, 256 * 1024, "analysis"));
-    }
   }
 }
 
