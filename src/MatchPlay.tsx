@@ -63,7 +63,7 @@ const CLOCK_TICK_MS = 100;
  * re-render landing between mousedown and mouseup drops the click, which is
  * what made pieces intermittently refuse to move. Only this panel repaints now.
  */
-function MatchClockPanel({
+export function MatchClockPanel({
   label,
   name,
   baseMs,

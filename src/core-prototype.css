@@ -1,0 +1,53 @@
+.prototype-heading {
+  width: min(100%, var(--board-max));
+  flex: 0 0 auto;
+  margin-bottom: var(--space-2);
+}
+.prototype-heading h1 {
+  font-size: 1rem;
+}
+.prototype-heading p {
+  margin: var(--space-1) 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.prototype-artifacts {
+  width: min(100%, var(--board-max));
+  flex: 0 0 auto;
+  font-size: 0.6875rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.core-prototype > .match-controls {
+  margin-top: var(--space-2);
+}
+.core-prototype > .match-setup {
+  margin-bottom: var(--space-3);
+}
+
+/* Keep the whole timed game visible on laptop-height windows. Mobile retains
+   the existing flowing board and hand layout. */
+@media (min-width: 48rem) {
+  .core-prototype .board-stage {
+    --board-size: min(
+      calc(100cqw - 2 * var(--hand-width) - 2 * var(--space-2)),
+      max(16rem, calc(100dvh - 19rem)),
+      32rem
+    );
+  }
+
+  .core-prototype.match-page--playing {
+    overflow-y: auto;
+  }
+}
+
+@media (min-width: 80rem) {
+  .core-prototype .board-stage {
+    --board-size: min(
+      calc(100cqw - 2 * var(--hand-width) - 2 * var(--space-2)),
+      100cqh,
+      max(16rem, calc(100dvh - 19rem)),
+      32rem
+    );
+  }
+}

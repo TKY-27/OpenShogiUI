@@ -16,9 +16,14 @@ export type WorkspaceRoute =
   | "workspace"
   | "match"
   | "browser-play"
+  | "core-prototype"
   | "evaluation-lab";
 
-export function routeForHash(hash: string): WorkspaceRoute {
+export function routeForHash(
+  hash: string,
+  development = false,
+): WorkspaceRoute {
+  if (development && hash === "#/core-prototype") return "core-prototype";
   if (hash === "#/match") return "match";
   if (hash === "#/browser-play") return "browser-play";
   if (hash === "#/evaluation-lab") return "evaluation-lab";

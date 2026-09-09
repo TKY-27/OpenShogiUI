@@ -1,0 +1,435 @@
+import {
+  parseBoardPosition,
+  SNAPSHOT_SCHEMA,
+  type BoardPosition,
+  type Side,
+  type TimeControl,
+} from "./browser-engine";
+
+export const LEAF_SHA256 =
+  "859e922b3f503ddeecf0afeb9a05fccac080a9faca3b19fce9d8253c9039c480";
+export const ASSET_PREFIX = "/__core-prototype/";
+export const ASSET_NAMES = [
+  "engine.js",
+  "engine.wasm",
+  "leaf.osaval03",
+  "controller.json",
+] as const;
+type AssetName = (typeof ASSET_NAMES)[number];
+export interface PrototypeAsset {
+  url: string;
+  sha256: string;
+  size: number;
+}
+export interface PrototypeManifest {
+  schema: "open_shogi_core_prototype_assets/v1";
+  artifacts: Record<AssetName, PrototypeAsset>;
+}
+export interface ComputeTelemetry {
+  modelSha256: string;
+  enabled: boolean;
+  decisions: number;
+  predictedRisk: number;
+  targetMs: number;
+  reorderedMoves: number;
+}
+export interface PrototypeSnapshot extends BoardPosition {
+  leafSha256: string;
+}
+export interface PrototypeSearch {
+  bestMove: string | null;
+  perspective: Side;
+  computeControl: ComputeTelemetry;
+  nodes: number;
+  depth: number;
+}
+export type PrototypeRequest =
+  | {
+      id: number;
+      kind: "initialize";
+      manifest: PrototypeManifest;
+      enabled: boolean;
+      initialSfen: string | null;
+      moves: string[];
+    }
+  | { id: number; kind: "move"; movement: string }
+  | { id: number; kind: "search"; timeControl: TimeControl };
+
+export function object(
+  value: unknown,
+  keys: readonly string[],
+): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    throw new Error("Invalid prototype object");
+  const result = value as Record<string, unknown>;
+  if (
+    Object.keys(result).length !== keys.length ||
+    keys.some((key) => !Object.hasOwn(result, key))
+  )
+    throw new Error("Unsupported prototype fields");
+  return result;
+}
+export function numeric(
+  value: unknown,
+  maximum = Number.MAX_SAFE_INTEGER,
+  integer = true,
+): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    value > maximum ||
+    (integer && !Number.isSafeInteger(value))
+  )
+    throw new Error("Invalid prototype number");
+  return value;
+}
+export function hash(value: unknown): string {
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value))
+    throw new Error("Invalid artifact SHA-256");
+  return value;
+}
+export function movement(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    !/^(?:[1-9][a-i][1-9][a-i]\+?|[PLNSGBR]\*[1-9][a-i])$/.test(value)
+  )
+    throw new Error("Invalid USI move");
+  return value;
+}
+function expect(value: unknown, expected: unknown): void {
+  if (value !== expected) throw new Error("Prototype identity mismatch");
+}
+
+export function parsePrototypeManifest(value: unknown): PrototypeManifest {
+  const record = object(value, ["schema", "artifacts"]);
+  expect(record.schema, "open_shogi_core_prototype_assets/v1");
+  const entries = object(record.artifacts, ASSET_NAMES);
+  const maximums = [
+    2 * 1024 * 1024,
+    32 * 1024 * 1024,
+    64 * 1024 * 1024,
+    16_384,
+  ];
+  const artifacts = Object.fromEntries(
+    ASSET_NAMES.map((name, index) => {
+      const artifact = object(entries[name], ["url", "sha256", "size"]);
+      const sha256 = hash(artifact.sha256);
+      const size = numeric(artifact.size, maximums[index]);
+      if (size === 0) throw new Error("Empty prototype artifact");
+      expect(artifact.url, `${ASSET_PREFIX}${name}?sha256=${sha256}`);
+      if (name === "leaf.osaval03") expect(sha256, LEAF_SHA256);
+      return [name, { url: artifact.url as string, sha256, size }];
+    }),
+  ) as Record<AssetName, PrototypeAsset>;
+  return { schema: "open_shogi_core_prototype_assets/v1", artifacts };
+}
+
+export function parseLeafIdentity(value: unknown): void {
+  const identity = object(value, [
+    "schema",
+    "modelFormat",
+    "artifactSha256",
+    "expectedHashVerified",
+    "buildClass",
+    "evaluationMode",
+  ]);
+  expect(identity.schema, "open_shogi_browser_model/v1");
+  expect(identity.modelFormat, "OSAVAL03");
+  expect(identity.artifactSha256, LEAF_SHA256);
+  expect(identity.expectedHashVerified, true);
+  expect(identity.buildClass, "pure-only");
+  expect(identity.evaluationMode, "pure-value");
+}
+
+export function parseComputeIdentity(
+  value: unknown,
+  controllerSha256: string,
+): void {
+  const identity = object(value, [
+    "schema",
+    "artifactSha256",
+    "leafModelSha256",
+    "expectedHashVerified",
+  ]);
+  expect(identity.schema, "open_shogiai_computation_identity/v1");
+  expect(identity.artifactSha256, controllerSha256);
+  expect(identity.leafModelSha256, LEAF_SHA256);
+  expect(identity.expectedHashVerified, true);
+}
+
+export function parsePureSnapshot(value: unknown): PrototypeSnapshot {
+  const snapshot = object(value, [
+    "schema",
+    "engine",
+    "initialSfen",
+    "sfen",
+    "sideToMove",
+    "moveNumber",
+    "board",
+    "hands",
+    "legalMoves",
+    "moves",
+    "terminal",
+    "evaluator",
+    "openingBook",
+    "openingPolicy",
+    "buildClass",
+    "compiledEvaluators",
+  ]);
+  expect(snapshot.schema, SNAPSHOT_SCHEMA);
+  expect(snapshot.buildClass, "pure-only");
+  expect(
+    JSON.stringify(snapshot.compiledEvaluators),
+    JSON.stringify(["osaval02", "phase10t-a1", "phase10v"]),
+  );
+  const engine = object(snapshot.engine, ["name", "version"]);
+  expect(engine.name, "OpenShogiAI");
+  if (typeof engine.version !== "string" || engine.version.length > 64)
+    throw new Error("Invalid engine version");
+  const evaluator = object(snapshot.evaluator, ["kind", "model"]);
+  expect(evaluator.kind, "model-available");
+  parseLeafIdentity(evaluator.model);
+  expect(snapshot.openingBook, null);
+  const opening = object(snapshot.openingPolicy, [
+    "profile",
+    "maxPlies",
+    "minimumSampleCount",
+    "maximumTeacherLossCp",
+  ]);
+  expect(opening.profile, "disabled");
+  for (const key of ["maxPlies", "minimumSampleCount", "maximumTeacherLossCp"])
+    expect(opening[key], 0);
+  const position = parseBoardPosition(snapshot);
+  if (
+    position.moves.length + 1 !== position.moveNumber ||
+    (position.terminal !== null && position.legalMoves.length !== 0)
+  )
+    throw new Error("Inconsistent prototype position");
+  return { ...position, leafSha256: LEAF_SHA256 };
+}
+
+export function parsePureSearch(
+  value: unknown,
+  controllerSha256: string,
+  enabled: boolean,
+): PrototypeSearch {
+  const search = object(value, [
+    "schema",
+    "timeControlSchema",
+    "timeControlMode",
+    "profile",
+    "evaluator",
+    "perspective",
+    "source",
+    "bestMove",
+    "scoreCp",
+    "outcome",
+    "depth",
+    "seldepth",
+    "nodes",
+    "elapsedNs",
+    "nps",
+    "pv",
+    "termination",
+    "lines",
+    "stats",
+    "runtimeProof",
+    "computeControl",
+  ]);
+  expect(search.schema, "open_shogi_browser_search/v1");
+  expect(search.timeControlSchema, "open_shogi_time_control/v1");
+  expect(search.timeControlMode, "clock");
+  expect(search.profile, "eco");
+  expect(search.evaluator, "pure_learned");
+  expect(search.source, "search");
+  if (search.perspective !== "black" && search.perspective !== "white")
+    throw new Error("Invalid search perspective");
+  const interrupted = [
+    "cancelled_before_evaluation",
+    "node_limit_before_evaluation",
+    "time_limit_before_evaluation",
+  ].includes(String(search.outcome));
+  const terminal = [
+    "checkmate",
+    "no_legal_moves",
+    "repetition",
+    "perpetual_check",
+  ].includes(String(search.outcome));
+  if (search.outcome !== "evaluated" && !interrupted && !terminal)
+    throw new Error("Invalid or failed search outcome");
+  if (interrupted) expect(search.scoreCp, null);
+  else if (
+    typeof search.scoreCp !== "number" ||
+    !Number.isSafeInteger(search.scoreCp) ||
+    Math.abs(search.scoreCp) > 32_000
+  )
+    throw new Error("Invalid search score");
+  const depth = numeric(search.depth, 5);
+  const nodes = numeric(search.nodes, 1_000_000_000);
+  for (const key of ["seldepth", "elapsedNs", "nps"]) numeric(search[key]);
+  if (
+    !["completed", "stable", "node-limit", "time-limit", "cancelled"].includes(
+      String(search.termination),
+    )
+  )
+    throw new Error("Invalid search termination");
+  const bestMove = search.bestMove === null ? null : movement(search.bestMove);
+  const pv = moveList(search.pv, 256);
+  if (bestMove !== null && pv[0] !== bestMove)
+    throw new Error("Search PV mismatch");
+  if (!Array.isArray(search.lines) || search.lines.length > 1)
+    throw new Error("Invalid search lines");
+  for (const value of search.lines) {
+    const line = object(value, [
+      "rank",
+      "bestMove",
+      "scoreCp",
+      "depth",
+      "seldepth",
+      "nodes",
+      "pv",
+    ]);
+    expect(line.rank, 1);
+    movement(line.bestMove);
+    if (
+      typeof line.scoreCp !== "number" ||
+      !Number.isSafeInteger(line.scoreCp) ||
+      Math.abs(line.scoreCp) > 32_000
+    )
+      throw new Error("Invalid line score");
+    for (const key of ["depth", "seldepth", "nodes"]) numeric(line[key]);
+    const linePv = moveList(line.pv, 256);
+    expect(linePv[0], line.bestMove);
+  }
+  const stats = object(search.stats, [
+    "ttProbes",
+    "ttHits",
+    "ttCollisions",
+    "betaCutoffs",
+    "candidateMoves",
+    "prunedMoves",
+    "qnodes",
+    "neuralInferenceCalls",
+    "neuralInferenceTimeNs",
+    "osaval02InferenceErrors",
+    "learnedEvalCalls",
+    "handcraftedEvalCalls",
+    "residualEvalCalls",
+    "compositeEvalCalls",
+    "fallbackCount",
+  ]);
+  for (const value of Object.values(stats)) numeric(value);
+  for (const key of [
+    "osaval02InferenceErrors",
+    "handcraftedEvalCalls",
+    "residualEvalCalls",
+    "compositeEvalCalls",
+    "fallbackCount",
+  ])
+    expect(stats[key], 0);
+  const proof = object(search.runtimeProof, [
+    "profile",
+    "profile_schema",
+    "learned_eval_calls",
+    "accumulator_updates",
+    "accumulator_refreshes",
+    "handcrafted_eval_calls",
+    "residual_eval_calls",
+    "composite_eval_calls",
+    "book_hits",
+    "teacher_calls",
+    "fallback_count",
+    "model_sha256",
+    "evaluator_profile_schema_hash",
+  ]);
+  expect(proof.profile, "pure_learned");
+  expect(proof.model_sha256, LEAF_SHA256);
+  expect(proof.profile_schema, "open_shogiai_pure_learned_v3_profile/v1");
+  expect(
+    proof.evaluator_profile_schema_hash,
+    "d2eec27887926ccc8a076552815cd54e34b85d6d23e65732ddba4989bf59c1e7",
+  );
+  for (const key of [
+    "learned_eval_calls",
+    "accumulator_updates",
+    "accumulator_refreshes",
+  ])
+    numeric(proof[key]);
+  expect(proof.learned_eval_calls, stats.learnedEvalCalls);
+  for (const key of [
+    "handcrafted_eval_calls",
+    "residual_eval_calls",
+    "composite_eval_calls",
+    "book_hits",
+    "teacher_calls",
+    "fallback_count",
+  ])
+    expect(proof[key], 0);
+  if (search.outcome === "evaluated") {
+    if (numeric(proof.learned_eval_calls) === 0 || bestMove === null)
+      throw new Error("Evaluated search lacks learned inference");
+  } else {
+    for (const key of [
+      "learned_eval_calls",
+      "accumulator_updates",
+      "accumulator_refreshes",
+    ])
+      expect(proof[key], 0);
+    expect(stats.neuralInferenceCalls, 0);
+    for (const key of ["depth", "seldepth", "nodes"]) expect(search[key], 0);
+    expect(search.lines.length, 0);
+    if (terminal) {
+      expect(bestMove, null);
+      expect(pv.length, 0);
+      expect(search.termination, "completed");
+    } else {
+      if (bestMove === null || pv.length !== 1)
+        throw new Error("Invalid interrupted search move");
+      const termination =
+        search.outcome === "cancelled_before_evaluation"
+          ? "cancelled"
+          : search.outcome === "node_limit_before_evaluation"
+            ? "node-limit"
+            : "time-limit";
+      expect(search.termination, termination);
+    }
+  }
+  const compute = object(search.computeControl, [
+    "modelSha256",
+    "enabled",
+    "decisions",
+    "predictedRisk",
+    "targetMs",
+    "reorderedMoves",
+  ]);
+  expect(compute.modelSha256, controllerSha256);
+  expect(compute.enabled, enabled);
+  const computeControl: ComputeTelemetry = {
+    modelSha256: controllerSha256,
+    enabled,
+    decisions: numeric(compute.decisions),
+    predictedRisk: numeric(compute.predictedRisk, 1, false),
+    targetMs: numeric(compute.targetMs, Number.MAX_SAFE_INTEGER, false),
+    reorderedMoves: numeric(compute.reorderedMoves),
+  };
+  return {
+    bestMove,
+    perspective: search.perspective,
+    computeControl,
+    depth,
+    nodes,
+  };
+}
+
+export function moveList(value: unknown, maximum = 512): string[] {
+  if (!Array.isArray(value) || value.length > maximum)
+    throw new Error("Invalid move history");
+  return value.map(movement);
+}
+
+export function boundedJson(raw: string, maximum = 256 * 1024): unknown {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > maximum)
+    throw new Error("Prototype response exceeds bound");
+  return JSON.parse(raw) as unknown;
+}

@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useReducer, useRef, useState } from "react";
 
 import licenseText from "../LICENSE?raw";
 import thirdPartyNotices from "../THIRD_PARTY.md?raw";
@@ -22,6 +22,9 @@ import {
 } from "./project";
 
 type NoticeView = "license" | "third-party" | "piece-credits" | "model-license";
+const CorePrototype = import.meta.env.DEV
+  ? lazy(() => import("./CorePrototype"))
+  : null;
 
 const markedBoardCells = new Map([
   [12, "accent-outline"],
@@ -83,6 +86,13 @@ function WorkspaceHome({ locale }: { locale: Locale }) {
       </section>
 
       <section className="workspace" aria-labelledby="workspace-title">
+        {import.meta.env.DEV ? (
+          <a href="#/core-prototype">
+            {locale === "ja"
+              ? "ローカル試作と対局する"
+              : "Play the local prototype"}
+          </a>
+        ) : null}
         <h2 id="workspace-title">{workspace.title}</h2>
         <ul>
           {workspaceStatuses.map(({ workspace: workspaceKey, status }) => (
@@ -197,20 +207,23 @@ export function LanguageSwitcher({
 }
 
 function App() {
-  const [route, setRoute] = useState(() => routeForHash(window.location.hash));
+  const [route, setRoute] = useState(() =>
+    routeForHash(window.location.hash, import.meta.env.DEV),
+  );
   const [locale, dispatchLocale] = useReducer(localeReducer, DEFAULT_LOCALE);
   const [noticeView, setNoticeView] = useState<NoticeView | null>(null);
   const isEvaluationLab = route === "evaluation-lab";
   const isBrowserPlay = route === "browser-play";
   const isMatch = route === "match";
+  const isPrototype = route === "core-prototype";
   // App routes own a fixed-height shell whose panes scroll; document routes
   // keep normal page flow because their content is genuinely long.
-  const isAppRoute = isBrowserPlay || isMatch;
+  const isAppRoute = isBrowserPlay || isMatch || isPrototype;
   const selectedMessages = getMessages(locale);
 
   useEffect(() => {
     function updateRoute() {
-      setRoute(routeForHash(window.location.hash));
+      setRoute(routeForHash(window.location.hash, import.meta.env.DEV));
     }
 
     window.addEventListener("hashchange", updateRoute);
@@ -235,7 +248,7 @@ function App() {
         >
           <a
             aria-current={
-              !isEvaluationLab && !isBrowserPlay && !isMatch
+              !isEvaluationLab && !isBrowserPlay && !isMatch && !isPrototype
                 ? "page"
                 : undefined
             }
@@ -268,7 +281,17 @@ function App() {
       </header>
 
       <div className="app-main">
-        {isMatch ? (
+        {isPrototype && CorePrototype !== null ? (
+          <Suspense
+            fallback={
+              <p role="status">
+                {locale === "ja" ? "準備しています…" : "Loading…"}
+              </p>
+            }
+          >
+            <CorePrototype locale={locale} />
+          </Suspense>
+        ) : isMatch ? (
           <MatchPlay locale={locale} />
         ) : isBrowserPlay ? (
           <BrowserPlay locale={locale} />

@@ -133,6 +133,20 @@ export interface BrowserSnapshot {
   openingPolicy: OpeningPolicySummary;
 }
 
+/** Rules-only position shared by board renderers and isolated engine adapters. */
+export type BoardPosition = Pick<
+  BrowserSnapshot,
+  | "initialSfen"
+  | "sfen"
+  | "sideToMove"
+  | "moveNumber"
+  | "board"
+  | "hands"
+  | "legalMoves"
+  | "moves"
+  | "terminal"
+>;
+
 export interface TimeControl {
   schema: typeof TIME_CONTROL_SCHEMA;
   blackTimeMs?: number;
@@ -698,33 +712,9 @@ function handEntries(value: unknown, path: string): HandEntry[] {
   return entries;
 }
 
-export function parseBrowserSnapshot(value: unknown): BrowserSnapshot {
+/** Validate the common position fields; each adapter validates its own envelope. */
+export function parseBoardPosition(value: unknown): BoardPosition {
   const parsed = record(value, "snapshot");
-  exactKeys(
-    parsed,
-    [
-      "schema",
-      "engine",
-      "initialSfen",
-      "sfen",
-      "sideToMove",
-      "moveNumber",
-      "board",
-      "hands",
-      "legalMoves",
-      "moves",
-      "terminal",
-      "evaluator",
-      "openingBook",
-      "openingPolicy",
-    ],
-    "snapshot",
-  );
-  if (parsed.schema !== SNAPSHOT_SCHEMA) {
-    throw new Error("snapshot.schema is unsupported");
-  }
-  const engine = record(parsed.engine, "snapshot.engine");
-  exactKeys(engine, ["name", "version"], "snapshot.engine");
   if (!Array.isArray(parsed.board) || parsed.board.length !== 81) {
     throw new Error("snapshot.board must have 81 squares");
   }
@@ -784,6 +774,54 @@ export function parseBrowserSnapshot(value: unknown): BrowserSnapshot {
                 : side(terminalRecord.loser, "snapshot.terminal.loser"),
           };
         })();
+  return {
+    initialSfen: stringValue(parsed.initialSfen, "snapshot.initialSfen", 512),
+    sfen: stringValue(parsed.sfen, "snapshot.sfen", 512),
+    sideToMove: side(parsed.sideToMove, "snapshot.sideToMove"),
+    moveNumber: integer(parsed.moveNumber, "snapshot.moveNumber", 1, 513),
+    board,
+    hands: {
+      black: handEntries(hands.black, "snapshot.hands.black"),
+      white: handEntries(hands.white, "snapshot.hands.white"),
+    },
+    legalMoves: parsed.legalMoves.map((move, index) =>
+      moveSummary(move, `snapshot.legalMoves[${index}]`),
+    ),
+    moves: parsed.moves.map((move, index) =>
+      usiMove(move, `snapshot.moves[${index}]`),
+    ),
+    terminal,
+  };
+}
+
+export function parseBrowserSnapshot(value: unknown): BrowserSnapshot {
+  const parsed = record(value, "snapshot");
+  exactKeys(
+    parsed,
+    [
+      "schema",
+      "engine",
+      "initialSfen",
+      "sfen",
+      "sideToMove",
+      "moveNumber",
+      "board",
+      "hands",
+      "legalMoves",
+      "moves",
+      "terminal",
+      "evaluator",
+      "openingBook",
+      "openingPolicy",
+    ],
+    "snapshot",
+  );
+  if (parsed.schema !== SNAPSHOT_SCHEMA) {
+    throw new Error("snapshot.schema is unsupported");
+  }
+  const engine = record(parsed.engine, "snapshot.engine");
+  exactKeys(engine, ["name", "version"], "snapshot.engine");
+  const position = parseBoardPosition(parsed);
   const evaluator = record(parsed.evaluator, "snapshot.evaluator");
   exactKeys(evaluator, ["kind", "model"], "snapshot.evaluator");
   if (
@@ -805,22 +843,7 @@ export function parseBrowserSnapshot(value: unknown): BrowserSnapshot {
       name: stringValue(engine.name, "snapshot.engine.name", 64),
       version: stringValue(engine.version, "snapshot.engine.version", 64),
     },
-    initialSfen: stringValue(parsed.initialSfen, "snapshot.initialSfen", 512),
-    sfen: stringValue(parsed.sfen, "snapshot.sfen", 512),
-    sideToMove: side(parsed.sideToMove, "snapshot.sideToMove"),
-    moveNumber: integer(parsed.moveNumber, "snapshot.moveNumber", 1, 513),
-    board,
-    hands: {
-      black: handEntries(hands.black, "snapshot.hands.black"),
-      white: handEntries(hands.white, "snapshot.hands.white"),
-    },
-    legalMoves: parsed.legalMoves.map((move, index) =>
-      moveSummary(move, `snapshot.legalMoves[${index}]`),
-    ),
-    moves: parsed.moves.map((move, index) =>
-      usiMove(move, `snapshot.moves[${index}]`),
-    ),
-    terminal,
+    ...position,
     evaluator: { kind: evaluator.kind, model },
     openingBook:
       parsed.openingBook === null

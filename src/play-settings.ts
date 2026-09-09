@@ -1,7 +1,7 @@
 import {
   RESOURCE_BUDGET_SCHEMA,
   TIME_CONTROL_SCHEMA,
-  type BrowserSnapshot,
+  type BoardPosition,
   type ResourceBudget,
   type SearchProfile,
   type Side,
@@ -173,7 +173,7 @@ export interface MoveHighlight {
 }
 
 export function lastMoveHighlight(
-  history: BrowserSnapshot[],
+  history: BoardPosition[],
   displayedIndex: number,
 ): MoveHighlight | null {
   if (displayedIndex <= 0 || displayedIndex >= history.length) return null;

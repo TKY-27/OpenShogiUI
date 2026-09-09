@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type {
-  BrowserSnapshot,
+  BoardPosition,
   HandEntry,
   HandPieceKind,
   MoveSummary,
@@ -107,7 +107,7 @@ export function persistedPieceSet(): PieceSetId {
 }
 
 export function selectedMoves(
-  snapshot: BrowserSnapshot,
+  snapshot: BoardPosition,
   selection: BoardSelection,
 ): MoveSummary[] {
   if (selection === null) return [];
@@ -134,7 +134,7 @@ export type BoardClickResult =
   | { kind: "selection"; selection: BoardSelection };
 
 export function resolveBoardClick(
-  snapshot: BrowserSnapshot,
+  snapshot: BoardPosition,
   selection: BoardSelection,
   index: number,
 ): BoardClickResult {
@@ -271,7 +271,7 @@ export function ShogiBoard({
   arrows = [],
   onSquare,
 }: {
-  snapshot: BrowserSnapshot;
+  snapshot: BoardPosition;
   selection: BoardSelection;
   disabled: boolean;
   messages: Messages;
@@ -572,7 +572,7 @@ function PromotionPicker({
   messages,
 }: {
   prompt: PromotionPrompt;
-  snapshot: BrowserSnapshot;
+  snapshot: BoardPosition;
   orientation: BoardOrientation;
   pieceSet: PieceSetId;
   messages: Messages;

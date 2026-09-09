@@ -51,6 +51,28 @@ forwards `casual: true`. The UI never emits `movetimeMs`, `nodes`, or `depth`, s
 budget is decided entirely by the engine. Clock arithmetic uses wall-clock readings rather than an
 accumulated tick count, so a throttled background tab cannot gain time.
 
+## Development-only core prototype
+
+`#/core-prototype` is recognized only in development and loads a separate Worker lazily.
+`core-prototype-dev.ts` exposes a loopback-only, same-origin allowlist under
+`/__core-prototype/`; no source or artifact from the AI checkout is a production import.
+Its `open_shogi_core_prototype_assets/v1` manifest binds each artifact URL, SHA-256 and size.
+The server resolves symlinks inside the AI checkout and rehashes every artifact response.
+
+`core-prototype-protocol.ts` validates the actual pure-only OSAVAL03 identity, disabled opening
+policy, runtime proof and `computeControl` telemetry separately from the legacy MLP contract.
+Rules-only board fields share the existing position validator. An evaluated search requires
+positive learned calls and zero prohibited counters. Explicit pre-evaluation interruptions
+carry a null score and validated zero-work evidence; failures never substitute a legacy engine.
+
+`PrototypeMatchSession` owns confirmed positions, per-side remaining milliseconds and operation
+generations. Both sides start with 180000 ms and zero increment/byoyomi. The engine receives both
+remaining clocks with `eco`, `pure_learned`, and MultiPV 1. User stop and every end condition
+physically terminate the Worker. Resume reconstructs the confirmed position and selected
+artifacts; stale results cannot change a newer match. AI flag fall is checked during search,
+before move application and before committing its response. The production build includes an
+automated check that no prototype Worker, artifact URL or loading code was emitted.
+
 ## Record export
 
 `src/kifu.ts` renders KIF and USI from snapshots the engine already produced. It re-derives no

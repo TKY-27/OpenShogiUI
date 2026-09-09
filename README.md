@@ -53,6 +53,28 @@ Only `src/engine.worker.ts` imports the generated JavaScript/Wasm interface. The
 commit and all four generated hashes are recorded in `PROVENANCE.md`. See `ARCHITECTURE.md` and
 `docs/interfaces.md` for the closed message, cache-identity, and artifact boundaries.
 
+## Local core prototype
+
+Development mode adds an explicit Workspace link to `#/core-prototype`. Start with
+`npm run dev -- --host 127.0.0.1 --strictPort`, select Sente/Gote and learned computation
+control on/off, then start a three-minute sudden-death game. Stop terminates the search Worker;
+Resume restores the last confirmed position with the same artifacts and remaining clocks.
+Resignation, flag fall, and terminal positions prevent subsequent moves. Rematch returns to
+the side/control choices. This local prototype makes no playing-strength claim.
+
+The adjacent OpenShogiAI checkout must contain `target/pure/bindings/open_shogi_wasm.js`,
+`target/pure/bindings/open_shogi_wasm_bg.wasm`, `local/frozen/baseline/model.osaval03`, and
+`local/core-prototype/controller.json`. The dev middleware serves only these four allowlisted
+files to loopback, same-origin requests. Its manifest binds their sizes and SHA-256 hashes;
+the leaf must match the frozen W256 baseline. Missing, changed, oversized or incompatible
+artifacts fail closed. Controller links must remain within that AI checkout.
+
+Play uses the pure evaluator with no opening book and the `eco` profile, leaving time allocation
+to the engine. The learned controller changes computation only; on/off uses the same leaf and
+controller identities. Neither weights nor pure bindings are copied into this repository.
+Production builds exclude the prototype module and artifact endpoint, checked by the build
+command. The existing committed Wasm snapshot and default play evaluator remain unchanged.
+
 ## Static hosting preparation
 
 For a future Cloudflare Pages project, use the repository root, build command
