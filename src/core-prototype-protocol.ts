@@ -4,6 +4,7 @@ import {
   type BoardPosition,
   type Side,
   type TimeControl,
+  type SearchProfile,
 } from "./browser-engine";
 
 export const LEAF_SHA256 =
@@ -22,11 +23,15 @@ export interface PrototypeAsset {
   size: number;
 }
 export interface PrototypeManifest {
-  schema: "open_shogi_core_prototype_assets/v1";
-  artifacts: Record<AssetName, PrototypeAsset>;
+  schema: "open_shogi_core_prototype_assets/v2";
+  selection: "baseline" | "candidate";
+  runId: string;
+  artifacts: Record<Exclude<AssetName, "controller.json">, PrototypeAsset> & {
+    "controller.json": PrototypeAsset | null;
+  };
 }
 export interface ComputeTelemetry {
-  modelSha256: string;
+  modelSha256: string | null;
   enabled: boolean;
   decisions: number;
   predictedRisk: number;
@@ -42,6 +47,35 @@ export interface PrototypeSearch {
   computeControl: ComputeTelemetry;
   nodes: number;
   depth: number;
+  scoreCp: number | null;
+  elapsedMs: number;
+  termination: string;
+  timing: PlayTiming;
+  workerRestartRequired?: boolean;
+}
+export interface PlayTiming {
+  targetMs: number;
+  hardLimitMs: number;
+  elapsedMs: number;
+  searchMs: number;
+  updates: number;
+  interruption: "shared-atomic-per-node";
+}
+export interface PlayProgress {
+  done: boolean;
+  result: PrototypeSearch;
+  timing: PlayTiming;
+}
+export interface PreparationTelemetry {
+  fetchMs: number;
+  moduleMs: number;
+  compileMs: number;
+  modelMs: number;
+  totalMs: number;
+}
+export interface PrototypeReady {
+  snapshot: PrototypeSnapshot;
+  preparation: PreparationTelemetry;
 }
 export type PrototypeRequest =
   | {
@@ -53,7 +87,15 @@ export type PrototypeRequest =
       moves: string[];
     }
   | { id: number; kind: "move"; movement: string }
-  | { id: number; kind: "search"; timeControl: TimeControl };
+  | { id: number; kind: "configure"; enabled: boolean }
+  | {
+      id: number;
+      kind: "search";
+      timeControl: TimeControl;
+      profile: SearchProfile;
+      cancelBuffer: SharedArrayBuffer;
+    }
+  | { id: number; kind: "stop"; searchId: number };
 
 export function object(
   value: unknown,
@@ -102,8 +144,15 @@ function expect(value: unknown, expected: unknown): void {
 }
 
 export function parsePrototypeManifest(value: unknown): PrototypeManifest {
-  const record = object(value, ["schema", "artifacts"]);
-  expect(record.schema, "open_shogi_core_prototype_assets/v1");
+  const record = object(value, ["schema", "selection", "runId", "artifacts"]);
+  expect(record.schema, "open_shogi_core_prototype_assets/v2");
+  if (record.selection !== "baseline" && record.selection !== "candidate")
+    throw new Error("Invalid candidate selection");
+  if (
+    typeof record.runId !== "string" ||
+    !/^[a-zA-Z0-9._-]{1,96}$/.test(record.runId)
+  )
+    throw new Error("Invalid run identity");
   const entries = object(record.artifacts, ASSET_NAMES);
   const maximums = [
     2 * 1024 * 1024,
@@ -113,19 +162,33 @@ export function parsePrototypeManifest(value: unknown): PrototypeManifest {
   ];
   const artifacts = Object.fromEntries(
     ASSET_NAMES.map((name, index) => {
+      if (name === "controller.json" && entries[name] === null)
+        return [name, null];
       const artifact = object(entries[name], ["url", "sha256", "size"]);
       const sha256 = hash(artifact.sha256);
       const size = numeric(artifact.size, maximums[index]);
       if (size === 0) throw new Error("Empty prototype artifact");
-      expect(artifact.url, `${ASSET_PREFIX}${name}?sha256=${sha256}`);
-      if (name === "leaf.osaval03") expect(sha256, LEAF_SHA256);
+      expect(
+        artifact.url,
+        `${ASSET_PREFIX}${record.selection}/${name}?sha256=${sha256}`,
+      );
+      if (name === "leaf.osaval03" && record.selection === "baseline")
+        expect(sha256, LEAF_SHA256);
       return [name, { url: artifact.url as string, sha256, size }];
     }),
-  ) as Record<AssetName, PrototypeAsset>;
-  return { schema: "open_shogi_core_prototype_assets/v1", artifacts };
+  ) as PrototypeManifest["artifacts"];
+  return {
+    schema: "open_shogi_core_prototype_assets/v2",
+    selection: record.selection,
+    runId: record.runId,
+    artifacts,
+  };
 }
 
-export function parseLeafIdentity(value: unknown): void {
+export function parseLeafIdentity(
+  value: unknown,
+  leafSha256 = LEAF_SHA256,
+): void {
   const identity = object(value, [
     "schema",
     "modelFormat",
@@ -136,7 +199,7 @@ export function parseLeafIdentity(value: unknown): void {
   ]);
   expect(identity.schema, "open_shogi_browser_model/v1");
   expect(identity.modelFormat, "OSAVAL03");
-  expect(identity.artifactSha256, LEAF_SHA256);
+  expect(identity.artifactSha256, leafSha256);
   expect(identity.expectedHashVerified, true);
   expect(identity.buildClass, "pure-only");
   expect(identity.evaluationMode, "pure-value");
@@ -145,6 +208,7 @@ export function parseLeafIdentity(value: unknown): void {
 export function parseComputeIdentity(
   value: unknown,
   controllerSha256: string,
+  leafSha256 = LEAF_SHA256,
 ): void {
   const identity = object(value, [
     "schema",
@@ -154,11 +218,14 @@ export function parseComputeIdentity(
   ]);
   expect(identity.schema, "open_shogiai_computation_identity/v1");
   expect(identity.artifactSha256, controllerSha256);
-  expect(identity.leafModelSha256, LEAF_SHA256);
+  expect(identity.leafModelSha256, leafSha256);
   expect(identity.expectedHashVerified, true);
 }
 
-export function parsePureSnapshot(value: unknown): PrototypeSnapshot {
+export function parsePureSnapshot(
+  value: unknown,
+  leafSha256 = LEAF_SHA256,
+): PrototypeSnapshot {
   const snapshot = object(value, [
     "schema",
     "engine",
@@ -189,7 +256,7 @@ export function parsePureSnapshot(value: unknown): PrototypeSnapshot {
     throw new Error("Invalid engine version");
   const evaluator = object(snapshot.evaluator, ["kind", "model"]);
   expect(evaluator.kind, "model-available");
-  parseLeafIdentity(evaluator.model);
+  parseLeafIdentity(evaluator.model, leafSha256);
   expect(snapshot.openingBook, null);
   const opening = object(snapshot.openingPolicy, [
     "profile",
@@ -201,18 +268,34 @@ export function parsePureSnapshot(value: unknown): PrototypeSnapshot {
   for (const key of ["maxPlies", "minimumSampleCount", "maximumTeacherLossCp"])
     expect(opening[key], 0);
   const position = parseBoardPosition(snapshot);
+  const initial = position.initialSfen.trim().split(/\s+/);
+  const initialMove = Number(initial[3]);
+  const initialSide = initial[1] === "b" ? "black" : "white";
+  const expectedSide =
+    position.moves.length % 2 === 0
+      ? initialSide
+      : initialSide === "black"
+        ? "white"
+        : "black";
   if (
-    position.moves.length + 1 !== position.moveNumber ||
+    initial.length !== 4 ||
+    !["b", "w"].includes(initial[1] ?? "") ||
+    !/^[1-9][0-9]*$/.test(initial[3] ?? "") ||
+    !Number.isSafeInteger(initialMove) ||
+    initialMove + position.moves.length !== position.moveNumber ||
+    position.sideToMove !== expectedSide ||
     (position.terminal !== null && position.legalMoves.length !== 0)
   )
     throw new Error("Inconsistent prototype position");
-  return { ...position, leafSha256: LEAF_SHA256 };
+  return { ...position, leafSha256 };
 }
 
 export function parsePureSearch(
   value: unknown,
-  controllerSha256: string,
+  controllerSha256: string | null,
   enabled: boolean,
+  leafSha256 = LEAF_SHA256,
+  profile: SearchProfile = "eco",
 ): PrototypeSearch {
   const search = object(value, [
     "schema",
@@ -240,7 +323,7 @@ export function parsePureSearch(
   expect(search.schema, "open_shogi_browser_search/v1");
   expect(search.timeControlSchema, "open_shogi_time_control/v1");
   expect(search.timeControlMode, "clock");
-  expect(search.profile, "eco");
+  expect(search.profile, profile);
   expect(search.evaluator, "pure_learned");
   expect(search.source, "search");
   if (search.perspective !== "black" && search.perspective !== "white")
@@ -265,7 +348,7 @@ export function parsePureSearch(
     Math.abs(search.scoreCp) > 32_000
   )
     throw new Error("Invalid search score");
-  const depth = numeric(search.depth, 5);
+  const depth = numeric(search.depth, 128);
   const nodes = numeric(search.nodes, 1_000_000_000);
   for (const key of ["seldepth", "elapsedNs", "nps"]) numeric(search[key]);
   if (
@@ -344,7 +427,7 @@ export function parsePureSearch(
     "evaluator_profile_schema_hash",
   ]);
   expect(proof.profile, "pure_learned");
-  expect(proof.model_sha256, LEAF_SHA256);
+  expect(proof.model_sha256, leafSha256);
   expect(proof.profile_schema, "open_shogiai_pure_learned_v3_profile/v1");
   expect(
     proof.evaluator_profile_schema_hash,
@@ -395,14 +478,26 @@ export function parsePureSearch(
       expect(search.termination, termination);
     }
   }
-  const compute = object(search.computeControl, [
-    "modelSha256",
-    "enabled",
-    "decisions",
-    "predictedRisk",
-    "targetMs",
-    "reorderedMoves",
-  ]);
+  if (search.computeControl === null && (enabled || controllerSha256 !== null))
+    throw new Error("Missing controller telemetry");
+  const compute = object(
+    search.computeControl ?? {
+      modelSha256: null,
+      enabled: false,
+      decisions: 0,
+      predictedRisk: 0,
+      targetMs: 0,
+      reorderedMoves: 0,
+    },
+    [
+      "modelSha256",
+      "enabled",
+      "decisions",
+      "predictedRisk",
+      "targetMs",
+      "reorderedMoves",
+    ],
+  );
   expect(compute.modelSha256, controllerSha256);
   expect(compute.enabled, enabled);
   const computeControl: ComputeTelemetry = {
@@ -419,7 +514,59 @@ export function parsePureSearch(
     computeControl,
     depth,
     nodes,
+    scoreCp: search.scoreCp as number | null,
+    elapsedMs: numeric(search.elapsedNs) / 1_000_000,
+    termination: String(search.termination),
+    timing: {
+      targetMs: computeControl.targetMs,
+      hardLimitMs: 0,
+      elapsedMs: numeric(search.elapsedNs) / 1_000_000,
+      searchMs: numeric(search.elapsedNs) / 1_000_000,
+      updates: 0,
+      interruption: "shared-atomic-per-node",
+    },
   };
+}
+
+export function parsePlayProgress(
+  value: unknown,
+  manifest: PrototypeManifest,
+  enabled: boolean,
+  profile: SearchProfile,
+): PlayProgress {
+  const envelope = object(value, ["schema", "done", "result", "timing"]);
+  expect(envelope.schema, "open_shogi_play_session/v1");
+  if (typeof envelope.done !== "boolean") throw new Error("Invalid play state");
+  const raw = object(envelope.timing, [
+    "targetMs",
+    "hardLimitMs",
+    "elapsedMs",
+    "searchMs",
+    "updates",
+    "interruption",
+  ]);
+  expect(raw.interruption, "shared-atomic-per-node");
+  const timing: PlayTiming = {
+    targetMs: numeric(raw.targetMs, 604_800_000, false),
+    hardLimitMs: numeric(raw.hardLimitMs, 604_800_000, false),
+    elapsedMs: numeric(raw.elapsedMs, 604_800_000, false),
+    searchMs: numeric(raw.searchMs, 604_800_000, false),
+    updates: numeric(raw.updates),
+    interruption: "shared-atomic-per-node",
+  };
+  if (
+    timing.targetMs > timing.hardLimitMs ||
+    timing.searchMs > timing.elapsedMs + 1
+  )
+    throw new Error("Invalid play timing");
+  const result = parsePureSearch(
+    envelope.result,
+    manifest.artifacts["controller.json"]?.sha256 ?? null,
+    enabled,
+    manifest.artifacts["leaf.osaval03"].sha256,
+    profile,
+  );
+  return { done: envelope.done, result: { ...result, timing }, timing };
 }
 
 export function moveList(value: unknown, maximum = 512): string[] {

@@ -4,7 +4,6 @@ import {
   ASSET_PREFIX,
   boundedJson,
   hash,
-  LEAF_SHA256,
   moveList,
   movement,
   numeric,
@@ -12,10 +11,11 @@ import {
   parseComputeIdentity,
   parseLeafIdentity,
   parsePrototypeManifest,
-  parsePureSearch,
+  parsePlayProgress,
   parsePureSnapshot,
   type PrototypeAsset,
   type PrototypeRequest,
+  type PrototypeManifest,
 } from "./core-prototype-protocol";
 
 interface PureEngine {
@@ -25,12 +25,14 @@ interface PureEngine {
   restore(initialSfen: string, moves: string): string;
   snapshot(): string;
   playMove(move: string): string;
-  searchWithTimeControl(
+  playStart(
     profile: string,
     evaluator: string,
     multiPv: number,
     time: string,
   ): string;
+  playRun(): string;
+  playStop(): string;
 }
 interface PureModule {
   default(options: { module_or_path: ArrayBuffer }): Promise<unknown>;
@@ -38,7 +40,8 @@ interface PureModule {
 }
 
 let engine: PureEngine | null = null;
-let controllerHash = "";
+let manifest: PrototypeManifest | null = null;
+
 let computeEnabled = false;
 let executing = false;
 
@@ -74,7 +77,11 @@ function parseRequest(value: unknown): PrototypeRequest {
       ? ["id", "kind", "manifest", "enabled", "initialSfen", "moves"]
       : kind === "move"
         ? ["id", "kind", "movement"]
-        : ["id", "kind", "timeControl"];
+        : kind === "configure"
+          ? ["id", "kind", "enabled"]
+          : kind === "stop"
+            ? ["id", "kind", "searchId"]
+            : ["id", "kind", "timeControl", "profile", "cancelBuffer"];
   const request = object(value, keys);
   const id = numeric(request.id);
   if (id === 0) throw new Error("Invalid request id");
@@ -97,7 +104,23 @@ function parseRequest(value: unknown): PrototypeRequest {
   }
   if (kind === "move")
     return { id, kind, movement: movement(request.movement) };
+  if (kind === "configure") {
+    if (typeof request.enabled !== "boolean")
+      throw new Error("Invalid control mode");
+    return { id, kind, enabled: request.enabled };
+  }
+  if (kind === "stop") return { id, kind, searchId: numeric(request.searchId) };
   if (kind === "search") {
+    if (!["balanced", "quality"].includes(String(request.profile)))
+      throw new Error("Invalid play quality");
+    if (
+      !self.crossOriginIsolated ||
+      !(request.cancelBuffer instanceof SharedArrayBuffer) ||
+      request.cancelBuffer.byteLength !== 4
+    )
+      throw new Error(
+        "Cooperative cancellation requires cross-origin isolation",
+      );
     const timeControl = parseTimeControl(request.timeControl);
     object(request.timeControl, [
       "schema",
@@ -114,7 +137,13 @@ function parseRequest(value: unknown): PrototypeRequest {
       timeControl.whiteIncrementMs !== 0
     )
       throw new Error("Prototype requires sudden death");
-    return { id, kind, timeControl };
+    return {
+      id,
+      kind,
+      timeControl,
+      profile: request.profile as "balanced" | "quality",
+      cancelBuffer: request.cancelBuffer,
+    };
   }
   throw new Error("Unsupported prototype request");
 }
@@ -123,14 +152,24 @@ async function execute(request: PrototypeRequest): Promise<unknown> {
   if (!import.meta.env.DEV)
     throw new Error("Prototype is available only in development");
   if (request.kind === "initialize") {
+    if (!self.crossOriginIsolated || typeof SharedArrayBuffer === "undefined")
+      throw new Error(
+        "この対局には COOP/COEP が有効な開発サーバーが必要です。ページを再読込してください。",
+      );
     if (engine !== null)
       throw new Error("Replace the Worker to initialize again");
+    const began = performance.now();
     const assets = request.manifest.artifacts;
+    if (request.enabled && assets["controller.json"] === null)
+      throw new Error("This candidate has no matching controller");
     const [wasm, leaf, controller] = await Promise.all([
       fetchArtifact(assets["engine.wasm"]),
       fetchArtifact(assets["leaf.osaval03"]),
-      fetchArtifact(assets["controller.json"]),
+      assets["controller.json"] === null
+        ? null
+        : fetchArtifact(assets["controller.json"]),
     ]);
+    const fetched = performance.now();
     // The server rehashes this exact JS on every request; its URL is hash-bound.
     const moduleUrl = new URL(assets["engine.js"].url, self.location.origin);
     if (
@@ -141,44 +180,106 @@ async function execute(request: PrototypeRequest): Promise<unknown> {
     const module = (await import(
       /* @vite-ignore */ moduleUrl.href
     )) as PureModule;
+    const imported = performance.now();
     await module.default({ module_or_path: wasm });
+    const compiled = performance.now();
     const loaded = new module.WasmBrowserEngine();
+    const leafHash = assets["leaf.osaval03"].sha256;
     parseLeafIdentity(
-      boundedJson(loaded.loadModel(new Uint8Array(leaf), LEAF_SHA256), 16_384),
+      boundedJson(loaded.loadModel(new Uint8Array(leaf), leafHash), 16_384),
+      leafHash,
     );
-    controllerHash = hash(assets["controller.json"].sha256);
-    parseComputeIdentity(
-      boundedJson(
-        loaded.loadComputeModel(new Uint8Array(controller), controllerHash),
-        16_384,
-      ),
-      controllerHash,
-    );
+    if (controller !== null && assets["controller.json"] !== null) {
+      const controllerHash = hash(assets["controller.json"].sha256);
+      parseComputeIdentity(
+        boundedJson(
+          loaded.loadComputeModel(new Uint8Array(controller), controllerHash),
+          16_384,
+        ),
+        controllerHash,
+        leafHash,
+      );
+    }
     loaded.setComputeEnabled(request.enabled);
     computeEnabled = request.enabled;
     if (request.initialSfen !== null)
       loaded.restore(request.initialSfen, JSON.stringify(request.moves));
     else if (request.moves.length !== 0)
       throw new Error("History requires an initial SFEN");
-    const snapshot = parsePureSnapshot(boundedJson(loaded.snapshot()));
+    const snapshot = parsePureSnapshot(
+      boundedJson(loaded.snapshot()),
+      leafHash,
+    );
     engine = loaded;
-    return snapshot;
+    manifest = request.manifest;
+    const finished = performance.now();
+    return {
+      snapshot,
+      preparation: {
+        fetchMs: fetched - began,
+        moduleMs: imported - fetched,
+        compileMs: compiled - imported,
+        modelMs: finished - compiled,
+        totalMs: finished - began,
+      },
+    };
   }
-  if (engine === null) throw new Error("Prototype engine is not initialized");
+  if (engine === null || manifest === null)
+    throw new Error("Prototype engine is not initialized");
+  if (request.kind === "configure") {
+    if (request.enabled && manifest.artifacts["controller.json"] === null)
+      throw new Error("This candidate has no matching controller");
+    engine.setComputeEnabled(request.enabled);
+    computeEnabled = request.enabled;
+    return null;
+  }
   if (request.kind === "move")
-    return parsePureSnapshot(boundedJson(engine.playMove(request.movement)));
-  return parsePureSearch(
-    boundedJson(
-      engine.searchWithTimeControl(
-        "eco",
+    return parsePureSnapshot(
+      boundedJson(engine.playMove(request.movement)),
+      manifest.artifacts["leaf.osaval03"].sha256,
+    );
+  if (request.kind !== "search") throw new Error("No active search");
+  const flag = new Int32Array(request.cancelBuffer);
+  const parse = (raw: string) =>
+    parsePlayProgress(
+      boundedJson(raw),
+      manifest!,
+      computeEnabled,
+      request.profile,
+    );
+  const callbacks = self as unknown as {
+    __openShogiPlayCancelled?: () => boolean;
+    __openShogiPlayProgress?: (raw: string) => void;
+  };
+  callbacks.__openShogiPlayCancelled = () => Atomics.load(flag, 0) !== 0;
+  callbacks.__openShogiPlayProgress = (raw) => {
+    self.postMessage({
+      id: request.id,
+      kind: "progress",
+      ok: true,
+      data: parse(raw),
+    });
+  };
+  try {
+    const initial = parse(
+      engine.playStart(
+        request.profile,
         "pure_learned",
         1,
         JSON.stringify(request.timeControl),
       ),
-    ),
-    controllerHash,
-    computeEnabled,
-  );
+    );
+    self.postMessage({
+      id: request.id,
+      kind: "progress",
+      ok: true,
+      data: initial,
+    });
+    return initial.done ? initial.result : parse(engine.playRun()).result;
+  } finally {
+    delete callbacks.__openShogiPlayCancelled;
+    delete callbacks.__openShogiPlayProgress;
+  }
 }
 
 self.addEventListener("message", (event: MessageEvent<unknown>) => {

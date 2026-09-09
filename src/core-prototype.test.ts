@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   prototypeRequestAllowed,
   readPrototypeArtifact,
+  readCandidateDescriptor,
 } from "../core-prototype-dev";
 import {
   PrototypeWorkerClient,
@@ -19,6 +20,7 @@ import {
   parsePrototypeManifest,
   parsePureSearch,
   parsePureSnapshot,
+  parsePlayProgress,
   type PrototypeManifest,
   type PrototypeSearch,
   type PrototypeSnapshot,
@@ -28,13 +30,19 @@ import { routeForHash } from "./project";
 
 const controllerHash = "a".repeat(64);
 const manifest = parsePrototypeManifest({
-  schema: "open_shogi_core_prototype_assets/v1",
+  schema: "open_shogi_core_prototype_assets/v2",
+  selection: "baseline",
+  runId: "frozen-w256-hard2",
   artifacts: Object.fromEntries(
     ASSET_NAMES.map((name) => {
       const sha256 = name === "leaf.osaval03" ? LEAF_SHA256 : controllerHash;
       return [
         name,
-        { url: `${ASSET_PREFIX}${name}?sha256=${sha256}`, sha256, size: 1 },
+        {
+          url: `${ASSET_PREFIX}baseline/${name}?sha256=${sha256}`,
+          sha256,
+          size: 1,
+        },
       ];
     }),
   ),
@@ -82,6 +90,8 @@ function pureSnapshot() {
   const { leafSha256: _, ...board } = position();
   return {
     ...board,
+    initialSfen:
+      "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
     schema: "open_shogi_browser_snapshot/v1",
     engine: { name: "OpenShogiAI", version: "test" },
     evaluator: { kind: "model-available", model: leafIdentity },
@@ -96,6 +106,24 @@ function pureSnapshot() {
     compiledEvaluators: ["osaval02", "phase10t-a1", "phase10v"],
   };
 }
+it("preserves the initial SFEN move number and side through restored history", () => {
+  const snapshot = pureSnapshot();
+  snapshot.initialSfen = "4k4/9/9/9/9/9/9/9/4K4 w - 121";
+  snapshot.moveNumber = 121;
+  snapshot.sideToMove = "white";
+  expect(parsePureSnapshot(snapshot).moveNumber).toBe(121);
+  snapshot.moves = ["5a6a"];
+  snapshot.moveNumber = 122;
+  snapshot.sideToMove = "black";
+  expect(parsePureSnapshot(snapshot).moveNumber).toBe(122);
+  expect(() => parsePureSnapshot({ ...snapshot, moveNumber: 2 })).toThrow();
+  expect(() =>
+    parsePureSnapshot({ ...snapshot, sideToMove: "white" }),
+  ).toThrow();
+  expect(() =>
+    parsePureSnapshot({ ...snapshot, initialSfen: "invalid" }),
+  ).toThrow();
+});
 function telemetry(enabled = true) {
   return {
     modelSha256: controllerHash,
@@ -106,6 +134,21 @@ function telemetry(enabled = true) {
     reorderedMoves: 0,
   };
 }
+const preparation = {
+  fetchMs: 1,
+  moduleMs: 2,
+  compileMs: 3,
+  modelMs: 4,
+  totalMs: 10,
+};
+const timing = {
+  targetMs: 200,
+  hardLimitMs: 600,
+  elapsedMs: 100,
+  searchMs: 98,
+  updates: 1,
+  interruption: "shared-atomic-per-node" as const,
+};
 function searchResult(side: "black" | "white" = "white"): PrototypeSearch {
   return {
     bestMove: side === "black" ? "7g7f" : "3c3d",
@@ -113,6 +156,10 @@ function searchResult(side: "black" | "white" = "white"): PrototypeSearch {
     computeControl: telemetry(),
     depth: 1,
     nodes: 3,
+    scoreCp: 2,
+    elapsedMs: 98,
+    termination: "stable",
+    timing,
   };
 }
 function rawSearch() {
@@ -189,9 +236,11 @@ class FakeEngine implements PrototypeEngineClient {
       restored: PrototypeSnapshot | null,
     ) => {
       this.position = restored ?? position();
-      return this.position;
+      return { snapshot: this.position, preparation };
     },
   );
+  configure = vi.fn(async (_enabled: boolean) => {});
+  stopSearch = vi.fn();
   move = vi.fn(async (move: string) => {
     this.position = position([...this.position.moves, move]);
     return this.position;
@@ -224,6 +273,71 @@ function harness() {
 }
 
 describe("isolated prototype protocol", () => {
+  it("validates play deadlines and candidate-specific pure proof without reusing the old controller", () => {
+    const raw = { ...rawSearch(), profile: "balanced" };
+    expect(
+      parsePlayProgress(
+        {
+          schema: "open_shogi_play_session/v1",
+          done: false,
+          result: raw,
+          timing,
+        },
+        manifest,
+        true,
+        "balanced",
+      ).result.depth,
+    ).toBe(1);
+    expect(() =>
+      parsePlayProgress(
+        {
+          schema: "open_shogi_play_session/v1",
+          done: false,
+          result: raw,
+          timing: { ...timing, targetMs: 700 },
+        },
+        manifest,
+        true,
+        "balanced",
+      ),
+    ).toThrow();
+    const selected = structuredClone(manifest);
+    selected.selection = "candidate";
+    selected.runId = "new-run";
+    for (const [name, artifact] of Object.entries(selected.artifacts))
+      if (artifact)
+        artifact.url = `${ASSET_PREFIX}candidate/${name}?sha256=${artifact.sha256}`;
+    selected.artifacts["controller.json"] = null;
+    const parsed = parsePrototypeManifest(selected);
+    const off = { ...raw, computeControl: null };
+    expect(
+      parsePlayProgress(
+        {
+          schema: "open_shogi_play_session/v1",
+          done: true,
+          result: off,
+          timing,
+        },
+        parsed,
+        false,
+        "balanced",
+      ).result.computeControl.modelSha256,
+    ).toBeNull();
+    expect(() =>
+      parsePlayProgress(
+        {
+          schema: "open_shogi_play_session/v1",
+          done: true,
+          result: raw,
+          timing,
+        },
+        parsed,
+        false,
+        "balanced",
+      ),
+    ).toThrow();
+  });
+
   it("keeps the route explicit and development-only", () => {
     expect(routeForHash("#/core-prototype")).toBe("workspace");
     expect(routeForHash("#/core-prototype", true)).toBe("core-prototype");
@@ -231,7 +345,7 @@ describe("isolated prototype protocol", () => {
   });
   it("rejects foreign asset URLs, missing artifacts, and a different frozen leaf", () => {
     const foreign = structuredClone(manifest);
-    foreign.artifacts["controller.json"].url = "https://example.com/model";
+    foreign.artifacts["controller.json"]!.url = "https://example.com/model";
     expect(() => parsePrototypeManifest(foreign)).toThrow();
     const wrong = structuredClone(manifest);
     wrong.artifacts["leaf.osaval03"].sha256 = controllerHash;
@@ -332,6 +446,109 @@ describe("isolated prototype protocol", () => {
 });
 
 describe("prototype game clock and cancellation", () => {
+  it.each(["blitz3", "rapid10"] as const)(
+    "forwards %s clocks equally for both qualities and AI colors",
+    async (preset) => {
+      for (const profile of ["balanced", "quality"] as const) {
+        for (const humanSide of ["black", "white"] as const) {
+          const h = harness();
+          const total = preset === "blitz3" ? 180000 : 600000;
+          let playing = h.session.start(humanSide, false, preset, profile);
+          if (humanSide === "black") {
+            await playing;
+            h.at(10100);
+            playing = h.session.move("7g7f");
+          }
+          await vi.waitFor(() =>
+            expect(h.clients[0]?.search).toHaveBeenCalledOnce(),
+          );
+          expect(h.clients[0].search.mock.calls[0]).toEqual([
+            {
+              schema: "open_shogi_time_control/v1",
+              blackTimeMs: total - (humanSide === "black" ? 10000 : 0),
+              whiteTimeMs: total,
+              byoyomiMs: 0,
+              blackIncrementMs: 0,
+              whiteIncrementMs: 0,
+              safetyMarginMs: 50,
+            },
+            profile,
+          ]);
+          h.at(humanSide === "black" ? 11100 : 1100);
+          h.clients[0].result.resolve({
+            ...searchResult(humanSide === "black" ? "white" : "black"),
+            computeControl: telemetry(false),
+          });
+          await playing;
+          expect(h.session.state.telemetry).toMatchObject({
+            profile,
+            preset,
+            elapsedMs: 1000,
+            searchMs: 98,
+          });
+          expect(
+            h.session.state.clock[
+              humanSide === "black" ? "whiteTimeMs" : "blackTimeMs"
+            ],
+          ).toBe(total - 1000);
+          h.session.dispose();
+        }
+      }
+    },
+  );
+  it("prepares before play and charges human response-delivery time", async () => {
+    const h = harness();
+    await h.session.prepare();
+    h.at(20100);
+    expect(h.session.state.turnStartedAt).toBeNull();
+    await h.session.start("black", false);
+    expect(h.clients[0].initialize).toHaveBeenCalledOnce();
+    const applied = deferred<PrototypeSnapshot>();
+    h.clients[0].move.mockReturnValueOnce(applied.promise);
+    h.at(21100);
+    const play = h.session.move("7g7f");
+    h.at(21600);
+    applied.resolve(position(["7g7f"]));
+    await vi.waitFor(() => expect(h.clients[0].search).toHaveBeenCalledOnce());
+    expect(h.session.state.clock.blackTimeMs).toBe(178500);
+    h.clients[0].result.resolve(searchResult());
+    await play;
+  });
+  it("cooperatively stops with a verified candidate, preserving the committed board and charging cancellation latency", async () => {
+    const h = harness();
+    const start = h.session.start("white", false);
+    await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
+    h.at(1100);
+    h.session.stop();
+    expect(h.clients[0].stopSearch).toHaveBeenCalledOnce();
+    expect(h.clients[0].dispose).not.toHaveBeenCalled();
+    expect(h.session.state.phase).toBe("stopping");
+    h.at(1140);
+    h.clients[0].result.resolve({
+      ...searchResult("black"),
+      termination: "cancelled",
+    });
+    await start;
+    expect(h.session.state.phase).toBe("stopped");
+    expect(h.session.state.snapshot?.moves).toEqual([]);
+    expect(h.session.state.clock.blackTimeMs).toBe(178960);
+    expect(h.session.state.telemetry?.movement).toBe("7g7f");
+    expect(h.clients[0].move).not.toHaveBeenCalled();
+  });
+  it("rejects a human move whose Worker validation finishes at flag fall", async () => {
+    const h = harness();
+    await h.session.start("black", false);
+    const applied = deferred<PrototypeSnapshot>();
+    h.clients[0].move.mockReturnValueOnce(applied.promise);
+    h.at(180000);
+    const play = h.session.move("7g7f");
+    h.at(180100);
+    applied.resolve(position(["7g7f"]));
+    await play;
+    expect(h.session.state.result?.reason).toBe("timeout");
+    expect(h.session.state.snapshot?.moves).toEqual([]);
+  });
+
   it("charges real elapsed milliseconds to each side and forwards the full remaining clock", async () => {
     const h = harness();
     await h.session.start("black", true);
@@ -348,6 +565,7 @@ describe("prototype game clock and cancellation", () => {
         whiteIncrementMs: 0,
         safetyMarginMs: 50,
       },
+      "balanced",
     ]);
     expect(h.session.state.telemetry).toBeNull();
     const applied = deferred<PrototypeSnapshot>();
@@ -362,7 +580,7 @@ describe("prototype game clock and cancellation", () => {
       blackTimeMs: 178500,
       whiteTimeMs: 176800,
     });
-    expect(h.session.state.telemetry).toEqual({
+    expect(h.session.state.telemetry).toMatchObject({
       ...telemetry(),
       elapsedMs: 3200,
     });
@@ -376,7 +594,7 @@ describe("prototype game clock and cancellation", () => {
     const h = harness();
     const started = h.session.start("white", false);
     await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
-    expect(h.clients[0].initialize.mock.calls[0][1]).toBe(false);
+    expect(h.clients[0].configure).toHaveBeenCalledWith(false);
     h.clients[0].result.resolve({
       ...searchResult("black"),
       computeControl: telemetry(false),
@@ -450,11 +668,8 @@ describe("prototype game clock and cancellation", () => {
     expect(h.session.state.clock.blackTimeMs).toBe(178000);
     h.at(502100);
     await h.session.resume();
-    expect(h.clients[1].initialize.mock.calls[0]).toEqual([
-      manifest,
-      true,
-      position(),
-    ]);
+    expect(h.clients).toHaveLength(1);
+    expect(h.clients[0].initialize).toHaveBeenCalledOnce();
     expect(h.session.state.clock.blackTimeMs).toBe(178000);
     expect(h.session.state.turnStartedAt).toBe(502100);
   });
@@ -528,6 +743,60 @@ describe("prototype game clock and cancellation", () => {
 });
 
 describe("prototype Worker transport", () => {
+  it("shares a cancellation flag while synchronous Worker work is pending and physically bounds an unresponsive Worker", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("crossOriginIsolated", true);
+    try {
+      const listeners: Record<string, (event: { data?: unknown }) => void> = {};
+      const worker = {
+        addEventListener: vi.fn((name, listener) => {
+          listeners[name] = listener;
+        }),
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+      };
+      const client = new PrototypeWorkerClient(
+        () => worker as unknown as Worker,
+      );
+      const pending = client.search(
+        {
+          schema: "open_shogi_time_control/v1",
+          blackTimeMs: 180000,
+          whiteTimeMs: 180000,
+        },
+        "quality",
+      );
+      const flag = new Int32Array(
+        worker.postMessage.mock.calls[0][0].cancelBuffer,
+      );
+      listeners.message({
+        data: {
+          id: 1,
+          kind: "progress",
+          ok: true,
+          data: { done: false, result: searchResult("black"), timing },
+        },
+      });
+      expect(Atomics.load(flag, 0)).toBe(0);
+      client.stopSearch();
+      expect(Atomics.load(flag, 0)).toBe(1);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(worker.terminate).toHaveBeenCalledOnce();
+      expect(await pending).toMatchObject({
+        bestMove: "7g7f",
+        termination: "host-cancelled",
+        workerRestartRequired: true,
+      });
+      listeners.message({
+        data: { id: 1, kind: "search", ok: true, data: searchResult("black") },
+      });
+      expect(worker.terminate).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("terminates pending work, ignores late events, and rejects response kind mismatch", async () => {
     const listeners: Record<string, (event: { data?: unknown }) => void> = {};
     const worker = {
@@ -553,6 +822,41 @@ describe("prototype Worker transport", () => {
 });
 
 describe("local artifact serving boundary", () => {
+  it("requires an explicit candidate descriptor and binds the actual leaf bytes without a controller fallback", async () => {
+    const root = await mkdtemp(join(tmpdir(), "osui-candidate-"));
+    try {
+      await mkdir(join(root, "local/core-prototype"), { recursive: true });
+      const descriptor = {
+        schema: "open_shogi_development_candidate/v1",
+        runId: "test-run",
+        leaf: { path: "local/model.osaval03", sha256: "a".repeat(64) },
+        controller: null,
+      };
+      await writeFile(
+        join(root, "local/core-prototype/candidate.json"),
+        JSON.stringify(descriptor),
+      );
+      expect((await readCandidateDescriptor(root)).controller).toBeNull();
+      await writeFile(join(root, "local/model.osaval03"), "changed-model");
+      await expect(
+        readPrototypeArtifact(root, "leaf.osaval03", "candidate"),
+      ).rejects.toThrow("hash mismatch");
+      await expect(
+        readPrototypeArtifact(root, "controller.json", "candidate"),
+      ).rejects.toThrow("no matching controller");
+      descriptor.leaf.path = "local/../outside";
+      await writeFile(
+        join(root, "local/core-prototype/candidate.json"),
+        JSON.stringify(descriptor),
+      );
+      await expect(readCandidateDescriptor(root)).rejects.toThrow(
+        "Invalid candidate artifact",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("rejects non-loopback, cross-site, foreign host and non-read requests", () => {
     const request = {
       method: "GET",

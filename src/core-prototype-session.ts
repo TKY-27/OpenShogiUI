@@ -1,10 +1,11 @@
-import type { Side } from "./browser-engine";
+import type { SearchProfile, Side } from "./browser-engine";
 import {
   chargeTurn,
   hasFlagFallen,
   initialClockFor,
   matchTimeControl,
   opposing,
+  type MatchPreset,
 } from "./match-clock";
 import type { MatchClock } from "./play-settings";
 import {
@@ -14,26 +15,54 @@ import {
 } from "./core-prototype-client";
 import type {
   ComputeTelemetry,
+  PreparationTelemetry,
   PrototypeManifest,
+  PrototypeSearch,
   PrototypeSnapshot,
 } from "./core-prototype-protocol";
 
+export interface PlayDiagnostic extends ComputeTelemetry {
+  elapsedMs: number;
+  searchMs: number;
+  hardLimitMs: number;
+  depth: number;
+  nodes: number;
+  scoreCp: number | null;
+  termination: string;
+  profile: SearchProfile;
+  preset: MatchPreset;
+  remaining: MatchClock;
+  side: Side;
+  movement: string | null;
+  leafSha256: string;
+  wasmSha256: string;
+  sfen: string;
+}
 export interface PrototypeState {
-  phase: "setup" | "loading" | "playing" | "stopped" | "finished" | "error";
+  phase:
+    | "setup"
+    | "loading"
+    | "playing"
+    | "stopping"
+    | "stopped"
+    | "finished"
+    | "error";
   snapshot: PrototypeSnapshot | null;
   previous: PrototypeSnapshot | null;
   clock: MatchClock;
   turnStartedAt: number | null;
   humanSide: Side;
   enabled: boolean;
+  profile: SearchProfile;
+  preset: "blitz3" | "rapid10";
   busy: boolean;
   result: { reason: string; winner: Side | null } | null;
   error: string | null;
   manifest: PrototypeManifest | null;
-  telemetry: (ComputeTelemetry & { elapsedMs: number }) | null;
+  preparation: PreparationTelemetry | null;
+  telemetry: PlayDiagnostic | null;
+  diagnostics: PlayDiagnostic[];
 }
-
-/** Owns committed positions, both clocks, and every operation that can outlive a match. */
 export function initialPrototypeState(): PrototypeState {
   return {
     phase: "setup",
@@ -42,20 +71,26 @@ export function initialPrototypeState(): PrototypeState {
     clock: initialClockFor("blitz3"),
     turnStartedAt: null,
     humanSide: "black",
-    enabled: true,
+    enabled: false,
+    profile: "balanced",
+    preset: "blitz3",
     busy: false,
     result: null,
     error: null,
     manifest: null,
+    preparation: null,
     telemetry: null,
+    diagnostics: [],
   };
 }
+
+/** The session alone owns clocks and committed positions; every asynchronous response is generation-bound. */
 export class PrototypeMatchSession {
-  state: PrototypeState = initialPrototypeState();
+  state = initialPrototypeState();
   private generation = 0;
   private client: PrototypeEngineClient | null = null;
   private disposed = false;
-
+  private searching = false;
   constructor(
     private readonly onChange: (state: PrototypeState) => void,
     private readonly createClient: () => PrototypeEngineClient = () =>
@@ -64,28 +99,67 @@ export class PrototypeMatchSession {
     private readonly now: () => number = () => Date.now(),
   ) {}
 
-  async start(humanSide: Side, enabled: boolean): Promise<void> {
+  async prepare(
+    selection: "baseline" | "candidate" = "baseline",
+  ): Promise<void> {
     if (this.disposed) return;
     const generation = this.invalidate();
-    this.publish({
-      phase: "loading",
-      snapshot: null,
-      previous: null,
-      clock: initialClockFor("blitz3"),
-      turnStartedAt: null,
-      humanSide,
-      enabled,
-      busy: true,
-      result: null,
-      error: null,
-      manifest: null,
-      telemetry: null,
-    });
+    this.publish({ ...initialPrototypeState(), phase: "loading", busy: true });
     try {
-      const manifest = await this.manifestLoader();
+      const manifest = await this.manifestLoader(selection);
       if (!this.current(generation)) return;
-      this.publish({ manifest });
-      await this.initialize(generation, null);
+      const client = this.createClient();
+      this.client = client;
+      const ready = await client.initialize(manifest, false, null);
+      if (!this.current(generation)) return;
+      this.publish({
+        manifest,
+        preparation: ready.preparation,
+        snapshot: ready.snapshot,
+        phase: "setup",
+        busy: false,
+      });
+    } catch (error) {
+      this.fail(generation, error);
+    }
+  }
+
+  async start(
+    humanSide: Side,
+    enabled: boolean,
+    preset: "blitz3" | "rapid10" = "blitz3",
+    profile: SearchProfile = "balanced",
+  ): Promise<void> {
+    if (this.disposed) return;
+    if (
+      this.state.phase !== "setup" ||
+      this.client === null ||
+      this.state.snapshot === null
+    ) {
+      await this.prepare(this.state.manifest?.selection ?? "baseline");
+      if (this.state.phase !== "setup") return;
+    }
+    const generation = this.generation;
+    this.publish({ busy: true });
+    try {
+      await this.client!.configure(enabled);
+      if (!this.current(generation)) return;
+      this.publish({
+        phase: "playing",
+        humanSide,
+        enabled,
+        preset,
+        profile,
+        clock: initialClockFor(preset),
+        turnStartedAt: this.now(),
+        busy: false,
+        result: null,
+        telemetry: null,
+        diagnostics: [],
+      });
+      if (this.finishTerminal()) return;
+      if (this.state.snapshot!.sideToMove !== humanSide)
+        await this.engineTurn(generation);
     } catch (error) {
       this.fail(generation, error);
     }
@@ -98,51 +172,62 @@ export class PrototypeMatchSession {
       this.state.snapshot === null
     )
       return;
-    const position = this.state.snapshot;
-    const generation = this.invalidate();
-    this.publish({ phase: "loading", busy: true, error: null });
+    const generation = this.generation;
+    this.publish({
+      phase: "playing",
+      turnStartedAt: this.now(),
+      busy: true,
+      error: null,
+    });
     try {
-      await this.initialize(generation, position);
+      if (this.client === null) await this.restoreClient(generation);
+      if (!this.current(generation) || this.tick()) return;
+      this.publish({ busy: false });
+      if (this.state.snapshot!.sideToMove !== this.state.humanSide)
+        await this.engineTurn(generation);
     } catch (error) {
       this.fail(generation, error);
     }
   }
 
   configure(): void {
-    if (this.disposed) return;
-    this.invalidate();
-    this.publish(initialPrototypeState());
+    void this.prepare(this.state.manifest?.selection ?? "baseline");
   }
-
   stop(): void {
-    if (this.state.phase !== "playing" && this.state.phase !== "loading")
-      return;
+    if (!["playing", "loading"].includes(this.state.phase)) return;
     if (this.tick()) return;
+    if (this.searching && this.client !== null) {
+      this.publish({ phase: "stopping", busy: true });
+      this.client.stopSearch();
+      return;
+    }
     this.chargeActiveTurn();
-    this.invalidate();
+    const hasPosition = this.state.snapshot !== null;
+    // A pending move/initialization cannot be reused after a physical stop.
+    if (this.state.busy || this.state.phase === "loading") this.invalidate();
     this.publish({
-      phase: this.state.snapshot === null ? "setup" : "stopped",
+      phase: hasPosition ? "stopped" : "setup",
       turnStartedAt: null,
       busy: false,
     });
   }
-
   resign(): void {
-    if (this.state.phase !== "playing" && this.state.phase !== "stopped")
-      return;
-    this.finish("resignation", opposing(this.state.humanSide));
+    if (["playing", "stopping", "stopped"].includes(this.state.phase))
+      this.finish("resignation", opposing(this.state.humanSide));
   }
-
   tick(): boolean {
     const { phase, snapshot, turnStartedAt, clock } = this.state;
-    if (phase !== "playing" || snapshot === null || turnStartedAt === null)
+    if (
+      (phase !== "playing" && phase !== "stopping") ||
+      snapshot === null ||
+      turnStartedAt === null
+    )
       return false;
     if (!hasFlagFallen(clock, snapshot.sideToMove, turnStartedAt, this.now()))
       return false;
     this.finish("timeout", opposing(snapshot.sideToMove));
     return true;
   }
-
   async move(movement: string): Promise<void> {
     const { snapshot, humanSide, busy, phase } = this.state;
     if (
@@ -155,93 +240,127 @@ export class PrototypeMatchSession {
       return;
     if (!snapshot.legalMoves.some(({ usi }) => usi === movement)) return;
     const generation = this.generation;
-    const client = this.client!;
-    this.chargeActiveTurn();
-    this.publish({ busy: true, turnStartedAt: null });
+    this.publish({ busy: true });
     try {
-      const next = await client.move(movement);
-      if (!this.current(generation)) return;
+      const next = await this.client!.move(movement);
+      if (!this.current(generation) || this.tick()) return;
+      // Include Worker validation and response delivery in the moving side's clock.
+      this.chargeActiveTurn();
       this.acceptMove(snapshot, next, movement);
-      if (this.finishTerminal()) return;
-      await this.engineTurn(generation);
+      if (!this.finishTerminal()) await this.engineTurn(generation);
     } catch (error) {
       this.fail(generation, error);
     }
   }
-
   dispose(): void {
     this.disposed = true;
     this.invalidate();
   }
 
-  private async initialize(
-    generation: number,
-    position: PrototypeSnapshot | null,
-  ): Promise<void> {
+  private async restoreClient(generation: number): Promise<void> {
+    const position = this.state.snapshot!;
+    this.client?.dispose();
     const client = this.createClient();
     this.client = client;
-    const snapshot = await client.initialize(
+    const ready = await client.initialize(
       this.state.manifest!,
       this.state.enabled,
       position,
     );
     if (!this.current(generation)) return;
     if (
-      position !== null &&
-      (snapshot.sfen !== position.sfen ||
-        snapshot.initialSfen !== position.initialSfen ||
-        JSON.stringify(snapshot.moves) !== JSON.stringify(position.moves))
+      ready.snapshot.sfen !== position.sfen ||
+      ready.snapshot.initialSfen !== position.initialSfen ||
+      JSON.stringify(ready.snapshot.moves) !== JSON.stringify(position.moves)
     )
       throw new Error("Restored game does not match the committed position");
-    this.publish({
-      snapshot,
-      phase: "playing",
-      busy: false,
-      turnStartedAt: this.now(),
-    });
-    if (this.finishTerminal()) return;
-    if (snapshot.sideToMove !== this.state.humanSide)
-      await this.engineTurn(generation);
+    this.publish({ preparation: ready.preparation });
   }
-
   private async engineTurn(generation: number): Promise<void> {
     if (!this.current(generation) || this.tick()) return;
     const position = this.state.snapshot!;
-    const client = this.client!;
+    const startedAt = this.state.turnStartedAt!;
     this.publish({ busy: true });
     const remaining = chargeTurn(
       this.state.clock,
       position.sideToMove,
-      this.now() - this.state.turnStartedAt!,
+      this.now() - startedAt,
     );
-    const response = await client.search(matchTimeControl("blitz3", remaining));
-    if (!this.current(generation) || this.tick()) return;
+    this.searching = true;
+    const response = await this.client!.search(
+      matchTimeControl(this.state.preset, remaining),
+      this.state.profile,
+    );
+    if (!this.current(generation)) return;
+    this.searching = false;
+    if (this.tick()) return;
     if (response.perspective !== position.sideToMove)
       throw new Error("Search returned the wrong side");
+    if (
+      response.bestMove !== null &&
+      !position.legalMoves.some(({ usi }) => usi === response.bestMove)
+    )
+      throw new Error("Search returned an illegal move");
+    if (this.state.phase === "stopping") {
+      this.record(response, position, remaining, startedAt);
+      this.chargeActiveTurn();
+      if (response.workerRestartRequired) {
+        this.client?.dispose();
+        this.client = null;
+      }
+      this.publish({ phase: "stopped", turnStartedAt: null, busy: false });
+      return;
+    }
     if (response.bestMove === null) {
       this.finish("engine-resignation", this.state.humanSide);
       return;
     }
-    if (!position.legalMoves.some(({ usi }) => usi === response.bestMove))
-      throw new Error("Search returned an illegal move");
-    const next = await client.move(response.bestMove);
+    if (response.workerRestartRequired) await this.restoreClient(generation);
     if (!this.current(generation) || this.tick()) return;
-    const clockKey =
-      position.sideToMove === "black" ? "blackTimeMs" : "whiteTimeMs";
-    const beforeCharge = this.state.clock[clockKey];
+    const next = await this.client!.move(response.bestMove);
+    if (!this.current(generation) || this.tick()) return;
+    this.record(response, position, remaining, startedAt);
     this.chargeActiveTurn();
-    const elapsedMs = beforeCharge - this.state.clock[clockKey];
     this.acceptMove(position, next, response.bestMove);
-    this.publish({ telemetry: { ...response.computeControl, elapsedMs } });
     this.finishTerminal();
   }
-
+  private record(
+    response: PrototypeSearch,
+    position: PrototypeSnapshot,
+    remaining: MatchClock,
+    startedAt: number,
+  ): void {
+    const telemetry: PlayDiagnostic = {
+      ...response.computeControl,
+      targetMs: response.timing.targetMs,
+      elapsedMs: this.now() - startedAt,
+      searchMs: response.timing.searchMs,
+      hardLimitMs: response.timing.hardLimitMs,
+      depth: response.depth,
+      nodes: response.nodes,
+      scoreCp: response.scoreCp,
+      termination: response.termination,
+      profile: this.state.profile,
+      preset: this.state.preset,
+      remaining,
+      side: position.sideToMove,
+      movement: response.bestMove,
+      leafSha256: position.leafSha256,
+      wasmSha256: this.state.manifest!.artifacts["engine.wasm"].sha256,
+      sfen: position.sfen,
+    };
+    this.publish({
+      telemetry,
+      diagnostics: [...this.state.diagnostics.slice(-127), telemetry],
+    });
+  }
   private acceptMove(
     before: PrototypeSnapshot,
     next: PrototypeSnapshot,
     movement: string,
   ): void {
     if (
+      next.leafSha256 !== before.leafSha256 ||
       next.initialSfen !== before.initialSfen ||
       next.sideToMove !== opposing(before.sideToMove) ||
       next.moveNumber !== before.moveNumber + 1 ||
@@ -273,15 +392,13 @@ export class PrototypeMatchSession {
   }
   private chargeActiveTurn(): void {
     const { snapshot, turnStartedAt, clock } = this.state;
-    if (snapshot !== null && turnStartedAt !== null)
+    if (snapshot !== null && turnStartedAt !== null) {
+      const now = this.now();
       this.publish({
-        clock: chargeTurn(
-          clock,
-          snapshot.sideToMove,
-          this.now() - turnStartedAt,
-        ),
-        turnStartedAt: this.now(),
+        clock: chargeTurn(clock, snapshot.sideToMove, now - turnStartedAt),
+        turnStartedAt: now,
       });
+    }
   }
   private fail(generation: number, error: unknown): void {
     if (!this.current(generation)) return;
@@ -296,6 +413,7 @@ export class PrototypeMatchSession {
   }
   private invalidate(): number {
     this.generation += 1;
+    this.searching = false;
     this.client?.dispose();
     this.client = null;
     return this.generation;

@@ -181,14 +181,20 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     );
     return () => {
       operationRef.current += 1;
+      adapterRef.current?.dispose();
       adapterRef.current = null;
-      adapter.dispose();
     };
     // The adapter owns a Worker; it must be created exactly once per mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const finish = useCallback((result: MatchOutcome) => {
+    // Invalidate first: a reply already queued by a timed-out Worker must never
+    // advance a finished game or a rematch. Legacy synchronous Wasm is stopped
+    // physically; its transport does not claim message-only cancellation.
+    operationRef.current += 1;
+    adapterRef.current?.dispose();
+    adapterRef.current = null;
     setOutcome(result);
     setPhase("finished");
     setBusy(null);
@@ -207,6 +213,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     if (phase !== "playing" || !clocked) return;
     const check = () => {
       if (!hasFlagFallen(clock, sideToMove, turnStartedAt, Date.now())) return;
+      setClock(chargeTurn(clock, sideToMove, Date.now() - turnStartedAt));
       finish({
         kind: "timeout",
         winner: opposing(sideToMove),
@@ -261,7 +268,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
      * wall time for both players, so both use it here.
      */
     const spent = clocked ? Date.now() - startedAt : 0;
-    const afterEngine = clocked
+    let afterEngine = clocked
       ? chargeTurn(clockAtTurn, engineSide, spent)
       : clockAtTurn;
     if (
@@ -276,8 +283,28 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       });
       return;
     }
+    if (
+      response.perspective !== engineSide ||
+      !position.legalMoves.some(({ usi }) => usi === response.bestMove)
+    )
+      throw new Error("Engine returned an invalid move");
     const replied = await adapter.playMove(response.bestMove);
     if (operationRef.current !== operation) return;
+    afterEngine = clocked
+      ? chargeTurn(clockAtTurn, engineSide, Date.now() - startedAt)
+      : clockAtTurn;
+    if (
+      clocked &&
+      hasFlagFallen(clockAtTurn, engineSide, startedAt, Date.now())
+    ) {
+      setClock(afterEngine);
+      finish({
+        kind: "timeout",
+        winner: opposing(engineSide),
+        loser: engineSide,
+      });
+      return;
+    }
     setTimeline((current) =>
       current === null
         ? createGameTimeline(replied, afterEngine)
@@ -318,11 +345,24 @@ export function MatchPlay({ locale }: { locale: Locale }) {
         });
         return;
       }
-      const afterHuman = clocked
-        ? chargeTurn(clock, humanSide, movedAt - turnStartedAt)
-        : clock;
       const next = await adapter.playMove(movement);
       if (operationRef.current !== operation) return;
+      const confirmedAt = Date.now();
+      const afterHuman = clocked
+        ? chargeTurn(clock, humanSide, confirmedAt - turnStartedAt)
+        : clock;
+      if (
+        clocked &&
+        hasFlagFallen(clock, humanSide, turnStartedAt, confirmedAt)
+      ) {
+        setClock(afterHuman);
+        finish({
+          kind: "timeout",
+          winner: opposing(humanSide),
+          loser: humanSide,
+        });
+        return;
+      }
       setTimeline((current) =>
         current === null
           ? createGameTimeline(next, afterHuman)
@@ -330,7 +370,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
               snapshot: next,
               source: null,
               clock: afterHuman,
-              moveTimeMs: movedAt - turnStartedAt,
+              moveTimeMs: confirmedAt - turnStartedAt,
             }),
       );
       setClock(afterHuman);
@@ -370,8 +410,9 @@ export function MatchPlay({ locale }: { locale: Locale }) {
   }
 
   async function startMatch() {
-    const adapter = adapterRef.current;
-    if (adapter === null) return;
+    const needsInitialization = adapterRef.current === null;
+    const adapter = adapterRef.current ?? new EngineWorkerClient("play");
+    adapterRef.current = adapter;
     const operation = operationRef.current + 1;
     operationRef.current = operation;
     setBusy("moving");
@@ -379,7 +420,9 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     setOutcome(null);
     setSelection(null);
     try {
-      const fresh = await adapter.reset();
+      const fresh = needsInitialization
+        ? await adapter.initialize()
+        : await adapter.reset();
       if (operationRef.current !== operation) return;
       const startingClock = initialClockFor(preset);
       setTimeline(createGameTimeline(fresh, startingClock));
@@ -410,9 +453,10 @@ export function MatchPlay({ locale }: { locale: Locale }) {
    * would make the flag-fall rule meaningless.
    */
   async function rewind(count: number) {
-    const adapter = adapterRef.current;
-    if (adapter === null || snapshot === null || busy !== null) return;
+    if (snapshot === null || busy !== null) return;
     if (snapshot.moves.length < count) return;
+    const adapter = adapterRef.current ?? new EngineWorkerClient("play");
+    adapterRef.current = adapter;
     const operation = operationRef.current + 1;
     operationRef.current = operation;
     setBusy("moving");
@@ -448,9 +492,10 @@ export function MatchPlay({ locale }: { locale: Locale }) {
   }
 
   async function redo() {
-    const adapter = adapterRef.current;
-    if (adapter === null || snapshot === null || busy !== null) return;
+    if (snapshot === null || busy !== null) return;
     if (undone.length < 2) return;
+    const adapter = adapterRef.current ?? new EngineWorkerClient("play");
+    adapterRef.current = adapter;
     const operation = operationRef.current + 1;
     operationRef.current = operation;
     setBusy("moving");
@@ -579,6 +624,18 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     side === humanSide ? match.you : match.engine;
   const sideLabel = (side: Side) =>
     side === "black" ? match.sente : match.gote;
+  const developmentNotice = import.meta.env.DEV ? (
+    <p className="play-notice">
+      {locale === "ja"
+        ? "この画面は旧互換エンジン（手作業評価）です。"
+        : "This screen uses the legacy engine with handcrafted evaluation. "}
+      <a href="#/core-prototype">
+        {locale === "ja"
+          ? "学習モデルの比較はこちら"
+          : "Compare the learned models"}
+      </a>
+    </p>
+  ) : null;
 
   if (phase === "setup") {
     return (
@@ -586,6 +643,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
         <div className="match-setup">
           <h1 id="match-title">{match.title}</h1>
           <p className="match-setup__lead">{match.subtitle}</p>
+          {developmentNotice}
 
           <fieldset className="segmented-control">
             <legend>{match.timeControl}</legend>
@@ -672,6 +730,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       <h1 className="visually-hidden" id="match-title">
         {match.title}
       </h1>
+      {developmentNotice}
 
       {notice === null ? null : (
         <p className="play-notice" role="alert">
