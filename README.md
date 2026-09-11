@@ -1,9 +1,9 @@
 # OpenShogiUI
 
 OpenShogiUI is the standalone browser interface for OpenShogiAI. It supports local browser play,
-continuous position analysis, and import-only inspection of bounded arena reports. Separate play
-and analysis module Workers keep WebAssembly game state, search, optional models, and optional
-opening books on the user's device.
+continuous position analysis and bounded arena-report inspection in development. The production
+build contains one explicitly selected learned configuration for play. WebAssembly computation
+and model weights remain in a dedicated local browser Worker.
 
 This clean-history repository contains the UI only. It has no Rust engine source, Python
 training stack, data-acquisition pipeline, local model, or private source history.
@@ -17,21 +17,14 @@ training stack, data-acquisition pipeline, local model, or private source histor
 
 ```sh
 npm ci --ignore-scripts
-npm run check
+npm run dev -- --host 127.0.0.1 --port 5176 --strictPort
 ```
 
-For local development and production preview:
+Open `http://127.0.0.1:5176/#/match`. The development match defaults to the locally registered
+r3 candidate and offers the frozen W256 comparison. The legacy analysis/lab routes are development
+only. Production builds require a separate explicit selection, as described below.
 
-```sh
-npm run dev
-npm run build
-npm run preview
-```
-
-The build output is `dist/`. Hash routes provide Workspace, Browser Play, and Evaluation Lab
-without requiring server-side route rewrites.
-
-Browser Play includes independent Sente/Gote role and board-orientation controls, move-history
+Development-only Browser Play includes independent Sente/Gote role and board-orientation controls, move-history
 navigation, takeover without position mutation, bounded time controls, MultiPV analysis, opening
 profiles, local opening-book/model loading, and 13 selectable CC BY 4.0 piece sets. The default
 casual time control delegates to the engine's adaptive policy with its documented 20-second cap;
@@ -55,15 +48,18 @@ commit and all four generated hashes are recorded in `PROVENANCE.md`. See `ARCHI
 
 ## Local core prototype
 
-Development mode adds an explicit Workspace link to `#/core-prototype`. Start with
+Development mode uses `#/match`; `#/core-prototype` remains a development alias. Start with
 `npm run dev -- --host 127.0.0.1 --port 5176 --strictPort` and reload the page after a
 server/binding update. The page prepares the selected model and Wasm before enabling Start.
 Select the frozen W256 or a prepared training candidate, Sente/Gote, three- or ten-minute
 sudden death, and standard/high quality. No opening book is used. Both quality modes pass
 the full remaining match clocks to the same engine time policy; quality changes the bounded
 search memory allocation. The unvalidated learned controller is explicitly OFF by default.
-Candidate/controller selection is fixed for the match; no alternate evaluator is loaded after
-a failure. This development route makes no playing-strength claim.
+Model selection stays available during preparation, with cancellation and generation guards. During
+play or pause it is disabled; end/reset the match explicitly to change it. Failures show a reason
+and a same-model retry. Every replacement physically terminates the previous Worker. This makes
+no playing-strength claim. The old prototype uses the same W256 weights plus controller ON; it
+is represented by the separate development controller setting, not a duplicate model.
 
 The adjacent OpenShogiAI checkout supplies `target/pure/bindings/open_shogi_wasm.js`,
 `target/pure/bindings/open_shogi_wasm_bg.wasm`, `local/frozen/baseline/model.osaval03`, and
@@ -77,8 +73,10 @@ candidate; the old W256 controller is never silently paired with a new leaf.
 The loopback-only development middleware exposes selected, hash-bound manifests and assets
 under `/__core-prototype/baseline/` or `/__core-prototype/candidate/`. The baseline leaf must
 match the frozen SHA-256. Every response uses no-store, and changed, missing, escaping,
-oversized or incompatible artifacts fail visibly. Both the loaded model identity and the
-controller-to-leaf binding are checked by the pure runtime and the Worker. The artifact panel
+oversized or incompatible artifacts fail visibly. The Worker hashes fetched JS/Wasm/model/controller bytes once; the verified JS bytes run through
+a short-lived Blob module and the verified Wasm bytes are passed explicitly. The runtime independently
+checks the leaf identity and controller-to-leaf binding. Search diagnostics retain positive learned
+evaluation proof and zero forbidden-path counters. No Service Worker or model storage cache is used. The artifact panel
 shows the run, leaf/controller/Wasm identities, preparation stages, and each last move's
 remaining clocks, quality, target, hard limit, actual search time, total charged user wait,
 depth/nodes and stop reason. Save diagnostics exports the bounded latest 128 search records.
@@ -95,24 +93,51 @@ and the controller. The physical watchdog allows at most 100 ms to acknowledge c
 Flag fall uses elapsed wall time even in hidden tabs, and operation generations reject old
 responses after stop, resignation or rematch.
 
-The ordinary `#/match` route uses the existing committed standard Wasm snapshot and its bundled
-`overall-champion` evaluator; it does not load the frozen W256 or this training candidate.
-The normal route now rejects stale responses after flag fall and includes move-validation and
-response delivery in clock charges, but its old Wasm time allocation and synchronous transport
-are **not** the new development runtime. Use `#/core-prototype` for the corrected engine clock
-comparison. Updating the public/default artifact remains a separate decision.
+## One-model production build
 
-Neither weights nor pure bindings are copied into this repository. Production builds exclude
-the prototype module and artifact endpoint, checked by the build command. The existing committed
-Wasm snapshot and public default evaluator remain unchanged. The legacy `integration:ai`
-command validates that separate pinned standard snapshot, not this development route.
+`release-model.json` is the explicit release selection and currently contains `model: null`:
+public adoption is **undecided**. An ordinary `npm run build` therefore fails clearly. It never
+selects latest, the development candidate, or a champion automatically. Model files remain outside
+this Git repository. The existing standard snapshot is retained for development analysis and is
+not included in the production output.
 
-## Static hosting preparation
+For the authorized local structure test, the adjacent AI checkout holds a temporary selection:
 
-For a future Cloudflare Pages project, use the repository root, build command
-`npm ci --ignore-scripts && npm run build`, and output directory `dist`. The committed
-`public/_headers` supplies the same-origin WebAssembly CSP and other static response headers.
-No deployment, upload, release, or remote push is performed by this repository's checks.
+```sh
+OPENSHOGI_RELEASE_CONFIG=local/runs/evaluator-20260910/diagnosis/astra-browser-r3/release-selection.local.json npm run check
+npm run preview -- --host 127.0.0.1 --port 4176 --strictPort
+```
+
+The override path is relative to the adjacent AI checkout and must stay inside it. It is used only
+by the build process. Preview serves the completed `dist/`; it does not read the development
+registry or this environment variable. Open `http://127.0.0.1:4176/#/match`. This local test is not
+release adoption, weight publication, a deployment or a champion change.
+
+A selection has schema `open_shogi_release_selection/v1` and exactly one `model` object with `id`,
+`format: "OSAVAL03"`, `runtimeProfile: "pure_learned-v3"`, `controllerEnabled`, and `artifacts`.
+The exact artifact keys are `engine.js`, `engine.wasm`, `leaf.osaval03`, `controller.json`.
+Each component specifies `{ path, sha256 }`; the controller may be null only when disabled.
+Paths must be registered files inside the AI checkout's `local/` or `target/`. The build checks
+all actual bytes and loads the evaluator/controller with the selected Wasm before emitting.
+Missing/multiple selections, wrong format/hash and incompatible configurations stop the build.
+
+Only this one configuration is emitted under `/model/release/`, with an output identity manifest
+at `/model/manifest.json`. Both the page and Worker compile the sole allowed manifest and controller
+setting. Query/hash/localStorage and runtime flags cannot activate development selection. Model
+selection UI, upload/analysis/lab routes and their alternate runtime are absent from production.
+Standard/high-quality and ordinary match settings remain available.
+
+Vite's [public directory is copied verbatim by default](https://vite.dev/guide/assets#the-public-directory),
+so this build disables `copyPublicDir` and emits only allowlisted existing UI assets. It rejects
+public symlinks and unexpected assets, ignores Finder metadata, clears its `dist/` output, disables
+source maps and rejects non-production builds. The postbuild audit scans the entire output,
+including Worker bundles, for extra models/runtime binaries, development routes and unselected hashes.
+No Service Worker/precache is installed. All model paths use content-bound URLs and no-store.
+
+The committed `public/_headers` and local preview apply COOP/COEP and a same-origin Wasm CSP.
+`blob:` is limited to script execution for already hash-verified module bytes; external network
+origins remain disallowed. No deployment/upload/release is performed by repository checks.
+The legacy `integration:ai` command validates the separate development analysis snapshot.
 
 ## License
 

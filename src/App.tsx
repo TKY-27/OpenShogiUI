@@ -4,9 +4,6 @@ import licenseText from "../LICENSE?raw";
 import thirdPartyNotices from "../THIRD_PARTY.md?raw";
 import pieceAssetNotices from "../THIRD_PARTY_ASSETS.md?raw";
 
-import { BrowserPlay } from "./BrowserPlay";
-import { EvaluationLab } from "./EvaluationLab";
-import { MatchPlay } from "./MatchPlay";
 import {
   applyDocumentLanguage,
   DEFAULT_LOCALE,
@@ -22,8 +19,20 @@ import {
 } from "./project";
 
 type NoticeView = "license" | "third-party" | "piece-credits" | "model-license";
-const CorePrototype = import.meta.env.DEV
-  ? lazy(() => import("./CorePrototype"))
+const CorePrototype = lazy(() => import("./CorePrototype"));
+const BrowserPlay = import.meta.env.DEV
+  ? lazy(() =>
+      import("./BrowserPlay").then((module) => ({
+        default: module.BrowserPlay,
+      })),
+    )
+  : null;
+const EvaluationLab = import.meta.env.DEV
+  ? lazy(() =>
+      import("./EvaluationLab").then((module) => ({
+        default: module.EvaluationLab,
+      })),
+    )
   : null;
 
 const markedBoardCells = new Map([
@@ -61,7 +70,13 @@ function WorkspaceHome({ locale }: { locale: Locale }) {
       <section className="introduction" aria-labelledby="page-title">
         <div className="introduction-copy">
           <h1 id="page-title">{workspace.headline}</h1>
-          <p className="summary">{workspace.summary}</p>
+          <p className="summary">
+            {import.meta.env.DEV
+              ? workspace.summary
+              : locale === "ja"
+                ? "OpenShogiAIのWebAssemblyエンジンと、このビルドで指定された学習モデルで対局します。"
+                : "Play with the OpenShogiAI WebAssembly engine and the learned model selected for this build."}
+          </p>
           <p className="phase">
             {workspace.releaseStatus[projectStatus.release]}
           </p>
@@ -73,24 +88,32 @@ function WorkspaceHome({ locale }: { locale: Locale }) {
         <h2 id="start-title">{workspace.startHeading}</h2>
         <a className="start-action start-action--primary" href="#/match">
           <strong>{workspace.startMatch}</strong>
-          <span>{workspace.startMatchDetail}</span>
+          <span>
+            {locale === "ja"
+              ? "3分切れ負け・10分切れ負け"
+              : "3-minute or 10-minute sudden death"}
+          </span>
         </a>
-        <a className="start-action" href="#/browser-play">
-          <strong>{workspace.startAnalysis}</strong>
-          <span>{workspace.startAnalysisDetail}</span>
-        </a>
-        <a className="start-action" href="#/evaluation-lab">
-          <strong>{workspace.startLab}</strong>
-          <span>{workspace.startLabDetail}</span>
-        </a>
+        {import.meta.env.DEV ? (
+          <>
+            <a className="start-action" href="#/browser-play">
+              <strong>{workspace.startAnalysis}</strong>
+              <span>{workspace.startAnalysisDetail}</span>
+            </a>
+            <a className="start-action" href="#/evaluation-lab">
+              <strong>{workspace.startLab}</strong>
+              <span>{workspace.startLabDetail}</span>
+            </a>
+          </>
+        ) : null}
       </section>
 
       <section className="workspace" aria-labelledby="workspace-title">
         {import.meta.env.DEV ? (
-          <a href="#/core-prototype">
+          <a href="#/match">
             {locale === "ja"
-              ? "ローカル試作と対局する"
-              : "Play the local prototype"}
+              ? "r3候補・旧基準を選んで対局する"
+              : "Choose the r3 candidate or previous baseline"}
           </a>
         ) : null}
         <h2 id="workspace-title">{workspace.title}</h2>
@@ -157,8 +180,8 @@ function NoticeDialog({
         {view === "model-license" ? (
           <p>
             {locale === "ja"
-              ? "モデル重みは同梱されません。完全な由来と条件の審査が終わるまで、ライセンス状態は pending-review です。"
-              : "Model weights are not bundled. Their license status remains pending-review until complete provenance and terms are reviewed."}
+              ? "モデルは開発時には登録済みのローカル資産から、本番相当ビルドでは明示指定した一構成から読み込みます。ビルドへの同梱は公開採用や権利審査の完了を意味しません。完全な由来と条件の審査が終わるまで、ライセンス状態は pending-review です。"
+              : "Development loads registered local assets; a production-equivalent build includes one explicitly selected configuration. Inclusion does not mean public adoption or rights approval. The license status remains pending-review until complete provenance and terms are reviewed."}
           </p>
         ) : (
           <pre>
@@ -259,18 +282,22 @@ function App() {
           <a aria-current={isMatch ? "page" : undefined} href="#/match">
             {selectedMessages.header.match}
           </a>
-          <a
-            aria-current={isBrowserPlay ? "page" : undefined}
-            href="#/browser-play"
-          >
-            {selectedMessages.header.browserPlay}
-          </a>
-          <a
-            aria-current={isEvaluationLab ? "page" : undefined}
-            href="#/evaluation-lab"
-          >
-            {selectedMessages.header.evaluationLab}
-          </a>
+          {import.meta.env.DEV ? (
+            <>
+              <a
+                aria-current={isBrowserPlay ? "page" : undefined}
+                href="#/browser-play"
+              >
+                {selectedMessages.header.browserPlay}
+              </a>
+              <a
+                aria-current={isEvaluationLab ? "page" : undefined}
+                href="#/evaluation-lab"
+              >
+                {selectedMessages.header.evaluationLab}
+              </a>
+            </>
+          ) : null}
         </nav>
         <LanguageSwitcher
           locale={locale}
@@ -281,25 +308,25 @@ function App() {
       </header>
 
       <div className="app-main">
-        {isPrototype && CorePrototype !== null ? (
-          <Suspense
-            fallback={
-              <p role="status">
-                {locale === "ja" ? "準備しています…" : "Loading…"}
-              </p>
-            }
-          >
+        <Suspense
+          fallback={
+            <p role="status">
+              {locale === "ja" ? "準備しています…" : "Loading…"}
+            </p>
+          }
+        >
+          {isMatch || (import.meta.env.DEV && isPrototype) ? (
             <CorePrototype locale={locale} />
-          </Suspense>
-        ) : isMatch ? (
-          <MatchPlay locale={locale} />
-        ) : isBrowserPlay ? (
-          <BrowserPlay locale={locale} />
-        ) : isEvaluationLab ? (
-          <EvaluationLab locale={locale} />
-        ) : (
-          <WorkspaceHome locale={locale} />
-        )}
+          ) : import.meta.env.DEV && isBrowserPlay && BrowserPlay !== null ? (
+            <BrowserPlay locale={locale} />
+          ) : import.meta.env.DEV &&
+            isEvaluationLab &&
+            EvaluationLab !== null ? (
+            <EvaluationLab locale={locale} />
+          ) : (
+            <WorkspaceHome locale={locale} />
+          )}
+        </Suspense>
       </div>
 
       <footer className="site-footer">
@@ -324,7 +351,11 @@ function App() {
             {locale === "ja" ? "モデルライセンス" : "Model License"}
           </button>
         </nav>
-        <span>{selectedMessages.footer}</span>
+        <span>
+          {locale === "ja"
+            ? "AGPL-3.0-only · モデルの公開採用・権利審査は別途必要です"
+            : "AGPL-3.0-only · Model adoption and rights review are separate"}
+        </span>
       </footer>
 
       {noticeView === null ? null : (

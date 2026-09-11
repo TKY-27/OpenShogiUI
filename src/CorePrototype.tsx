@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { releaseControllerEnabled } from "virtual:shogi-runtime";
 import type { MoveSummary, SearchProfile, Side } from "./browser-engine";
 import {
   initialPrototypeState,
   PrototypeMatchSession,
 } from "./core-prototype-session";
 import { getMessages, type Locale } from "./localization";
-import { MatchClockPanel } from "./MatchPlay";
+import { MatchClockPanel } from "./MatchClockPanel";
 import { opposing } from "./match-clock";
 import { downloadText } from "./kifu";
 import { lastMoveHighlight } from "./play-settings";
@@ -28,9 +29,10 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
   const [enabled, setEnabled] = useState(false);
   const [preset, setPreset] = useState<"blitz3" | "rapid10">("blitz3");
   const [profile, setProfile] = useState<SearchProfile>("balanced");
-  const [candidate, setCandidate] = useState<"baseline" | "candidate">(
-    "baseline",
+  const [confirmAction, setConfirmAction] = useState<"resign" | "reset" | null>(
+    null,
   );
+  const confirmRef = useRef<HTMLDialogElement>(null);
   const [selection, setSelection] = useState<BoardSelection>(null);
   const [promotion, setPromotion] = useState<MoveSummary[] | null>(null);
   const [pieceSet] = useState(persistedPieceSet);
@@ -38,7 +40,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
   useEffect(() => {
     const session = new PrototypeMatchSession(setState);
     sessionRef.current = session;
-    void session.prepare();
+    void session.prepare(import.meta.env.DEV ? "candidate" : "release");
     const timer = window.setInterval(() => session.tick(), 100);
     return () => {
       window.clearInterval(timer);
@@ -50,6 +52,10 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
     setSelection(null);
     setPromotion(null);
   }, [state.snapshot, state.phase]);
+  useEffect(() => {
+    if (confirmAction !== null && !confirmRef.current?.open)
+      confirmRef.current?.showModal();
+  }, [confirmAction]);
 
   const position = state.snapshot;
   const orientation =
@@ -83,7 +89,24 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
     state.phase === "setup" ||
     state.phase === "error" ||
     (state.phase === "loading" && position === null);
-  const active = ["playing", "stopping", "loading"].includes(state.phase);
+  const active = state.phase === "playing" || state.phase === "stopping";
+  const canSelectModel = setup && (state.phase === "loading" || !state.busy);
+  const ready =
+    state.phase === "setup" &&
+    !state.busy &&
+    state.manifest !== null &&
+    position !== null &&
+    state.identity?.expectedHashVerified === true &&
+    state.identity.leafSha256 === position.leafSha256;
+  const modelLabel = import.meta.env.DEV
+    ? state.selection === "candidate"
+      ? ja
+        ? "r3候補"
+        : "r3 candidate"
+      : ja
+        ? "旧基準 (W256)"
+        : "Previous baseline (W256)"
+    : messages.match.engine;
   const result = state.result;
   const status =
     state.phase === "loading"
@@ -111,13 +134,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
   const clock = (side: Side) => (
     <MatchClockPanel
       label={sideLabel(side)}
-      name={
-        side === state.humanSide
-          ? messages.match.you
-          : ja
-            ? "ローカル試作 AI"
-            : "Local prototype AI"
-      }
+      name={side === state.humanSide ? messages.match.you : modelLabel}
       baseMs={state.clock[side === "black" ? "blackTimeMs" : "whiteTimeMs"]}
       runningSince={running(side)}
       showClock
@@ -128,54 +145,101 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
 
   return (
     <main
-      className={`match-page core-prototype ${position === null ? "" : "match-page--playing"}`}
+      className={`match-page core-prototype ${import.meta.env.DEV ? "core-prototype--development" : ""} ${setup ? "" : "match-page--playing"}`}
       aria-labelledby="prototype-title"
     >
       <header className="prototype-heading">
         <h1 id="prototype-title">
-          {ja
-            ? "開発用学習モデルとの対局"
-            : "Play the development learned model"}
+          {import.meta.env.DEV
+            ? ja
+              ? "学習モデルを選んで対局"
+              : "Choose a learned model to play"
+            : messages.workspace.startMatch}
         </h1>
         <p>
-          {ja
-            ? "同じ時計管理で凍結評価器と準備済みの学習候補を比較します。棋力は検証中です。"
-            : "Compare the frozen evaluator and prepared candidate with the same clock management. Playing strength is under evaluation."}
+          {import.meta.env.DEV
+            ? ja
+              ? "開発用の新旧モデル比較です。棋力は検証中です。"
+              : "Compare development models. Playing strength is under evaluation."
+            : ja
+              ? "3分・10分の切れ負け。定跡なし。"
+              : "3-minute or 10-minute sudden death. No opening book."}
         </p>
       </header>
-      {setup ? (
-        <div className="match-setup">
-          <fieldset
-            className="segmented-control"
-            disabled={state.phase === "loading"}
-          >
-            <legend>{ja ? "評価モデル" : "Evaluator"}</legend>
+      {import.meta.env.DEV ? (
+        <section
+          className="prototype-model"
+          aria-label={ja ? "開発用モデル設定" : "Development model settings"}
+        >
+          <fieldset className="segmented-control" disabled={!canSelectModel}>
+            <legend>{ja ? "モデル" : "Model"}</legend>
             <div>
-              {(["baseline", "candidate"] as const).map((value) => (
+              {(["candidate", "baseline"] as const).map((value) => (
                 <button
                   type="button"
                   key={value}
-                  aria-pressed={candidate === value}
+                  aria-pressed={state.selection === value}
                   onClick={() => {
-                    setCandidate(value);
                     setEnabled(false);
                     void sessionRef.current?.prepare(value);
                   }}
                 >
-                  {value === "baseline"
+                  {value === "candidate"
                     ? ja
-                      ? "凍結 W256"
-                      : "Frozen W256"
+                      ? "r3候補"
+                      : "r3 candidate"
                     : ja
-                      ? "本学習候補"
-                      : "Trained candidate"}
+                      ? "旧基準 (W256)"
+                      : "Previous baseline (W256)"}
                 </button>
               ))}
             </div>
           </fieldset>
+          <p
+            className="prototype-model__status"
+            role="status"
+            aria-live="polite"
+          >
+            {state.phase === "loading" ? (
+              ja ? (
+                `${modelLabel}を読み込み、照合しています…`
+              ) : (
+                `Loading and verifying ${modelLabel}…`
+              )
+            ) : state.identity === null ? (
+              ja ? (
+                "モデルは未読込です"
+              ) : (
+                "No verified model is loaded"
+              )
+            ) : (
+              <>
+                {modelLabel} · {ja ? "照合済み" : "Verified"} ·{" "}
+                <code>{state.identity.modelId}</code>
+                <br />
+                OSAVAL03 · <code>
+                  {state.identity.leafSha256.slice(0, 12)}
+                </code>{" "}
+                · {ja ? "思考制御" : "Controller"}{" "}
+                {(setup ? enabled : state.enabled) ? "ON" : "OFF"} ·{" "}
+                {messages.play.profileName[setup ? profile : state.profile]}
+              </>
+            )}
+          </p>
+          {!setup ? (
+            <p className="match-setup__note">
+              {ja
+                ? "モデルを変更するには、対局を終了して設定に戻ってください。"
+                : "End this game and return to settings to change models."}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+      {setup ? (
+        <div className="match-setup">
           <fieldset
             className="segmented-control"
-            disabled={state.phase === "loading"}
+            disabled={state.phase === "loading" || state.busy}
           >
             <legend>{messages.match.timeControl}</legend>
             <div>
@@ -193,7 +257,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           </fieldset>
           <fieldset
             className="segmented-control"
-            disabled={state.phase === "loading"}
+            disabled={state.phase === "loading" || state.busy}
           >
             <legend>{ja ? "計算品質" : "Search quality"}</legend>
             <div>
@@ -211,7 +275,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           </fieldset>
           <fieldset
             className="segmented-control"
-            disabled={state.phase === "loading"}
+            disabled={state.phase === "loading" || state.busy}
           >
             <legend>{messages.match.yourSide}</legend>
             <div>
@@ -227,47 +291,45 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
               ))}
             </div>
           </fieldset>
-          <fieldset
-            className="segmented-control"
-            disabled={state.phase === "loading"}
-          >
-            <legend>
-              {ja ? "学習した思考制御" : "Learned computation control"}
-            </legend>
-            <div>
-              {[true, false].map((value) => (
-                <button
-                  type="button"
-                  key={String(value)}
-                  aria-pressed={enabled === value}
-                  disabled={
-                    value &&
-                    state.manifest?.artifacts["controller.json"] == null
-                  }
-                  onClick={() => setEnabled(value)}
-                >
-                  {value ? (ja ? "有効" : "On") : ja ? "無効" : "Off"}
-                </button>
-              ))}
-            </div>
-          </fieldset>
+          {import.meta.env.DEV ? (
+            <fieldset
+              className="segmented-control"
+              disabled={state.phase === "loading" || state.busy}
+            >
+              <legend>
+                {ja ? "思考制御 (開発用)" : "Computation control (development)"}
+              </legend>
+              <div>
+                {[true, false].map((value) => (
+                  <button
+                    type="button"
+                    key={String(value)}
+                    aria-pressed={enabled === value}
+                    disabled={
+                      value &&
+                      state.manifest?.artifacts["controller.json"] == null
+                    }
+                    onClick={() => setEnabled(value)}
+                  >
+                    {value ? (ja ? "有効" : "On") : ja ? "無効" : "Off"}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
           <p className="match-setup__note">
             {ja
-              ? "高品質も同じ残り時計と絶対上限を守ります。思考制御は効果未確認のため既定で無効です。準備が終わってから対局を開始します。"
-              : "Both quality modes use the same remaining clock and hard limit. The unvalidated learned controller is off by default. Preparation completes before play starts."}
+              ? "標準・高品質は同じモデルを使い、残り時間から思考時間を配分します。モデルの読込と照合が終わると対局を開始できます。"
+              : "Standard and high quality use the same model and allocate thinking time from the remaining clock. Play is available after the model is loaded and verified."}
           </p>
           <button
             className="match-start"
             type="button"
-            disabled={
-              state.phase === "loading" ||
-              state.manifest === null ||
-              state.snapshot === null
-            }
+            disabled={!ready}
             onClick={() =>
               void sessionRef.current?.start(
                 humanSide,
-                enabled,
+                import.meta.env.DEV ? enabled : releaseControllerEnabled,
                 preset,
                 profile,
               )
@@ -278,9 +340,15 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
         </div>
       ) : null}
       {state.error === null ? null : (
-        <p className="play-notice" role="alert">
-          {state.error}
-        </p>
+        <div className="play-notice prototype-error">
+          <p role="alert">{state.error}</p>
+          <button
+            type="button"
+            onClick={() => void sessionRef.current?.prepare(state.selection)}
+          >
+            {ja ? "同じモデルで再試行" : "Retry this model"}
+          </button>
+        </div>
       )}
       {position === null || setup ? null : (
         <div className="match-board">
@@ -351,10 +419,12 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           {status}
         </p>
         <p className="match-move-number">
-          <span>
-            {ja ? "思考制御" : "Control"}{" "}
-            {(setup ? enabled : state.enabled) ? "ON" : "OFF"}
-          </span>
+          {import.meta.env.DEV ? (
+            <span>
+              {ja ? "思考制御" : "Control"}{" "}
+              {(setup ? enabled : state.enabled) ? "ON" : "OFF"}
+            </span>
+          ) : null}
           <strong>
             {position?.moveNumber ?? 1}
             {ja ? "手目" : " ply"}
@@ -379,24 +449,35 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
             </button>
           ) : null}
           {state.phase === "playing" || state.phase === "stopped" ? (
-            <button type="button" onClick={() => sessionRef.current?.resign()}>
+            <button type="button" onClick={() => setConfirmAction("resign")}>
               {messages.match.resign}
             </button>
           ) : null}
-          {position !== null && !active ? (
+          {position !== null && !setup ? (
             <button
               type="button"
-              onClick={() => sessionRef.current?.configure()}
+              disabled={state.phase === "stopping"}
+              onClick={() => {
+                if (active || state.phase === "stopped")
+                  setConfirmAction("reset");
+                else sessionRef.current?.configure();
+              }}
             >
-              {messages.match.rematch}
+              {active || state.phase === "stopped"
+                ? ja
+                  ? "対局を終了して設定へ"
+                  : "End game and return to settings"
+                : messages.match.rematch}
             </button>
           ) : null}
         </div>
       </div>
-      {state.manifest === null ? null : (
+      {import.meta.env.DEV && state.manifest !== null ? (
         <details className="prototype-artifacts">
           <summary>
-            {ja ? "使用中のローカル資産" : "Active local artifacts"}
+            {ja
+              ? "モデルと読込の詳細 (開発用)"
+              : "Model and load details (development)"}
           </summary>
           {state.telemetry == null ||
           state.telemetry.elapsedMs == null ? null : (
@@ -448,7 +529,33 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           <p>
             {state.manifest.selection} · {state.manifest.runId}
           </p>
-          <p>OSAVAL03 · {state.manifest.artifacts["leaf.osaval03"].sha256}</p>
+          <p>
+            {ja ? "期待する評価器 SHA-256" : "Expected evaluator SHA-256"}
+            <br />
+            {state.manifest.artifacts["leaf.osaval03"].sha256}
+          </p>
+          {state.identity === null ? null : (
+            <>
+              <p>
+                {ja ? "読み込んだ評価器 SHA-256" : "Loaded evaluator SHA-256"}
+                <br />
+                {state.identity.leafSha256}
+              </p>
+              <p>
+                {state.identity.modelFormat} · {state.identity.buildClass} ·{" "}
+                {state.identity.evaluationMode}
+              </p>
+            </>
+          )}
+          {state.telemetry === null ? null : (
+            <p>
+              {ja
+                ? "直前の推論が使った評価器 SHA-256"
+                : "Evaluator SHA-256 used for the last inference"}
+              <br />
+              {state.telemetry.leafSha256}
+            </p>
+          )}
           <p>
             {ja ? "思考制御" : "Controller"} ·{" "}
             {state.manifest.artifacts["controller.json"]?.sha256 ??
@@ -466,6 +573,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
                   {
                     schema: "open_shogi_ui_diagnostics/v1",
                     manifest: state.manifest,
+                    identity: state.identity,
                     preparation: state.preparation,
                     searches: state.diagnostics,
                   },
@@ -478,6 +586,48 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
             {ja ? "診断ログを保存" : "Save diagnostics"}
           </button>
         </details>
+      ) : null}
+      {confirmAction === null ? null : (
+        <dialog
+          ref={confirmRef}
+          aria-labelledby="prototype-confirm-title"
+          aria-modal="true"
+          className="notice-view"
+          onCancel={() => setConfirmAction(null)}
+          onClose={() => setConfirmAction(null)}
+        >
+          <article>
+            <h2 id="prototype-confirm-title">
+              {confirmAction === "resign"
+                ? messages.match.resign
+                : ja
+                  ? "対局を終了"
+                  : "End this game"}
+            </h2>
+            <p>
+              {confirmAction === "resign"
+                ? messages.match.resignConfirm
+                : ja
+                  ? "現在の対局を終了し、モデルと対局設定の選択に戻ります。"
+                  : "End the current game and return to model and game settings."}
+            </p>
+            <div className="inline-actions">
+              <button type="button" onClick={() => setConfirmAction(null)}>
+                {messages.match.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirmAction === "resign") sessionRef.current?.resign();
+                  else sessionRef.current?.configure();
+                  setConfirmAction(null);
+                }}
+              >
+                {messages.match.confirm}
+              </button>
+            </div>
+          </article>
+        </dialog>
       )}
     </main>
   );

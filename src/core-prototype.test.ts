@@ -21,9 +21,12 @@ import {
   parsePureSearch,
   parsePureSnapshot,
   parsePlayProgress,
+  parseRuntimeIdentity,
+  verifyArtifactBytes,
   type PrototypeManifest,
   type PrototypeSearch,
   type PrototypeSnapshot,
+  type PureRuntimeProof,
 } from "./core-prototype-protocol";
 import { PrototypeMatchSession } from "./core-prototype-session";
 import { routeForHash } from "./project";
@@ -160,6 +163,7 @@ function searchResult(side: "black" | "white" = "white"): PrototypeSearch {
     elapsedMs: 98,
     termination: "stable",
     timing,
+    runtimeProof: rawSearch().runtimeProof as PureRuntimeProof,
   };
 }
 function rawSearch() {
@@ -226,17 +230,53 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+function runtimeIdentity(selected: PrototypeManifest = manifest) {
+  return parseRuntimeIdentity(
+    {
+      modelId: selected.runId,
+      modelFormat: "OSAVAL03",
+      leafSha256: selected.artifacts["leaf.osaval03"].sha256,
+      controllerSha256: selected.artifacts["controller.json"]?.sha256 ?? null,
+      jsSha256: selected.artifacts["engine.js"].sha256,
+      wasmSha256: selected.artifacts["engine.wasm"].sha256,
+      expectedHashVerified: true,
+      buildClass: "pure-only",
+      evaluationMode: "pure-value",
+    },
+    selected,
+  );
+}
+function candidateManifest(): PrototypeManifest {
+  const candidate = structuredClone(manifest);
+  candidate.selection = "candidate";
+  candidate.runId = "r3-best-step6144";
+  candidate.artifacts["leaf.osaval03"].sha256 = "b".repeat(64);
+  candidate.artifacts["controller.json"] = null;
+  for (const [name, asset] of Object.entries(candidate.artifacts)) {
+    if (asset)
+      asset.url = `${ASSET_PREFIX}candidate/${name}?sha256=${asset.sha256}`;
+  }
+  return parsePrototypeManifest(candidate);
+}
+
 class FakeEngine implements PrototypeEngineClient {
   position = position();
   result = deferred<PrototypeSearch>();
   initialize = vi.fn(
     async (
-      _manifest: PrototypeManifest,
+      selected: PrototypeManifest,
       _enabled: boolean,
       restored: PrototypeSnapshot | null,
     ) => {
-      this.position = restored ?? position();
-      return { snapshot: this.position, preparation };
+      this.position = restored ?? {
+        ...position(),
+        leafSha256: selected.artifacts["leaf.osaval03"].sha256,
+      };
+      return {
+        snapshot: this.position,
+        preparation,
+        identity: runtimeIdentity(selected),
+      };
     },
   );
   configure = vi.fn(async (_enabled: boolean) => {});
@@ -248,7 +288,7 @@ class FakeEngine implements PrototypeEngineClient {
   search = vi.fn(() => this.result.promise);
   dispose = vi.fn();
 }
-function harness() {
+async function harness() {
   let now = 100;
   const clients: FakeEngine[] = [];
   const changes = vi.fn();
@@ -262,6 +302,7 @@ function harness() {
     async () => manifest,
     () => now,
   );
+  await session.prepare("baseline");
   return {
     session,
     clients,
@@ -273,6 +314,32 @@ function harness() {
 }
 
 describe("isolated prototype protocol", () => {
+  it("checks actual bytes once and retains the verified inference proof", async () => {
+    const bytes = new TextEncoder().encode("abc").buffer;
+    const artifact = {
+      url: "/registered-artifact",
+      size: 3,
+      sha256:
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    };
+    expect(await verifyArtifactBytes(bytes, artifact)).toBe(artifact.sha256);
+    await expect(
+      verifyArtifactBytes(new TextEncoder().encode("abd").buffer, artifact),
+    ).rejects.toThrow("hash mismatch");
+    await expect(
+      verifyArtifactBytes(new ArrayBuffer(4), artifact),
+    ).rejects.toThrow("size mismatch");
+    const raw = rawSearch();
+    expect(parsePureSearch(raw, controllerHash, true).runtimeProof).toEqual(
+      raw.runtimeProof,
+    );
+    expect(() =>
+      parseRuntimeIdentity(
+        { ...runtimeIdentity(), jsSha256: "b".repeat(64) },
+        manifest,
+      ),
+    ).toThrow("identity mismatch");
+  });
   it("validates play deadlines and candidate-specific pure proof without reusing the old controller", () => {
     const raw = { ...rawSearch(), profile: "balanced" };
     expect(
@@ -446,12 +513,138 @@ describe("isolated prototype protocol", () => {
 });
 
 describe("prototype game clock and cancellation", () => {
+  it("does not start before verified preparation, while loading, or during a match", async () => {
+    const pending = deferred<PrototypeManifest>();
+    const factory = vi.fn(() => new FakeEngine());
+    const session = new PrototypeMatchSession(
+      vi.fn(),
+      factory,
+      () => pending.promise,
+    );
+    await session.start("black", false);
+    expect(factory).not.toHaveBeenCalled();
+    const preparing = session.prepare("baseline");
+    await session.start("white", false);
+    expect(factory).not.toHaveBeenCalled();
+    pending.resolve(manifest);
+    await preparing;
+    await session.start("black", false);
+    const playing = session.state;
+    await session.start("white", true);
+    await session.prepare("candidate");
+    expect(session.state).toBe(playing);
+    session.stop();
+    const stopped = session.state;
+    await session.prepare("candidate");
+    expect(session.state).toBe(stopped);
+    await session.configure();
+    expect(session.state.phase).toBe("setup");
+    expect(factory).toHaveBeenCalledTimes(2);
+    session.dispose();
+  });
+
+  it("disposes a superseded initializing Worker and ignores its late identity", async () => {
+    const ready = deferred<Awaited<ReturnType<FakeEngine["initialize"]>>>();
+    const oldClient = new FakeEngine();
+    oldClient.initialize.mockReturnValueOnce(ready.promise);
+    const currentClient = new FakeEngine();
+    const factory = vi
+      .fn()
+      .mockReturnValueOnce(oldClient)
+      .mockReturnValueOnce(currentClient);
+    const loader = vi.fn(async (selection) =>
+      selection === "candidate" ? candidateManifest() : manifest,
+    );
+    const session = new PrototypeMatchSession(vi.fn(), factory, loader);
+    const old = session.prepare("baseline");
+    await vi.waitFor(() => expect(oldClient.initialize).toHaveBeenCalledOnce());
+    await session.prepare("candidate");
+    expect(oldClient.dispose).toHaveBeenCalledOnce();
+    expect(session.state.identity?.leafSha256).toBe("b".repeat(64));
+    ready.resolve({
+      snapshot: position(),
+      preparation,
+      identity: runtimeIdentity(),
+    });
+    await old;
+    expect(session.state.selection).toBe("candidate");
+    expect(session.state.identity?.leafSha256).toBe("b".repeat(64));
+    session.dispose();
+  });
+
+  it("recreates one Worker for reload and old/candidate/old changes without retaining state", async () => {
+    const clients: FakeEngine[] = [];
+    const session = new PrototypeMatchSession(
+      vi.fn(),
+      () => {
+        const client = new FakeEngine();
+        clients.push(client);
+        return client;
+      },
+      async (selection) =>
+        selection === "candidate" ? candidateManifest() : manifest,
+    );
+    for (const selection of [
+      "baseline",
+      "baseline",
+      "candidate",
+      "baseline",
+    ] as const) {
+      await session.prepare(selection);
+      expect(session.state.selection).toBe(selection);
+      expect(session.state.identity?.modelId).toBe(
+        selection === "candidate" ? "r3-best-step6144" : manifest.runId,
+      );
+      expect(session.state.snapshot?.leafSha256).toBe(
+        selection === "candidate" ? "b".repeat(64) : LEAF_SHA256,
+      );
+      expect(session.state.snapshot?.moves).toEqual([]);
+      expect(session.state.diagnostics).toEqual([]);
+    }
+    expect(clients).toHaveLength(4);
+    for (const client of clients.slice(0, -1))
+      expect(client.dispose).toHaveBeenCalledOnce();
+    expect(clients[3].dispose).not.toHaveBeenCalled();
+    session.dispose();
+  });
+
+  it("keeps a failed selection explicit, requires retry and rejects mismatched loaded identity", async () => {
+    const loader = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("registered model missing"))
+      .mockResolvedValue(candidateManifest());
+    const client = new FakeEngine();
+    const factory = vi.fn(() => client);
+    const session = new PrototypeMatchSession(vi.fn(), factory, loader);
+    await session.prepare("candidate");
+    expect(session.state).toMatchObject({
+      phase: "error",
+      selection: "candidate",
+      manifest: null,
+      identity: null,
+      error: "registered model missing",
+    });
+    await session.start("black", false);
+    expect(factory).not.toHaveBeenCalled();
+    await session.prepare(session.state.selection);
+    expect(session.state.phase).toBe("setup");
+    expect(session.state.identity?.leafSha256).toBe("b".repeat(64));
+    client.initialize.mockResolvedValueOnce({
+      snapshot: position(),
+      preparation,
+      identity: runtimeIdentity(),
+    });
+    await session.prepare("candidate");
+    expect(session.state.phase).toBe("error");
+    expect(session.state.error).toContain("identity mismatch");
+    session.dispose();
+  });
   it.each(["blitz3", "rapid10"] as const)(
     "forwards %s clocks equally for both qualities and AI colors",
     async (preset) => {
       for (const profile of ["balanced", "quality"] as const) {
         for (const humanSide of ["black", "white"] as const) {
-          const h = harness();
+          const h = await harness();
           const total = preset === "blitz3" ? 180000 : 600000;
           let playing = h.session.start(humanSide, false, preset, profile);
           if (humanSide === "black") {
@@ -497,8 +690,7 @@ describe("prototype game clock and cancellation", () => {
     },
   );
   it("prepares before play and charges human response-delivery time", async () => {
-    const h = harness();
-    await h.session.prepare();
+    const h = await harness();
     h.at(20100);
     expect(h.session.state.turnStartedAt).toBeNull();
     await h.session.start("black", false);
@@ -515,7 +707,7 @@ describe("prototype game clock and cancellation", () => {
     await play;
   });
   it("cooperatively stops with a verified candidate, preserving the committed board and charging cancellation latency", async () => {
-    const h = harness();
+    const h = await harness();
     const start = h.session.start("white", false);
     await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
     h.at(1100);
@@ -536,7 +728,7 @@ describe("prototype game clock and cancellation", () => {
     expect(h.clients[0].move).not.toHaveBeenCalled();
   });
   it("rejects a human move whose Worker validation finishes at flag fall", async () => {
-    const h = harness();
+    const h = await harness();
     await h.session.start("black", false);
     const applied = deferred<PrototypeSnapshot>();
     h.clients[0].move.mockReturnValueOnce(applied.promise);
@@ -550,7 +742,7 @@ describe("prototype game clock and cancellation", () => {
   });
 
   it("charges real elapsed milliseconds to each side and forwards the full remaining clock", async () => {
-    const h = harness();
+    const h = await harness();
     await h.session.start("black", true);
     h.at(1600);
     const move = h.session.move("7g7f");
@@ -591,7 +783,7 @@ describe("prototype game clock and cancellation", () => {
     expect(h.session.state.snapshot?.sideToMove).toBe("black");
   });
   it("starts the AI as black when the human selects gote", async () => {
-    const h = harness();
+    const h = await harness();
     const started = h.session.start("white", false);
     await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
     expect(h.clients[0].configure).toHaveBeenCalledWith(false);
@@ -605,11 +797,12 @@ describe("prototype game clock and cancellation", () => {
     expect(h.session.state.telemetry?.elapsedMs).toBe(
       180000 - h.session.state.clock.blackTimeMs,
     );
+    await h.session.configure();
     await h.session.start("black", true);
     expect(h.session.state.telemetry).toBeNull();
   });
   it("rejects a human move exactly at flag fall before changing the Worker", async () => {
-    const h = harness();
+    const h = await harness();
     await h.session.start("black", true);
     h.at(180100);
     await h.session.move("7g7f");
@@ -621,7 +814,7 @@ describe("prototype game clock and cancellation", () => {
     expect(h.clients[0].dispose).toHaveBeenCalledOnce();
   });
   it("physically stops overdue search and ignores its later result", async () => {
-    const h = harness();
+    const h = await harness();
     const started = h.session.start("white", true);
     await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
     h.at(180100);
@@ -636,7 +829,7 @@ describe("prototype game clock and cancellation", () => {
     });
   });
   it("checks flag fall again when a search returns without a timer tick", async () => {
-    const h = harness();
+    const h = await harness();
     const started = h.session.start("white", true);
     await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
     h.at(180100);
@@ -646,7 +839,7 @@ describe("prototype game clock and cancellation", () => {
     expect(h.session.state.result?.reason).toBe("timeout");
   });
   it("does not commit an AI move whose application completes after flag fall", async () => {
-    const h = harness();
+    const h = await harness();
     const started = h.session.start("white", true);
     await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
     const moved = deferred<PrototypeSnapshot>();
@@ -660,7 +853,7 @@ describe("prototype game clock and cancellation", () => {
     expect(h.session.state.result?.reason).toBe("timeout");
   });
   it("preserves confirmed position, time and artifact identity through physical stop/resume", async () => {
-    const h = harness();
+    const h = await harness();
     await h.session.start("black", true);
     h.at(2100);
     h.session.stop();
@@ -674,9 +867,10 @@ describe("prototype game clock and cancellation", () => {
     expect(h.session.state.turnStartedAt).toBe(502100);
   });
   it("rejects stale search after a new match selects the other controller mode", async () => {
-    const h = harness();
+    const h = await harness();
     const old = h.session.start("white", true);
     await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
+    await h.session.configure();
     await h.session.start("black", false);
     h.clients[0].result.resolve(searchResult("black"));
     await old;
@@ -693,8 +887,10 @@ describe("prototype game clock and cancellation", () => {
       .mockResolvedValueOnce(manifest);
     const factory = vi.fn(() => new FakeEngine());
     const session = new PrototypeMatchSession(vi.fn(), factory, loader);
-    const old = session.start("white", true);
-    await session.start("black", false);
+    const old = session.prepare("candidate");
+    const oldSignal = loader.mock.calls[0][1] as AbortSignal;
+    await session.prepare("baseline");
+    expect(oldSignal.aborted).toBe(true);
     stale.resolve(manifest);
     await old;
     expect(factory).toHaveBeenCalledOnce();
@@ -702,12 +898,13 @@ describe("prototype game clock and cancellation", () => {
     expect(session.state.snapshot?.moves).toEqual([]);
   });
   it("resignation and rule-terminal positions forbid later moves", async () => {
-    const h = harness();
+    const h = await harness();
     await h.session.start("black", true);
     h.session.resign();
     await h.session.move("7g7f");
     expect(h.clients[0].move).not.toHaveBeenCalled();
     expect(h.session.state.result?.reason).toBe("resignation");
+    await h.session.configure();
     await h.session.start("black", true);
     const terminal = {
       ...position(["7g7f"]),
@@ -725,7 +922,7 @@ describe("prototype game clock and cancellation", () => {
     expect(h.session.state.result?.winner).toBe("black");
   });
   it("fails closed on illegal AI replies and missing assets", async () => {
-    const h = harness();
+    const h = await harness();
     const started = h.session.start("white", true);
     await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
     h.clients[0].result.resolve({ ...searchResult("black"), bestMove: "1a1b" });
@@ -736,6 +933,7 @@ describe("prototype game clock and cancellation", () => {
     const session = new PrototypeMatchSession(vi.fn(), factory, async () => {
       throw new Error("missing controller");
     });
+    await session.prepare("baseline");
     await session.start("black", true);
     expect(factory).not.toHaveBeenCalled();
     expect(session.state.phase).toBe("error");

@@ -1,16 +1,23 @@
 import type { SearchProfile, Side, TimeControl } from "./browser-engine";
 import {
+  releaseControllerEnabled,
+  releaseManifest,
+} from "virtual:shogi-runtime";
+import {
   ASSET_PREFIX,
+  DEFAULT_SELECTION,
   boundedJson,
   numeric,
   object,
   parsePrototypeManifest,
+  parseRuntimeIdentity,
   type PrototypeManifest,
   type PrototypeRequest,
   type PrototypeSearch,
   type PrototypeSnapshot,
   type PrototypeReady,
   type PlayProgress,
+  type PrototypeSelection,
 } from "./core-prototype-protocol";
 
 type RequestPayload = PrototypeRequest extends infer T
@@ -144,11 +151,25 @@ export class PrototypeWorkerClient implements PrototypeEngineClient {
         moves: position?.moves ?? [],
       }) as Promise<PrototypeReady>
     ).then((ready) => {
-      this.sideToMove = ready.snapshot.sideToMove;
-      return ready;
+      try {
+        parseRuntimeIdentity(ready.identity, manifest);
+        if (ready.snapshot.leafSha256 !== ready.identity.leafSha256)
+          throw new Error("Worker snapshot model identity mismatch");
+        this.sideToMove = ready.snapshot.sideToMove;
+        return ready;
+      } catch (error) {
+        this.fail(
+          error instanceof Error ? error : new Error("Invalid Worker identity"),
+        );
+        throw error;
+      }
     });
   }
   configure(enabled: boolean): Promise<void> {
+    if (!import.meta.env.DEV && enabled !== releaseControllerEnabled)
+      return Promise.reject(
+        new Error("Release controller configuration is fixed"),
+      );
     return this.request({ kind: "configure", enabled }) as Promise<void>;
   }
   move(movement: string): Promise<PrototypeSnapshot> {
@@ -172,7 +193,7 @@ export class PrototypeWorkerClient implements PrototypeEngineClient {
     )
       return Promise.reject(
         new Error(
-          "この対局には COOP/COEP が有効な開発サーバーが必要です。ページを再読込してください。",
+          "この対局には COOP/COEP が有効なサーバーが必要です。ページを再読込してください。",
         ),
       );
     if (this.pending !== null || this.disposed)
@@ -266,16 +287,31 @@ export class PrototypeWorkerClient implements PrototypeEngineClient {
 }
 
 export async function loadPrototypeManifest(
-  selection: "baseline" | "candidate" = "baseline",
+  selection: PrototypeSelection = DEFAULT_SELECTION,
+  signal?: AbortSignal,
 ): Promise<PrototypeManifest> {
+  signal?.throwIfAborted();
+  if (!import.meta.env.DEV) {
+    if (selection !== "release")
+      throw new Error("Development model selection is unavailable");
+    return parsePrototypeManifest(releaseManifest);
+  }
+  if (selection !== "baseline" && selection !== "candidate")
+    throw new Error("Invalid development model selection");
   const response = await fetch(`${ASSET_PREFIX}${selection}/manifest.json`, {
     cache: "no-store",
     credentials: "same-origin",
     redirect: "error",
+    signal,
   });
   if (!response.ok)
     throw new Error(
-      "試作のローカル資産を準備できません。pure build と controller の生成を確認してください。",
+      `モデルのローカル資産を準備できません（HTTP ${response.status}）。登録済みのモデルと pure build を確認してください。`,
     );
-  return parsePrototypeManifest(boundedJson(await response.text(), 8_192));
+  const manifest = parsePrototypeManifest(
+    boundedJson(await response.text(), 8_192),
+  );
+  if (manifest.selection !== selection)
+    throw new Error("Selected model manifest mismatch");
+  return manifest;
 }

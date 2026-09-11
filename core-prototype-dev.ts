@@ -6,6 +6,14 @@ import type { IncomingMessage } from "node:http";
 import type { Plugin } from "vite";
 
 export const PROTOTYPE_PREFIX = "/__core-prototype/";
+const RUNTIME_HASHES: Record<string, string> = {
+  "engine.js":
+    "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e",
+  "engine.wasm":
+    "0df3ce43b275137bf18ccbf1372c4dacdc99645db6b7b3630669b8528252ad1f",
+  "controller.json":
+    "66110bae4ef5fbedd6a3c5537813f0fae5b9276b576a745b2364b4a093141b63",
+};
 export const FROZEN_LEAF_SHA256 =
   "859e922b3f503ddeecf0afeb9a05fccac080a9faca3b19fce9d8253c9039c480";
 
@@ -205,6 +213,13 @@ export function corePrototypeDev(): Plugin {
                   name,
                   selection,
                 );
+                const pinned = RUNTIME_HASHES[name];
+                if (
+                  pinned &&
+                  artifact.sha256 !== pinned &&
+                  (name !== "controller.json" || selection === "baseline")
+                )
+                  throw new Error("Registered runtime configuration changed");
                 return [
                   name,
                   {
@@ -234,6 +249,13 @@ export function corePrototypeDev(): Plugin {
           )
             throw new Error("Artifact hash is required");
           const artifact = await readPrototypeArtifact(aiRoot, name, selection);
+          const pinned = RUNTIME_HASHES[name];
+          if (
+            pinned &&
+            artifact.sha256 !== pinned &&
+            (name !== "controller.json" || selection === "baseline")
+          )
+            throw new Error("Registered runtime configuration changed");
           if (artifact.sha256 !== url.searchParams.get("sha256"))
             throw new Error("Artifact changed; reload the prototype");
           response.setHeader("Content-Type", artifact.mime);

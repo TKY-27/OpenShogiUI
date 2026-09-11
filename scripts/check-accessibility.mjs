@@ -6,6 +6,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const browserPlay = readFileSync(join(root, "src/BrowserPlay.tsx"), "utf8");
 const boardView = readFileSync(join(root, "src/ShogiBoardView.tsx"), "utf8");
 const matchPlay = readFileSync(join(root, "src/MatchPlay.tsx"), "utf8");
+const clockPanel = readFileSync(join(root, "src/MatchClockPanel.tsx"), "utf8");
 const app = readFileSync(join(root, "src/App.tsx"), "utf8");
 const styles = readFileSync(join(root, "src/index.css"), "utf8");
 const failures = [];
@@ -41,9 +42,15 @@ const requiredMatchEvidence = [
   'aria-live="polite"',
   'aria-modal="true"',
   "showModal()",
-  "aria-label={remainingLabel(formatMatchClock(remainingMs))}",
   'type="button"',
 ];
+if (
+  !clockPanel.includes(
+    "aria-label={remainingLabel(formatMatchClock(remainingMs))}",
+  )
+) {
+  failures.push("MatchClockPanel is missing the accessible remaining time");
+}
 
 // The promotion picker is inline, not modal, so it must still be labelled and
 // focusable and must still handle Escape.

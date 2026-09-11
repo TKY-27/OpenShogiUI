@@ -6,10 +6,16 @@ import {
   type TimeControl,
   type SearchProfile,
 } from "./browser-engine";
+import { assetPrefix, releaseManifest } from "virtual:shogi-runtime";
 
-export const LEAF_SHA256 =
-  "859e922b3f503ddeecf0afeb9a05fccac080a9faca3b19fce9d8253c9039c480";
-export const ASSET_PREFIX = "/__core-prototype/";
+export const LEAF_SHA256 = import.meta.env.DEV
+  ? "859e922b3f503ddeecf0afeb9a05fccac080a9faca3b19fce9d8253c9039c480"
+  : (releaseManifest?.artifacts["leaf.osaval03"].sha256 ?? "");
+export const ASSET_PREFIX = assetPrefix;
+export type PrototypeSelection = "baseline" | "candidate" | "release";
+export const DEFAULT_SELECTION: PrototypeSelection = import.meta.env.DEV
+  ? "candidate"
+  : "release";
 export const ASSET_NAMES = [
   "engine.js",
   "engine.wasm",
@@ -24,7 +30,7 @@ export interface PrototypeAsset {
 }
 export interface PrototypeManifest {
   schema: "open_shogi_core_prototype_assets/v2";
-  selection: "baseline" | "candidate";
+  selection: PrototypeSelection;
   runId: string;
   artifacts: Record<Exclude<AssetName, "controller.json">, PrototypeAsset> & {
     "controller.json": PrototypeAsset | null;
@@ -51,7 +57,35 @@ export interface PrototypeSearch {
   elapsedMs: number;
   termination: string;
   timing: PlayTiming;
+  runtimeProof: PureRuntimeProof;
   workerRestartRequired?: boolean;
+}
+export interface PureRuntimeProof {
+  profile: "pure_learned";
+  profile_schema: "open_shogiai_pure_learned_v3_profile/v1";
+  model_sha256: string;
+  evaluator_profile_schema_hash: string;
+  learned_eval_calls: number;
+  accumulator_updates: number;
+  accumulator_refreshes: number;
+  handcrafted_eval_calls: number;
+  residual_eval_calls: number;
+  composite_eval_calls: number;
+  book_hits: number;
+  teacher_calls: number;
+  fallback_count: number;
+}
+/** Emitted only after byte hashes, Wasm load identities and the first snapshot agree. */
+export interface RuntimeIdentity {
+  modelId: string;
+  modelFormat: "OSAVAL03";
+  leafSha256: string;
+  controllerSha256: string | null;
+  jsSha256: string;
+  wasmSha256: string;
+  expectedHashVerified: true;
+  buildClass: "pure-only";
+  evaluationMode: "pure-value";
 }
 export interface PlayTiming {
   targetMs: number;
@@ -76,6 +110,7 @@ export interface PreparationTelemetry {
 export interface PrototypeReady {
   snapshot: PrototypeSnapshot;
   preparation: PreparationTelemetry;
+  identity: RuntimeIdentity;
 }
 export type PrototypeRequest =
   | {
@@ -146,8 +181,12 @@ function expect(value: unknown, expected: unknown): void {
 export function parsePrototypeManifest(value: unknown): PrototypeManifest {
   const record = object(value, ["schema", "selection", "runId", "artifacts"]);
   expect(record.schema, "open_shogi_core_prototype_assets/v2");
-  if (record.selection !== "baseline" && record.selection !== "candidate")
-    throw new Error("Invalid candidate selection");
+  if (import.meta.env.DEV) {
+    if (record.selection !== "baseline" && record.selection !== "candidate")
+      throw new Error("Invalid development model selection");
+  } else if (record.selection !== "release" || releaseManifest === null) {
+    throw new Error("A pinned release model is required");
+  }
   if (
     typeof record.runId !== "string" ||
     !/^[a-zA-Z0-9._-]{1,96}$/.test(record.runId)
@@ -172,17 +211,81 @@ export function parsePrototypeManifest(value: unknown): PrototypeManifest {
         artifact.url,
         `${ASSET_PREFIX}${record.selection}/${name}?sha256=${sha256}`,
       );
-      if (name === "leaf.osaval03" && record.selection === "baseline")
+      if (
+        import.meta.env.DEV &&
+        name === "leaf.osaval03" &&
+        record.selection === "baseline"
+      )
         expect(sha256, LEAF_SHA256);
+      if (!import.meta.env.DEV) {
+        const pinned = releaseManifest!.artifacts[name];
+        if (pinned === null) throw new Error("Unexpected release artifact");
+        expect(artifact.url, pinned.url);
+        expect(sha256, pinned.sha256);
+        expect(size, pinned.size);
+      }
       return [name, { url: artifact.url as string, sha256, size }];
     }),
   ) as PrototypeManifest["artifacts"];
+  if (!import.meta.env.DEV) {
+    expect(record.runId, releaseManifest!.runId);
+    expect(
+      artifacts["controller.json"] === null,
+      releaseManifest!.artifacts["controller.json"] === null,
+    );
+  }
   return {
     schema: "open_shogi_core_prototype_assets/v2",
-    selection: record.selection,
+    selection: record.selection as PrototypeSelection,
     runId: record.runId,
     artifacts,
   };
+}
+
+export function parseRuntimeIdentity(
+  value: unknown,
+  manifest: PrototypeManifest,
+): RuntimeIdentity {
+  const identity = object(value, [
+    "modelId",
+    "modelFormat",
+    "leafSha256",
+    "controllerSha256",
+    "jsSha256",
+    "wasmSha256",
+    "expectedHashVerified",
+    "buildClass",
+    "evaluationMode",
+  ]);
+  expect(identity.modelId, manifest.runId);
+  expect(identity.modelFormat, "OSAVAL03");
+  expect(identity.leafSha256, manifest.artifacts["leaf.osaval03"].sha256);
+  expect(
+    identity.controllerSha256,
+    manifest.artifacts["controller.json"]?.sha256 ?? null,
+  );
+  expect(identity.jsSha256, manifest.artifacts["engine.js"].sha256);
+  expect(identity.wasmSha256, manifest.artifacts["engine.wasm"].sha256);
+  expect(identity.expectedHashVerified, true);
+  expect(identity.buildClass, "pure-only");
+  expect(identity.evaluationMode, "pure-value");
+  return identity as unknown as RuntimeIdentity;
+}
+
+/** Hash exactly the bytes about to be executed/loaded, once per Worker initialization. */
+export async function verifyArtifactBytes(
+  bytes: ArrayBuffer,
+  artifact: PrototypeAsset,
+): Promise<string> {
+  if (bytes.byteLength !== artifact.size)
+    throw new Error("Model artifact size mismatch");
+  const digest = Array.from(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+  if (digest !== artifact.sha256)
+    throw new Error("Model artifact hash mismatch");
+  return digest;
 }
 
 export function parseLeafIdentity(
@@ -517,6 +620,7 @@ export function parsePureSearch(
     scoreCp: search.scoreCp as number | null,
     elapsedMs: numeric(search.elapsedNs) / 1_000_000,
     termination: String(search.termination),
+    runtimeProof: proof as unknown as PureRuntimeProof,
     timing: {
       targetMs: computeControl.targetMs,
       hardLimitMs: 0,

@@ -3,6 +3,12 @@
   flex: 0 0 auto;
   margin-bottom: var(--space-2);
 }
+.core-prototype {
+  --prototype-chrome-height: 19rem;
+}
+.core-prototype--development {
+  --prototype-chrome-height: 27rem;
+}
 .prototype-heading h1 {
   font-size: 1rem;
 }
@@ -18,6 +24,44 @@
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+.prototype-model {
+  width: min(100%, 30rem);
+  min-width: 0;
+  flex: 0 0 auto;
+  margin-bottom: var(--space-3);
+}
+.prototype-model .segmented-control {
+  min-width: 0;
+}
+.prototype-model .segmented-control button {
+  min-height: 2.75rem;
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+}
+.prototype-model__status {
+  margin: var(--space-2) 0;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.prototype-model__status code {
+  font-size: inherit;
+}
+.prototype-error {
+  width: min(100%, 30rem);
+  overflow-wrap: anywhere;
+}
+.prototype-error button {
+  min-height: 2.75rem;
+}
+.core-prototype .match-start:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.core-prototype.match-page--playing .prototype-model {
+  margin-bottom: 0;
+}
 .core-prototype > .match-controls {
   margin-top: var(--space-2);
 }
@@ -31,7 +75,7 @@
   .core-prototype .board-stage {
     --board-size: min(
       calc(100cqw - 2 * var(--hand-width) - 2 * var(--space-2)),
-      max(16rem, calc(100dvh - 19rem)),
+      max(16rem, calc(100dvh - var(--prototype-chrome-height))),
       32rem
     );
   }
@@ -46,7 +90,7 @@
     --board-size: min(
       calc(100cqw - 2 * var(--hand-width) - 2 * var(--space-2)),
       100cqh,
-      max(16rem, calc(100dvh - 19rem)),
+      max(16rem, calc(100dvh - var(--prototype-chrome-height))),
       32rem
     );
   }

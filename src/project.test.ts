@@ -21,10 +21,18 @@ describe("project foundation metadata", () => {
 
   it("keeps Workspace as the safe default for unknown hash routes", () => {
     expect(routeForHash("#/match")).toBe("match");
-    expect(routeForHash("#/evaluation-lab")).toBe("evaluation-lab");
-    expect(routeForHash("#/browser-play")).toBe("browser-play");
+    expect(routeForHash("#/evaluation-lab")).toBe("workspace");
+    expect(routeForHash("#/browser-play")).toBe("workspace");
     expect(routeForHash("#/workspace")).toBe("workspace");
     expect(routeForHash("#/unknown")).toBe("workspace");
+  });
+
+  it("limits model-upload and comparison routes to development", () => {
+    expect(routeForHash("#/core-prototype")).toBe("workspace");
+    expect(routeForHash("#/core-prototype", true)).toBe("core-prototype");
+    expect(routeForHash("#/evaluation-lab", true)).toBe("evaluation-lab");
+    expect(routeForHash("#/browser-play", true)).toBe("browser-play");
+    expect(routeForHash("#/match", true)).toBe("match");
   });
 
   it("keeps the static publication boundary same-origin and Wasm-capable", () => {
@@ -33,7 +41,7 @@ describe("project foundation metadata", () => {
       "utf8",
     );
 
-    expect(headers).toContain("script-src 'self' 'wasm-unsafe-eval'");
+    expect(headers).toContain("script-src 'self' blob: 'wasm-unsafe-eval'");
     expect(headers).toContain("worker-src 'self'");
     expect(headers).toContain("frame-ancestors 'none'");
     expect(headers).not.toContain("'unsafe-eval'");

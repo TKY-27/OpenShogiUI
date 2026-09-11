@@ -23,9 +23,12 @@ export function routeForHash(
   hash: string,
   development = false,
 ): WorkspaceRoute {
-  if (development && hash === "#/core-prototype") return "core-prototype";
+  if (import.meta.env.DEV && development && hash === "#/core-prototype")
+    return "core-prototype";
   if (hash === "#/match") return "match";
-  if (hash === "#/browser-play") return "browser-play";
-  if (hash === "#/evaluation-lab") return "evaluation-lab";
+  if (import.meta.env.DEV && development && hash === "#/browser-play")
+    return "browser-play";
+  if (import.meta.env.DEV && development && hash === "#/evaluation-lab")
+    return "evaluation-lab";
   return "workspace";
 }

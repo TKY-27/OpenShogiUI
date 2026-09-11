@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { parseTimeControl } from "./browser-engine";
+import { releaseControllerEnabled } from "virtual:shogi-runtime";
 import {
-  ASSET_PREFIX,
   boundedJson,
   hash,
   moveList,
@@ -13,6 +13,8 @@ import {
   parsePrototypeManifest,
   parsePlayProgress,
   parsePureSnapshot,
+  parseRuntimeIdentity,
+  verifyArtifactBytes,
   type PrototypeAsset,
   type PrototypeRequest,
   type PrototypeManifest,
@@ -45,27 +47,17 @@ let manifest: PrototypeManifest | null = null;
 let computeEnabled = false;
 let executing = false;
 
-async function fetchArtifact(artifact: PrototypeAsset): Promise<ArrayBuffer> {
+async function fetchArtifact(artifact: PrototypeAsset) {
   const response = await fetch(artifact.url, {
     cache: "no-store",
     credentials: "same-origin",
     redirect: "error",
   });
-  if (
-    !response.ok ||
-    response.headers.get("content-length") !== String(artifact.size)
-  )
+  if (!response.ok)
     throw new Error("Prototype artifact unavailable or changed");
   const bytes = await response.arrayBuffer();
-  if (bytes.byteLength !== artifact.size)
-    throw new Error("Prototype artifact size mismatch");
-  const digest = Array.from(
-    new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
-    (byte) => byte.toString(16).padStart(2, "0"),
-  ).join("");
-  if (digest !== artifact.sha256)
-    throw new Error("Prototype artifact hash mismatch");
-  return bytes;
+  const sha256 = await verifyArtifactBytes(bytes, artifact);
+  return { bytes, sha256 };
 }
 
 function parseRequest(value: unknown): PrototypeRequest {
@@ -93,6 +85,8 @@ function parseRequest(value: unknown): PrototypeRequest {
           request.initialSfen.length > 512))
     )
       throw new Error("Invalid initialization");
+    if (!import.meta.env.DEV && request.enabled !== releaseControllerEnabled)
+      throw new Error("Release controller configuration is fixed");
     return {
       id,
       kind,
@@ -107,6 +101,8 @@ function parseRequest(value: unknown): PrototypeRequest {
   if (kind === "configure") {
     if (typeof request.enabled !== "boolean")
       throw new Error("Invalid control mode");
+    if (!import.meta.env.DEV && request.enabled !== releaseControllerEnabled)
+      throw new Error("Release controller configuration is fixed");
     return { id, kind, enabled: request.enabled };
   }
   if (kind === "stop") return { id, kind, searchId: numeric(request.searchId) };
@@ -149,12 +145,10 @@ function parseRequest(value: unknown): PrototypeRequest {
 }
 
 async function execute(request: PrototypeRequest): Promise<unknown> {
-  if (!import.meta.env.DEV)
-    throw new Error("Prototype is available only in development");
   if (request.kind === "initialize") {
     if (!self.crossOriginIsolated || typeof SharedArrayBuffer === "undefined")
       throw new Error(
-        "この対局には COOP/COEP が有効な開発サーバーが必要です。ページを再読込してください。",
+        "この対局には COOP/COEP が有効なサーバーが必要です。ページを再読込してください。",
       );
     if (engine !== null)
       throw new Error("Replace the Worker to initialize again");
@@ -162,7 +156,8 @@ async function execute(request: PrototypeRequest): Promise<unknown> {
     const assets = request.manifest.artifacts;
     if (request.enabled && assets["controller.json"] === null)
       throw new Error("This candidate has no matching controller");
-    const [wasm, leaf, controller] = await Promise.all([
+    const [javascript, wasm, leaf, controller] = await Promise.all([
+      fetchArtifact(assets["engine.js"]),
       fetchArtifact(assets["engine.wasm"]),
       fetchArtifact(assets["leaf.osaval03"]),
       assets["controller.json"] === null
@@ -170,30 +165,38 @@ async function execute(request: PrototypeRequest): Promise<unknown> {
         : fetchArtifact(assets["controller.json"]),
     ]);
     const fetched = performance.now();
-    // The server rehashes this exact JS on every request; its URL is hash-bound.
-    const moduleUrl = new URL(assets["engine.js"].url, self.location.origin);
-    if (
-      moduleUrl.origin !== self.location.origin ||
-      !moduleUrl.pathname.startsWith(ASSET_PREFIX)
-    )
-      throw new Error("Invalid engine module URL");
-    const module = (await import(
-      /* @vite-ignore */ moduleUrl.href
-    )) as PureModule;
+    // wasm-bindgen's web module has no imports. Passing verified Wasm bytes below
+    // bypasses its optional relative-URL fallback. Execute these verified JS bytes,
+    // rather than fetching the module URL again through a separate module cache.
+    const moduleUrl = URL.createObjectURL(
+      new Blob([javascript.bytes], { type: "text/javascript" }),
+    );
+    let module: PureModule;
+    try {
+      module = (await import(/* @vite-ignore */ moduleUrl)) as PureModule;
+    } finally {
+      URL.revokeObjectURL(moduleUrl);
+    }
     const imported = performance.now();
-    await module.default({ module_or_path: wasm });
+    await module.default({ module_or_path: wasm.bytes });
     const compiled = performance.now();
     const loaded = new module.WasmBrowserEngine();
     const leafHash = assets["leaf.osaval03"].sha256;
     parseLeafIdentity(
-      boundedJson(loaded.loadModel(new Uint8Array(leaf), leafHash), 16_384),
+      boundedJson(
+        loaded.loadModel(new Uint8Array(leaf.bytes), leafHash),
+        16_384,
+      ),
       leafHash,
     );
     if (controller !== null && assets["controller.json"] !== null) {
       const controllerHash = hash(assets["controller.json"].sha256);
       parseComputeIdentity(
         boundedJson(
-          loaded.loadComputeModel(new Uint8Array(controller), controllerHash),
+          loaded.loadComputeModel(
+            new Uint8Array(controller.bytes),
+            controllerHash,
+          ),
           16_384,
         ),
         controllerHash,
@@ -215,6 +218,20 @@ async function execute(request: PrototypeRequest): Promise<unknown> {
     const finished = performance.now();
     return {
       snapshot,
+      identity: parseRuntimeIdentity(
+        {
+          modelId: request.manifest.runId,
+          modelFormat: "OSAVAL03",
+          leafSha256: leaf.sha256,
+          controllerSha256: controller?.sha256 ?? null,
+          jsSha256: javascript.sha256,
+          wasmSha256: wasm.sha256,
+          expectedHashVerified: true,
+          buildClass: "pure-only",
+          evaluationMode: "pure-value",
+        },
+        request.manifest,
+      ),
       preparation: {
         fetchMs: fetched - began,
         moduleMs: imported - fetched,

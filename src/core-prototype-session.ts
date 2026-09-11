@@ -1,4 +1,5 @@
 import type { SearchProfile, Side } from "./browser-engine";
+import { releaseControllerEnabled } from "virtual:shogi-runtime";
 import {
   chargeTurn,
   hasFlagFallen,
@@ -13,12 +14,17 @@ import {
   PrototypeWorkerClient,
   type PrototypeEngineClient,
 } from "./core-prototype-client";
-import type {
-  ComputeTelemetry,
-  PreparationTelemetry,
-  PrototypeManifest,
-  PrototypeSearch,
-  PrototypeSnapshot,
+import {
+  DEFAULT_SELECTION,
+  parseRuntimeIdentity,
+  type PrototypeSelection,
+  type RuntimeIdentity,
+  type PureRuntimeProof,
+  type ComputeTelemetry,
+  type PreparationTelemetry,
+  type PrototypeManifest,
+  type PrototypeSearch,
+  type PrototypeSnapshot,
 } from "./core-prototype-protocol";
 
 export interface PlayDiagnostic extends ComputeTelemetry {
@@ -37,6 +43,7 @@ export interface PlayDiagnostic extends ComputeTelemetry {
   leafSha256: string;
   wasmSha256: string;
   sfen: string;
+  runtimeProof: PureRuntimeProof;
 }
 export interface PrototypeState {
   phase:
@@ -58,7 +65,9 @@ export interface PrototypeState {
   busy: boolean;
   result: { reason: string; winner: Side | null } | null;
   error: string | null;
+  selection: PrototypeSelection;
   manifest: PrototypeManifest | null;
+  identity: RuntimeIdentity | null;
   preparation: PreparationTelemetry | null;
   telemetry: PlayDiagnostic | null;
   diagnostics: PlayDiagnostic[];
@@ -71,13 +80,15 @@ export function initialPrototypeState(): PrototypeState {
     clock: initialClockFor("blitz3"),
     turnStartedAt: null,
     humanSide: "black",
-    enabled: false,
+    enabled: !import.meta.env.DEV && releaseControllerEnabled,
     profile: "balanced",
     preset: "blitz3",
     busy: false,
     result: null,
     error: null,
+    selection: DEFAULT_SELECTION,
     manifest: null,
+    identity: null,
     preparation: null,
     telemetry: null,
     diagnostics: [],
@@ -91,6 +102,7 @@ export class PrototypeMatchSession {
   private client: PrototypeEngineClient | null = null;
   private disposed = false;
   private searching = false;
+  private preparationAbort: AbortController | null = null;
   constructor(
     private readonly onChange: (state: PrototypeState) => void,
     private readonly createClient: () => PrototypeEngineClient = () =>
@@ -100,20 +112,38 @@ export class PrototypeMatchSession {
   ) {}
 
   async prepare(
-    selection: "baseline" | "candidate" = "baseline",
+    selection: PrototypeSelection = DEFAULT_SELECTION,
   ): Promise<void> {
-    if (this.disposed) return;
+    if (
+      this.disposed ||
+      ["playing", "stopping", "stopped"].includes(this.state.phase)
+    )
+      return;
     const generation = this.invalidate();
-    this.publish({ ...initialPrototypeState(), phase: "loading", busy: true });
+    const abort = new AbortController();
+    this.preparationAbort = abort;
+    this.publish({
+      ...initialPrototypeState(),
+      selection,
+      phase: "loading",
+      busy: true,
+    });
     try {
-      const manifest = await this.manifestLoader(selection);
+      const manifest = await this.manifestLoader(selection, abort.signal);
       if (!this.current(generation)) return;
+      if (manifest.selection !== selection)
+        throw new Error("Selected model manifest mismatch");
       const client = this.createClient();
       this.client = client;
-      const ready = await client.initialize(manifest, false, null);
+      const ready = await client.initialize(manifest, this.state.enabled, null);
       if (!this.current(generation)) return;
+      const identity = parseRuntimeIdentity(ready.identity, manifest);
+      if (ready.snapshot.leafSha256 !== identity.leafSha256)
+        throw new Error("Prepared model identity mismatch");
+      this.preparationAbort = null;
       this.publish({
         manifest,
+        identity,
         preparation: ready.preparation,
         snapshot: ready.snapshot,
         phase: "setup",
@@ -131,14 +161,15 @@ export class PrototypeMatchSession {
     profile: SearchProfile = "balanced",
   ): Promise<void> {
     if (this.disposed) return;
+    if (!import.meta.env.DEV && enabled !== releaseControllerEnabled) return;
     if (
       this.state.phase !== "setup" ||
+      this.state.busy ||
       this.client === null ||
-      this.state.snapshot === null
-    ) {
-      await this.prepare(this.state.manifest?.selection ?? "baseline");
-      if (this.state.phase !== "setup") return;
-    }
+      this.state.snapshot === null ||
+      this.state.identity === null
+    )
+      return;
     const generation = this.generation;
     this.publish({ busy: true });
     try {
@@ -190,8 +221,12 @@ export class PrototypeMatchSession {
     }
   }
 
-  configure(): void {
-    void this.prepare(this.state.manifest?.selection ?? "baseline");
+  configure(): Promise<void> {
+    if (this.disposed) return Promise.resolve();
+    const selection = this.state.selection;
+    this.invalidate();
+    this.publish({ ...initialPrototypeState(), selection });
+    return this.prepare(selection);
   }
   stop(): void {
     if (!["playing", "loading"].includes(this.state.phase)) return;
@@ -268,13 +303,15 @@ export class PrototypeMatchSession {
       position,
     );
     if (!this.current(generation)) return;
+    parseRuntimeIdentity(ready.identity, this.state.manifest!);
     if (
+      ready.snapshot.leafSha256 !== position.leafSha256 ||
       ready.snapshot.sfen !== position.sfen ||
       ready.snapshot.initialSfen !== position.initialSfen ||
       JSON.stringify(ready.snapshot.moves) !== JSON.stringify(position.moves)
     )
       throw new Error("Restored game does not match the committed position");
-    this.publish({ preparation: ready.preparation });
+    this.publish({ preparation: ready.preparation, identity: ready.identity });
   }
   private async engineTurn(generation: number): Promise<void> {
     if (!this.current(generation) || this.tick()) return;
@@ -348,6 +385,7 @@ export class PrototypeMatchSession {
       leafSha256: position.leafSha256,
       wasmSha256: this.state.manifest!.artifacts["engine.wasm"].sha256,
       sfen: position.sfen,
+      runtimeProof: response.runtimeProof,
     };
     this.publish({
       telemetry,
@@ -414,6 +452,8 @@ export class PrototypeMatchSession {
   private invalidate(): number {
     this.generation += 1;
     this.searching = false;
+    this.preparationAbort?.abort();
+    this.preparationAbort = null;
     this.client?.dispose();
     this.client = null;
     return this.generation;
