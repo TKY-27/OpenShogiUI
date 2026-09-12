@@ -135,6 +135,43 @@ function analysis(lineCount = 3) {
 }
 
 describe("browser engine protocol", () => {
+  it("validates the complete current runtime counters without inventing legacy proof", () => {
+    const legacy = search(1);
+    expect(parseSearchResponse(legacy).stats.learnedEvalCalls).toBeUndefined();
+    const counters = {
+      osaval02InferenceErrors: 0,
+      learnedEvalCalls: 10,
+      handcraftedEvalCalls: 0,
+      residualEvalCalls: 0,
+      compositeEvalCalls: 0,
+      fallbackCount: 0,
+    };
+    const current = { ...legacy, stats: { ...legacy.stats, ...counters } };
+    expect(parseSearchResponse(current).stats).toMatchObject(counters);
+    const { fallbackCount: _missing, ...partial } = current.stats;
+    expect(() => parseSearchResponse({ ...current, stats: partial })).toThrow(
+      "key set",
+    );
+    expect(() =>
+      parseSearchResponse({
+        ...current,
+        stats: { ...current.stats, learnedEvalCalls: -1 },
+      }),
+    ).toThrow("integer");
+  });
+
+  it("rejects opening-book activation even through direct Worker requests", () => {
+    for (const kind of [
+      "load-opening-book",
+      "unload-opening-book",
+      "configure-opening",
+    ]) {
+      expect(() => parseWorkerRequest({ id: 1, kind })).toThrow(
+        "Opening books and opening policy changes are disabled",
+      );
+    }
+  });
+
   it("binds board array positions to their exact shogi squares", () => {
     const valid = snapshot();
     valid.board[0] = {

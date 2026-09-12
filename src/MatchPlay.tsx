@@ -399,7 +399,6 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       const restored = await adapter.restart(
         { initialSfen: snapshot.initialSfen, moves },
         null,
-        null,
       );
       if (operationRef.current !== operation) return;
       setTimeline((current) =>
@@ -443,7 +442,6 @@ export function MatchPlay({ locale }: { locale: Locale }) {
           initialSfen: snapshot.initialSfen,
           moves: [...snapshot.moves, ...replayMoves],
         },
-        null,
         null,
       );
       if (operationRef.current !== operation) return;

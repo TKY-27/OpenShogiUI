@@ -8,6 +8,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const privateCommit = "5451e02d35abc3efc1fcc29260cdb89acad1d416";
 const analysisProtocolCommit = "1232d015a6b2c3df9abf366137bded245bd14a93";
 const requiredProvenance = [
+  "ea7dc1376a30ead0b9571fbe640e24f513198f4c",
+  "42e38eef28395aa2935382795c46fc440701c7fb",
   privateCommit,
   "21bf0c1fbe02250855b66a96f2fe37bd042650d4",
   "aa3eec7afc3bc9dff5a330eb6c3b3a1ee503baa703073281a906bb3753c01731",
@@ -23,19 +25,19 @@ const requiredProvenance = [
 const expectedBindings = new Map([
   [
     "open_shogi_wasm.d.ts",
-    "19f8a5a9f786666d2a736daff7cedae9fa9c77a55f6e6ed85950882e0e07eee9",
+    "8b899de7246585f5c7ccafe0b5b2dde012eec0af12a8032d5d4e5741be9cf063",
   ],
   [
     "open_shogi_wasm.js",
-    "b0862ea56ee808c2feabe2ab67128d317fdbb824856b47fe6fabd5dbfac40d88",
+    "8d36745850bb91e90f93436a9c40d833686cca6c1232ab2c7c9346a59e109023",
   ],
   [
     "open_shogi_wasm_bg.wasm",
-    "49034d4d1cff1e004eceaf1e62b309d9882516e039457c09a758904217fd3805",
+    "ac6e26e539a7792cc9d53d3bbbd99e3113d97a65ea76d433c9f8daa6280d131d",
   ],
   [
     "open_shogi_wasm_bg.wasm.d.ts",
-    "25de209ae4d389487b6b7db0ae895e935fdd84fa62a9bad0dbadf08ec7c910cd",
+    "efb20b72f02808e77a8baed92fc80fa2f3e1c9b8ce0709f2cd49ed7259933068",
   ],
 ]);
 const failures = [];

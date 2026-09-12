@@ -13,7 +13,7 @@ validated once in the Worker.
 `src/engine-client.ts` defines the UI-facing boundary and owns the Worker lifecycle directly;
 `src/engine.worker.ts` is the only module that imports the generated OpenShogiAI binding. Play and
 continuous analysis use separate Workers. Messages use discriminated unions and transferable model
-or opening-book bytes. Request correlation, one active analysis generation, complete analysis
+bytes. Request correlation, one active analysis generation, complete analysis
 identity, and physical Worker replacement prevent stale work from updating a newer displayed
 position.
 
@@ -28,7 +28,7 @@ The browser-facing engine supports:
   budget allocation to the engine;
 - bounded search profiles and one to ten continuous MultiPV lines;
 - `open_shogi_analysis/v1` start, bounded slice, and stop lifecycle messages;
-- strict, preferred, or disabled opening policy plus local opening-book load/removal;
+- book-free play with opening-book load and policy-change requests rejected;
 - local `OSAVAL01` validation, activation, and removal.
 
 The main thread renders returned snapshots rather than reconstructing rules from visual board
@@ -80,14 +80,14 @@ shogi rules: the piece for each ply is read from the board in the preceding posi
 handed to the browser through a Blob object URL, which is not a network request and does not touch
 the same-origin `connect-src` boundary.
 
-## Analysis summary cache
+## Live analysis identity
 
-`src/analysis-cache.ts` keys summaries by schema, canonical position SFEN, model hash, evaluator
-configuration hash, feature-schema hash, evaluation-semantics hash, search-options hash,
-opening-profile hash, MultiPV count, and frozen Wasm SHA-256. A cached or live update is publishable
-only when every identity field still matches. IndexedDB values are closed-parsed before use and it
-retains at most 128 bounded summaries; memory remains the fallback when storage is unavailable.
-Model bytes, book bytes, and internal search state are not cached.
+`src/analysis-cache.ts` retains the versioned identity validator and legacy summary store utility.
+Browser Play uses a non-persistent store: no past summary is read, written or preloaded. Live
+updates must still match schema, canonical SFEN, model, evaluator configuration, feature schema,
+evaluation semantics, search options, opening profile and MultiPV count. Analysis runs in its
+own Worker and is not an input to the play Worker. Historical report/book metadata parsers remain
+read-compatible; their presence does not allow book activation through the Worker protocol.
 
 ## Generated WebAssembly snapshot
 

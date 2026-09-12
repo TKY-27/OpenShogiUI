@@ -84,7 +84,7 @@ describe("analysis cache identity", () => {
       analysisCacheIdentity(request({ multiPv: 2 })),
     );
     expect(analysisCacheIdentity(original)).toContain(
-      "49034d4d1cff1e004eceaf1e62b309d9882516e039457c09a758904217fd3805",
+      "ac6e26e539a7792cc9d53d3bbbd99e3113d97a65ea76d433c9f8daa6280d131d",
     );
   });
 });

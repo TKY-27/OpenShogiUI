@@ -215,6 +215,13 @@ export interface SearchResponse {
     qnodes: number;
     neuralInferenceCalls: number;
     neuralInferenceTimeNs: number;
+    // Older v1 artifacts predate these runtime-path counters.
+    osaval02InferenceErrors?: number;
+    learnedEvalCalls?: number;
+    handcraftedEvalCalls?: number;
+    residualEvalCalls?: number;
+    compositeEvalCalls?: number;
+    fallbackCount?: number;
   };
   openingBookMove?: {
     sampleCount: number;
@@ -1412,6 +1419,18 @@ export function parseSearchResponse(value: unknown): SearchResponse {
     };
   });
   const stats = record(parsed.stats, "search.stats");
+  const runtimeCounters = [
+    "osaval02InferenceErrors",
+    "learnedEvalCalls",
+    "handcraftedEvalCalls",
+    "residualEvalCalls",
+    "compositeEvalCalls",
+    "fallbackCount",
+  ];
+  // Preserve old artifact reads, but never accept a partial runtime proof.
+  const hasRuntimeCounters = runtimeCounters.some((key) =>
+    Object.hasOwn(stats, key),
+  );
   exactKeys(
     stats,
     [
@@ -1424,6 +1443,7 @@ export function parseSearchResponse(value: unknown): SearchResponse {
       "qnodes",
       "neuralInferenceCalls",
       "neuralInferenceTimeNs",
+      ...(hasRuntimeCounters ? runtimeCounters : []),
     ],
     "search.stats",
   );
@@ -1628,66 +1648,9 @@ export function parseWorkerRequest(value: unknown): WorkerRequest {
       };
     }
     case "load-opening-book":
-      exactKeys(
-        parsed,
-        ["id", "kind", "bytes", "expectedArtifactSha256"],
-        "request",
-      );
-      if (
-        !(parsed.bytes instanceof ArrayBuffer) ||
-        parsed.bytes.byteLength === 0 ||
-        parsed.bytes.byteLength > MAX_BROWSER_OPENING_BOOK_BYTES
-      ) {
-        throw new Error("request.bytes exceeds the opening-book bound");
-      }
-      return {
-        id,
-        kind,
-        bytes: parsed.bytes,
-        expectedArtifactSha256:
-          parsed.expectedArtifactSha256 === null
-            ? null
-            : sha256(
-                parsed.expectedArtifactSha256,
-                "request.expectedArtifactSha256",
-              ),
-      };
     case "unload-opening-book":
-      exactKeys(parsed, ["id", "kind"], "request");
-      return { id, kind };
     case "configure-opening":
-      exactKeys(
-        parsed,
-        [
-          "id",
-          "kind",
-          "profile",
-          "maxPlies",
-          "minimumSampleCount",
-          "maximumTeacherLossCp",
-        ],
-        "request",
-      );
-      if (!OPENING_PROFILES.has(parsed.profile as OpeningProfile)) {
-        throw new Error("request.profile is unsupported");
-      }
-      return {
-        id,
-        kind,
-        profile: parsed.profile as OpeningProfile,
-        maxPlies: integer(parsed.maxPlies, "request.maxPlies", 1, 40),
-        minimumSampleCount: integer(
-          parsed.minimumSampleCount,
-          "request.minimumSampleCount",
-          1,
-        ),
-        maximumTeacherLossCp: integer(
-          parsed.maximumTeacherLossCp,
-          "request.maximumTeacherLossCp",
-          0,
-          32_000,
-        ),
-      };
+      throw new Error("Opening books and opening policy changes are disabled");
     case "analysis-start":
       exactKeys(
         parsed,

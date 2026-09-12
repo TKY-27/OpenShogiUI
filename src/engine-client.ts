@@ -5,9 +5,6 @@ import {
   type BrowserSnapshot,
   type EvaluatorChoice,
   type ModelSummary,
-  type OpeningBookSummary,
-  type OpeningPolicySummary,
-  type OpeningProfile,
   parseWorkerResponse,
   type SearchProfile,
   type SearchResponse,
@@ -33,11 +30,6 @@ export interface EngineSession {
 }
 
 export interface RestorableModel {
-  bytes: ArrayBuffer;
-  expectedArtifactSha256: string | null;
-}
-
-export interface RestorableOpeningBook {
   bytes: ArrayBuffer;
   expectedArtifactSha256: string | null;
 }
@@ -145,39 +137,6 @@ export class EngineWorkerClient {
     );
   }
 
-  async loadOpeningBook(
-    openingBook: RestorableOpeningBook,
-  ): Promise<OpeningBookSummary> {
-    return this.run(() => this.requestOpeningBookLoad(openingBook));
-  }
-
-  async unloadOpeningBook(): Promise<BrowserSnapshot> {
-    return this.run(
-      async () =>
-        (await this.request({
-          kind: "unload-opening-book",
-        })) as BrowserSnapshot,
-    );
-  }
-
-  async configureOpening(
-    profile: OpeningProfile,
-    maxPlies = 40,
-    minimumSampleCount = 2,
-    maximumTeacherLossCp = 80,
-  ): Promise<OpeningPolicySummary> {
-    return this.run(
-      async () =>
-        (await this.request({
-          kind: "configure-opening",
-          profile,
-          maxPlies,
-          minimumSampleCount,
-          maximumTeacherLossCp,
-        })) as OpeningPolicySummary,
-    );
-  }
-
   async analysisStart(
     profile: SearchProfile,
     evaluator: EvaluatorChoice,
@@ -214,7 +173,6 @@ export class EngineWorkerClient {
   async restart(
     session: EngineSession,
     model: RestorableModel | null = null,
-    openingBook: RestorableOpeningBook | null = null,
   ): Promise<BrowserSnapshot> {
     this.assertNotDisposed();
     this.transition("initializing");
@@ -228,9 +186,6 @@ export class EngineWorkerClient {
         moves: session.moves,
       })) as BrowserSnapshot;
       if (model !== null) await this.requestModelLoad(model);
-      if (openingBook !== null) {
-        await this.requestOpeningBookLoad(openingBook);
-      }
       if (this.isCurrentWorker(generation) && !this.isDisposed()) {
         this.transition("ready");
       }
@@ -325,20 +280,6 @@ export class EngineWorkerClient {
       },
       [transferable],
     )) as ModelSummary;
-  }
-
-  private async requestOpeningBookLoad(
-    openingBook: RestorableOpeningBook,
-  ): Promise<OpeningBookSummary> {
-    const transferable = openingBook.bytes.slice(0);
-    return (await this.request(
-      {
-        kind: "load-opening-book",
-        bytes: transferable,
-        expectedArtifactSha256: openingBook.expectedArtifactSha256,
-      },
-      [transferable],
-    )) as OpeningBookSummary;
   }
 
   private terminatePending(message: string) {

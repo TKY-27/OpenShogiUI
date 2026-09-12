@@ -21,6 +21,7 @@ import {
   toggleHandSelection,
 } from "./ShogiBoardView";
 import { getMessages } from "./localization";
+import { BrowserPlay } from "./BrowserPlay";
 
 const handOrder: HandPieceKind[] = [
   "rook",
@@ -94,6 +95,16 @@ function startPosition(): BrowserSnapshot {
     },
   };
 }
+
+describe("book-free development play", () => {
+  it("offers ordinary search without book upload or opening profile controls", () => {
+    const markup = renderToStaticMarkup(<BrowserPlay locale="en" />);
+    expect(markup).toContain("No opening book; ordinary search only");
+    expect(markup).not.toContain('id="book-file"');
+    expect(markup).not.toContain("Opening profile");
+    expect(markup).toContain('id="model-file"');
+  });
+});
 
 describe("browser shogi board", () => {
   it("shares board and hand selection decisions across both play routes", () => {

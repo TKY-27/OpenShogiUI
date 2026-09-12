@@ -9,7 +9,7 @@ const DATABASE_VERSION = 1;
 const STORE_NAME = "analysis-summaries";
 const MAX_PERSISTED_SUMMARIES = 128;
 const ENGINE_SNAPSHOT_SHA256 =
-  "49034d4d1cff1e004eceaf1e62b309d9882516e039457c09a758904217fd3805";
+  "ac6e26e539a7792cc9d53d3bbbd99e3113d97a65ea76d433c9f8daa6280d131d";
 
 export interface CachedAnalysisSummary {
   key: string;

@@ -7,7 +7,6 @@ import {
   useState,
 } from "react";
 
-import { AnalysisSummaryStore } from "./analysis-cache";
 import {
   emptyProgress,
   progressElapsedSeconds,
@@ -20,14 +19,12 @@ import {
 import {
   ANALYSIS_SCHEMA,
   MAX_BROWSER_MODEL_BYTES,
-  MAX_BROWSER_OPENING_BOOK_BYTES,
   type AnalysisStart,
   type BrowserSnapshot,
   type EvaluatorChoice,
   type HandPieceKind,
   type ModelSummary,
   type MoveSummary,
-  type OpeningBookSummary,
   type OpeningProfile,
   recommendedSearchProfile,
   type SearchProfile,
@@ -39,7 +36,6 @@ import {
   EngineWorkerClient,
   type EngineReadyState,
   type RestorableModel,
-  type RestorableOpeningBook,
 } from "./engine-client";
 import {
   appendGameTimeline,
@@ -88,7 +84,7 @@ import {
   toggleHandSelection,
 } from "./ShogiBoardView";
 
-type BusyState = "initializing" | "moving" | "engine" | "model" | "book";
+type BusyState = "initializing" | "moving" | "engine" | "model";
 
 /**
  * Facts about the displayed position. These used to sit on a permanent shelf
@@ -113,7 +109,12 @@ interface AdapterPair {
   analysis: EngineWorkerClient;
 }
 
-const analysisStore = new AnalysisSummaryStore();
+// Past analysis is never preloaded into the development play workspace.
+const analysisStore = {
+  get: async () => null,
+  put: async () => undefined,
+};
+const openingProfile: OpeningProfile = "unrestricted";
 
 function text(locale: Locale) {
   const ja = locale === "ja";
@@ -180,16 +181,9 @@ function text(locale: Locale) {
     pauseAnalysis: ja
       ? "AI思考中は解析を一時停止"
       : "Pause analysis during AI turn",
-    openingProfile: ja ? "オープニングプロファイル" : "Opening profile",
-    ibishaStrict: ja ? "居飛車厳格" : "Ibisya strict",
-    ibishaPreferred: ja ? "居飛車優先" : "Ibisya preferred",
-    unrestricted: ja ? "無制限" : "Unrestricted",
-    openingHint: ja
-      ? "居飛車プロファイルは定跡選択方針で、合法手を制限しません。"
-      : "Ibisya profiles affect book selection, never legal moves.",
-    chooseBook: ja ? "定跡ファイルを選択" : "Choose opening book",
-    removeBook: ja ? "定跡を外す" : "Remove book",
-    bookNotLoaded: ja ? "定跡未読込" : "No book loaded",
+    noBook: ja
+      ? "定跡なし・通常探索のみ"
+      : "No opening book; ordinary search only",
     pieceSet: ja ? "駒のデザイン" : "Piece set",
     pieceCredits: ja ? "駒のクレジット" : "Piece Credits",
     close: ja ? "閉じる" : "Close",
@@ -199,7 +193,6 @@ function text(locale: Locale) {
     workerReady: ja ? "準備完了" : "Ready",
     applyingMove: ja ? "指し手を反映しています…" : "Applying move…",
     loadingModel: ja ? "モデルを読み込んでいます…" : "Loading model…",
-    loadingBook: ja ? "定跡を読み込んでいます…" : "Loading opening book…",
     aiThinking: (side: Side) =>
       ja
         ? `${side === "black" ? "先手" : "後手"}AIが考えています…`
@@ -732,8 +725,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   const [matchClock, setMatchClock] = useState<MatchClock>(() =>
     initialMatchClock(DEFAULT_TIME_CONTROL),
   );
-  const [openingProfile, setOpeningProfile] =
-    useState<OpeningProfile>("ibisha_strict");
   const [analysisEnabled, setAnalysisEnabled] = useState(true);
   const [analysisView, setAnalysisView] = useState<AnalysisView>({
     status: "idle",
@@ -744,14 +735,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   const [model, setModel] = useState<RestorableModel | null>(null);
   const [modelSummary, setModelSummary] = useState<ModelSummary | null>(null);
   const [modelFileName, setModelFileName] = useState<string | null>(null);
-  const [openingBookSummary, setOpeningBookSummary] =
-    useState<OpeningBookSummary | null>(null);
-  const [openingBookFileName, setOpeningBookFileName] = useState<string | null>(
-    null,
-  );
-  const [openingBook, setOpeningBook] = useState<RestorableOpeningBook | null>(
-    null,
-  );
   const [pieceSet, setPieceSet] = useState<PieceSetId>(persistedPieceSet);
   const [pieceCreditsOpen, setPieceCreditsOpen] = useState(false);
   const [pauseAnalysisDuringAiTurn, setPauseAnalysisDuringAiTurn] =
@@ -761,7 +744,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     useState<EngineReadyState>("new");
   const [analysisWorkerState, setAnalysisWorkerState] =
     useState<EngineReadyState>("new");
-  const appliedOpeningProfileRef = useRef<OpeningProfile | null>(null);
 
   const history = timeline === null ? [] : timelineSnapshots(timeline);
   const moveSources = timeline?.entries.map(({ source }) => source) ?? [];
@@ -855,29 +837,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   ]);
 
   useEffect(() => {
-    const play = adaptersRef.current?.play;
-    if (
-      play === undefined ||
-      play.readyState !== "ready" ||
-      busy !== null ||
-      appliedOpeningProfileRef.current === openingProfile
-    )
-      return;
-    const requestedProfile = openingProfile;
-    void play
-      .configureOpening(requestedProfile)
-      .then(() => {
-        if (adaptersRef.current?.play === play)
-          appliedOpeningProfileRef.current = requestedProfile;
-      })
-      .catch((error: unknown) => {
-        setNotice(
-          error instanceof Error ? error.message : errorMessageRef.current,
-        );
-      });
-  }, [busy, openingProfile, playWorkerState]);
-
-  useEffect(() => {
     const adapter = adaptersRef.current?.play;
     if (
       playWorkerState !== "crashed" ||
@@ -887,16 +846,12 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
       return;
     const operation = ++operationRef.current;
     setBusy("initializing");
-    appliedOpeningProfileRef.current = null;
     void adapter
       .restart(
         { initialSfen: liveSnapshot.initialSfen, moves: liveSnapshot.moves },
         model,
-        openingBook,
       )
-      .then(async (restored) => {
-        await adapter.configureOpening(openingProfile);
-        appliedOpeningProfileRef.current = openingProfile;
+      .then((restored) => {
         if (operationRef.current !== operation) return;
         setTimeline((current) =>
           current === null ? null : replaceLiveEntry(current, restored),
@@ -913,7 +868,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
       .finally(() => {
         if (operationRef.current === operation) setBusy(null);
       });
-  }, [liveSnapshot, model, openingBook, openingProfile, playWorkerState]);
+  }, [liveSnapshot, model, playWorkerState]);
 
   useEffect(() => {
     if (displayedSnapshot === null) return;
@@ -970,7 +925,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     if (
       adapter === undefined ||
       adapter.readyState !== "ready" ||
-      appliedOpeningProfileRef.current !== openingProfile ||
       liveSnapshot === null ||
       busy !== null ||
       aiRequestRef.current ||
@@ -1326,55 +1280,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     }
   }
 
-  async function loadOpeningBook(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    const adapter = adaptersRef.current?.play;
-    if (file === undefined || adapter === undefined || busy !== null) return;
-    if (file.size === 0 || file.size > MAX_BROWSER_OPENING_BOOK_BYTES) {
-      setNotice(
-        `Opening book must be 1..${MAX_BROWSER_OPENING_BOOK_BYTES} bytes`,
-      );
-      return;
-    }
-    setBusy("book");
-    try {
-      const bytes = await file.arrayBuffer();
-      const expectedArtifactSha256 = await sha256Hex(bytes);
-      const restorable = {
-        bytes,
-        expectedArtifactSha256,
-      } satisfies RestorableOpeningBook;
-      const summary = await adapter.loadOpeningBook(restorable);
-      setOpeningBook(restorable);
-      setOpeningBookSummary(summary);
-      setOpeningBookFileName(file.name);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : messages.play.error);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function unloadOpeningBook() {
-    const adapter = adaptersRef.current?.play;
-    if (adapter === undefined || busy !== null) return;
-    setBusy("book");
-    try {
-      const snapshot = await adapter.unloadOpeningBook();
-      setTimeline((current) =>
-        current === null ? null : replaceLiveEntry(current, snapshot),
-      );
-      setOpeningBookSummary(null);
-      setOpeningBookFileName(null);
-      setOpeningBook(null);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : messages.play.error);
-    } finally {
-      setBusy(null);
-    }
-  }
-
   async function restartPlayAs(nextRole: HumanRole) {
     const adapter = adaptersRef.current?.play;
     setHumanRole(nextRole);
@@ -1383,15 +1288,11 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
     aiRequestRef.current = false;
     setPlayThinking(false);
     setBusy("initializing");
-    appliedOpeningProfileRef.current = null;
     try {
       const restored = await adapter.restart(
         { initialSfen: liveSnapshot.initialSfen, moves: liveSnapshot.moves },
         model,
-        openingBook,
       );
-      await adapter.configureOpening(openingProfile);
-      appliedOpeningProfileRef.current = openingProfile;
       if (operationRef.current !== operation) return;
       setTimeline((current) =>
         current === null ? null : replaceLiveEntry(current, restored),
@@ -1437,8 +1338,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
         return labels.applyingMove;
       case "model":
         return labels.loadingModel;
-      case "book":
-        return labels.loadingBook;
       default:
         return labels.workerReady;
     }
@@ -1710,23 +1609,7 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
                 />
               </label>
             ) : null}
-            <label className="select-field">
-              <span>{labels.openingProfile}</span>
-              <select
-                disabled={busy !== null}
-                onChange={(event) =>
-                  setOpeningProfile(event.currentTarget.value as OpeningProfile)
-                }
-                value={openingProfile}
-              >
-                <option value="ibisha_strict">{labels.ibishaStrict}</option>
-                <option value="ibisha_preferred">
-                  {labels.ibishaPreferred}
-                </option>
-                <option value="unrestricted">{labels.unrestricted}</option>
-              </select>
-              <small>{labels.openingHint}</small>
-            </label>
+            <small>{labels.noBook}</small>
             <details>
               <summary>{labels.advanced}</summary>
               <label className="select-field">
@@ -1812,24 +1695,6 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
               {modelSummary === null ? null : (
                 <button onClick={() => void unloadModel()} type="button">
                   {messages.play.removeModel}
-                </button>
-              )}
-            </div>
-            <div className="artifact-control">
-              <div>
-                <span>{labels.book}</span>
-                <strong>{openingBookFileName ?? labels.bookNotLoaded}</strong>
-              </div>
-              <label htmlFor="book-file">{labels.chooseBook}</label>
-              <input
-                accept=".gz,application/gzip,application/octet-stream"
-                id="book-file"
-                onChange={(event) => void loadOpeningBook(event)}
-                type="file"
-              />
-              {openingBookSummary === null ? null : (
-                <button onClick={() => void unloadOpeningBook()} type="button">
-                  {labels.removeBook}
                 </button>
               )}
             </div>

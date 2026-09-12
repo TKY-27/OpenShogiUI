@@ -25,12 +25,29 @@ r3 candidate and offers the frozen W256 comparison. The legacy analysis/lab rout
 only. Production builds require a separate explicit selection, as described below.
 
 Development-only Browser Play includes independent Sente/Gote role and board-orientation controls, move-history
-navigation, takeover without position mutation, bounded time controls, MultiPV analysis, opening
-profiles, local opening-book/model loading, and 13 selectable CC BY 4.0 piece sets. The default
+navigation, takeover without position mutation, bounded time controls, MultiPV analysis,
+local model loading, and 13 selectable CC BY 4.0 piece sets. All play and evaluation are book-free;
+Browser Play offers no opening-book upload, opening profiles or persisted analysis preload. The default
 casual time control delegates to the engine's adaptive policy with its documented 20-second cap;
 fixed, clock, and profile-bounded node limits are serialized through
 `open_shogi_time_control/v1`. Thread and hash values reflect the frozen single-threaded Wasm
 profile instead of presenting ineffective memory controls.
+
+## Working policy
+
+All development games, strength evaluation and any future production play use ordinary search
+without an opening book, fixed first moves, position-to-answer tables, preloaded past analysis or
+external teachers during play. Normal search transposition tables remain allowed. Opening game
+records and teachers may inform training; teachers may also be used for offline diagnosis.
+Production remains one explicitly adopted model, while development retains candidate comparison.
+No new public adoption or weight publication is implied by development changes.
+
+Astra owns strength diagnosis, design, evaluator/search/teacher/training changes, selection,
+important review and UI integration. The user starts a separate Luna Max execution session for
+fixed data processing, main training, routine evaluation, monitoring and predefined recovery.
+Astra performs bounded path/resume checks and stops at the AI repository's `ready_for_luna`
+contract; it does not start a Luna subagent or wait as a long-running monitor. Follow
+OpenShogiAI `docs/status.md` for the current run contract and state.
 
 ## AI integration contract
 

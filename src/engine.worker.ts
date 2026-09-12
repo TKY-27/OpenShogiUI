@@ -6,8 +6,6 @@ import {
   parseAnalysisResponse,
   parseBrowserSnapshot,
   parseModelSummary,
-  parseOpeningBookSummary,
-  parseOpeningPolicySummary,
   parseSearchResponse,
   parseWorkerRequest,
   WORKER_RESPONSE_SCHEMA,
@@ -46,6 +44,9 @@ async function execute(request: WorkerRequest): Promise<unknown> {
     case "initialize": {
       engine?.free();
       engine = new WasmBrowserEngine();
+      // The legacy binding calls its unconstrained profile "unrestricted".
+      // No book can be loaded through the Worker protocol.
+      engine.configureOpening("unrestricted", 40, 2n, 80);
       const raw =
         request.initialSfen === null
           ? engine.snapshot()
@@ -85,30 +86,18 @@ async function execute(request: WorkerRequest): Promise<unknown> {
               request.multiPv,
               JSON.stringify(request.timeControl),
             );
-      return parseSearchResponse(parseJson(raw, 128 * 1024, "search"));
-    }
-    case "load-opening-book": {
-      const raw = requireEngine().loadOpeningBook(
-        new Uint8Array(request.bytes),
-        request.expectedArtifactSha256 ?? undefined,
+      const response = parseSearchResponse(
+        parseJson(raw, 128 * 1024, "search"),
       );
-      return parseOpeningBookSummary(parseJson(raw, 16 * 1024, "openingBook"));
+      if (response.source !== "search") {
+        throw new Error("Opening-book responses are disabled");
+      }
+      return response;
     }
-    case "unload-opening-book": {
-      const raw = requireEngine().unloadOpeningBook();
-      return parseBrowserSnapshot(parseJson(raw, 256 * 1024, "snapshot"));
-    }
-    case "configure-opening": {
-      const raw = requireEngine().configureOpening(
-        request.profile,
-        request.maxPlies,
-        BigInt(request.minimumSampleCount),
-        request.maximumTeacherLossCp,
-      );
-      return parseOpeningPolicySummary(
-        parseJson(raw, 16 * 1024, "openingPolicy"),
-      );
-    }
+    case "load-opening-book":
+    case "unload-opening-book":
+    case "configure-opening":
+      throw new Error("Opening books and opening policy changes are disabled");
     case "analysis-start": {
       const raw = requireEngine().analysisStart(
         request.profile,
