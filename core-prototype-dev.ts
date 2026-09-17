@@ -97,11 +97,14 @@ async function containedFile(
 }
 export async function readCandidateDescriptor(
   aiRoot: string,
+  selection: "candidate" | "defense" = "candidate",
 ): Promise<CandidateDescriptor> {
+  if (selection !== "candidate" && selection !== "defense")
+    throw new Error("Invalid candidate selection");
   const root = await realpath(aiRoot);
   const value = JSON.parse(
     (
-      await containedFile(root, "local/core-prototype/candidate.json", 8192)
+      await containedFile(root, `local/core-prototype/${selection}.json`, 8192)
     ).toString(),
   ) as CandidateDescriptor;
   if (
@@ -130,7 +133,7 @@ export async function readCandidateDescriptor(
 export async function readPrototypeArtifact(
   aiRoot: string,
   name: string,
-  selection: "baseline" | "candidate" = "baseline",
+  selection: "baseline" | "candidate" | "defense" = "baseline",
 ) {
   if (!Object.hasOwn(artifacts, name))
     throw new Error("Unknown prototype artifact");
@@ -140,10 +143,10 @@ export async function readPrototypeArtifact(
   let expected: string | null =
     name === "leaf.osaval03" ? FROZEN_LEAF_SHA256 : null;
   if (
-    selection === "candidate" &&
+    selection !== "baseline" &&
     (name === "leaf.osaval03" || name === "controller.json")
   ) {
-    const descriptor = await readCandidateDescriptor(root);
+    const descriptor = await readCandidateDescriptor(root, selection);
     const artifact =
       name === "leaf.osaval03" ? descriptor.leaf : descriptor.controller;
     if (artifact === null)
@@ -192,13 +195,15 @@ export function corePrototypeDev(): Plugin {
           const [selection, name] = parts;
           if (
             parts.length !== 2 ||
-            (selection !== "baseline" && selection !== "candidate")
+            (selection !== "baseline" &&
+              selection !== "candidate" &&
+              selection !== "defense")
           )
             throw new Error("Explicit candidate selection required");
           if (name === "manifest.json" && !url.search) {
             const descriptor =
-              selection === "candidate"
-                ? await readCandidateDescriptor(aiRoot)
+              selection !== "baseline"
+                ? await readCandidateDescriptor(aiRoot, selection)
                 : null;
             const entries = await Promise.all(
               Object.keys(artifacts).map(async (name) => {

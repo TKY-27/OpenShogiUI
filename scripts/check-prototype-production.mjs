@@ -62,6 +62,8 @@ function inspect(directory) {
         "/__core-prototype/",
         "#/core-prototype",
         "r3候補",
+        "防御学習候補",
+        "Defense learning candidate",
         "旧基準 (W256)",
         "open-shogi-core-prototype-selection",
         "serviceWorker.register",
@@ -75,7 +77,9 @@ function inspect(directory) {
         "859e922b3f503ddeecf0afeb9a05fccac080a9faca3b19fce9d8253c9039c480";
       const r3 =
         "cd07f2a202f6e781afcb6a8af3c7a198c4203373e4505fe089f8c7f05eefd983";
-      for (const hash of [frozen, r3])
+      const defense =
+        "8c1c875038b74dc475c356d50c635c2e22dcab7aaa201d7d9aea7188e668b35a";
+      for (const hash of [frozen, r3, defense])
         if (
           hash !== manifest.artifacts["leaf.osaval03"].sha256 &&
           content.includes(hash)

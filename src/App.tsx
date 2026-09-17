@@ -112,8 +112,8 @@ function WorkspaceHome({ locale }: { locale: Locale }) {
         {import.meta.env.DEV ? (
           <a href="#/match">
             {locale === "ja"
-              ? "r3候補・旧基準を選んで対局する"
-              : "Choose the r3 candidate or previous baseline"}
+              ? "防御学習候補・r3候補・旧基準を選んで対局する"
+              : "Choose the defense candidate, r3 candidate or previous baseline"}
           </a>
         ) : null}
         <h2 id="workspace-title">{workspace.title}</h2>

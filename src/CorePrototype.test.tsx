@@ -83,6 +83,9 @@ describe("learned-model match setup", () => {
     expect(html).toContain(manifest.runId);
     expect(html).toContain(sha256);
     expect(html).toContain("読み込んだ評価器 SHA-256");
+    expect(html).toContain("防御学習候補");
+    expect(html).toContain("r3候補");
+    expect(html).toContain("旧基準 (W256)");
     expect(html).toContain("持ち時間");
     expect(html).toContain("計算品質");
     expect(html).toContain("思考制御 (開発用)");

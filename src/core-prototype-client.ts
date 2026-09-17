@@ -296,7 +296,11 @@ export async function loadPrototypeManifest(
       throw new Error("Development model selection is unavailable");
     return parsePrototypeManifest(releaseManifest);
   }
-  if (selection !== "baseline" && selection !== "candidate")
+  if (
+    selection !== "baseline" &&
+    selection !== "candidate" &&
+    selection !== "defense"
+  )
     throw new Error("Invalid development model selection");
   const response = await fetch(`${ASSET_PREFIX}${selection}/manifest.json`, {
     cache: "no-store",

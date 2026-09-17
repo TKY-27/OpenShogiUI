@@ -21,7 +21,7 @@ npm run dev -- --host 127.0.0.1 --port 5176 --strictPort
 ```
 
 Open `http://127.0.0.1:5176/#/match`. The development match defaults to the locally registered
-r3 candidate and offers the frozen W256 comparison. The legacy analysis/lab routes are development
+r3 candidate and offers the defense learning candidate and frozen W256 comparisons. The legacy analysis/lab routes are development
 only. Production builds require a separate explicit selection, as described below.
 
 Development-only Browser Play includes independent Sente/Gote role and board-orientation controls, move-history
@@ -68,7 +68,7 @@ commit and all four generated hashes are recorded in `PROVENANCE.md`. See `ARCHI
 Development mode uses `#/match`; `#/core-prototype` remains a development alias. Start with
 `npm run dev -- --host 127.0.0.1 --port 5176 --strictPort` and reload the page after a
 server/binding update. The page prepares the selected model and Wasm before enabling Start.
-Select the frozen W256 or a prepared training candidate, Sente/Gote, three- or ten-minute
+Select the defense learning candidate, r3 candidate or frozen W256, Sente/Gote, three- or ten-minute
 sudden death, and standard/high quality. No opening book is used. Both quality modes pass
 the full remaining match clocks to the same engine time policy; quality changes the bounded
 search memory allocation. The unvalidated learned controller is explicitly OFF by default.
@@ -82,13 +82,16 @@ The adjacent OpenShogiAI checkout supplies `target/pure/bindings/open_shogi_wasm
 `target/pure/bindings/open_shogi_wasm_bg.wasm`, `local/frozen/baseline/model.osaval03`, and
 `local/core-prototype/controller.json`. A trained candidate becomes available only when the
 judgment owner writes `local/core-prototype/candidate.json` after checking its export and
-runtime identity. That one local descriptor has schema `open_shogi_development_candidate/v1`,
+runtime identity. The independent `local/core-prototype/defense.json` descriptor uses the same
+format for the defense learning candidate; `candidate.json` continues to identify r3.
+These development selections require runtime verification, not completed strength evaluation or release adoption.
+Each local descriptor has schema `open_shogi_development_candidate/v1`,
 `runId`, `leaf: { path, sha256 }`, and `controller: null | { path, sha256 }`. Artifact paths
 must be inside the adjacent checkout's `local/`. A null controller disables ON for that
 candidate; the old W256 controller is never silently paired with a new leaf.
 
 The loopback-only development middleware exposes selected, hash-bound manifests and assets
-under `/__core-prototype/baseline/` or `/__core-prototype/candidate/`. The baseline leaf must
+under `/__core-prototype/baseline/`, `/__core-prototype/candidate/` or `/__core-prototype/defense/`. The baseline leaf must
 match the frozen SHA-256. Every response uses no-store, and changed, missing, escaping,
 oversized or incompatible artifacts fail visibly. The Worker hashes fetched JS/Wasm/model/controller bytes once; the verified JS bytes run through
 a short-lived Blob module and the verified Wasm bytes are passed explicitly. The runtime independently

@@ -246,15 +246,20 @@ function runtimeIdentity(selected: PrototypeManifest = manifest) {
     selected,
   );
 }
-function candidateManifest(): PrototypeManifest {
+function candidateManifest(
+  selection: "candidate" | "defense" = "candidate",
+): PrototypeManifest {
   const candidate = structuredClone(manifest);
-  candidate.selection = "candidate";
-  candidate.runId = "r3-best-step6144";
-  candidate.artifacts["leaf.osaval03"].sha256 = "b".repeat(64);
+  candidate.selection = selection;
+  candidate.runId =
+    selection === "defense" ? "defense-best-step1536" : "r3-best-step6144";
+  candidate.artifacts["leaf.osaval03"].sha256 = (
+    selection === "defense" ? "c" : "b"
+  ).repeat(64);
   candidate.artifacts["controller.json"] = null;
   for (const [name, asset] of Object.entries(candidate.artifacts)) {
     if (asset)
-      asset.url = `${ASSET_PREFIX}candidate/${name}?sha256=${asset.sha256}`;
+      asset.url = `${ASSET_PREFIX}${selection}/${name}?sha256=${asset.sha256}`;
   }
   return parsePrototypeManifest(candidate);
 }
@@ -572,7 +577,7 @@ describe("prototype game clock and cancellation", () => {
     session.dispose();
   });
 
-  it("recreates one Worker for reload and old/candidate/old changes without retaining state", async () => {
+  it("recreates one Worker for reload and baseline/r3/defense changes without retaining state", async () => {
     const clients: FakeEngine[] = [];
     const session = new PrototypeMatchSession(
       vi.fn(),
@@ -582,29 +587,33 @@ describe("prototype game clock and cancellation", () => {
         return client;
       },
       async (selection) =>
-        selection === "candidate" ? candidateManifest() : manifest,
+        selection === "candidate" || selection === "defense"
+          ? candidateManifest(selection)
+          : manifest,
     );
     for (const selection of [
       "baseline",
       "baseline",
       "candidate",
+      "defense",
+      "candidate",
       "baseline",
     ] as const) {
       await session.prepare(selection);
+      const expected =
+        selection === "baseline" ? manifest : candidateManifest(selection);
       expect(session.state.selection).toBe(selection);
-      expect(session.state.identity?.modelId).toBe(
-        selection === "candidate" ? "r3-best-step6144" : manifest.runId,
-      );
+      expect(session.state.identity?.modelId).toBe(expected.runId);
       expect(session.state.snapshot?.leafSha256).toBe(
-        selection === "candidate" ? "b".repeat(64) : LEAF_SHA256,
+        expected.artifacts["leaf.osaval03"].sha256,
       );
       expect(session.state.snapshot?.moves).toEqual([]);
       expect(session.state.diagnostics).toEqual([]);
     }
-    expect(clients).toHaveLength(4);
+    expect(clients).toHaveLength(6);
     for (const client of clients.slice(0, -1))
       expect(client.dispose).toHaveBeenCalledOnce();
-    expect(clients[3].dispose).not.toHaveBeenCalled();
+    expect(clients[5].dispose).not.toHaveBeenCalled();
     session.dispose();
   });
 
@@ -1020,40 +1029,45 @@ describe("prototype Worker transport", () => {
 });
 
 describe("local artifact serving boundary", () => {
-  it("requires an explicit candidate descriptor and binds the actual leaf bytes without a controller fallback", async () => {
-    const root = await mkdtemp(join(tmpdir(), "osui-candidate-"));
-    try {
-      await mkdir(join(root, "local/core-prototype"), { recursive: true });
-      const descriptor = {
-        schema: "open_shogi_development_candidate/v1",
-        runId: "test-run",
-        leaf: { path: "local/model.osaval03", sha256: "a".repeat(64) },
-        controller: null,
-      };
-      await writeFile(
-        join(root, "local/core-prototype/candidate.json"),
-        JSON.stringify(descriptor),
-      );
-      expect((await readCandidateDescriptor(root)).controller).toBeNull();
-      await writeFile(join(root, "local/model.osaval03"), "changed-model");
-      await expect(
-        readPrototypeArtifact(root, "leaf.osaval03", "candidate"),
-      ).rejects.toThrow("hash mismatch");
-      await expect(
-        readPrototypeArtifact(root, "controller.json", "candidate"),
-      ).rejects.toThrow("no matching controller");
-      descriptor.leaf.path = "local/../outside";
-      await writeFile(
-        join(root, "local/core-prototype/candidate.json"),
-        JSON.stringify(descriptor),
-      );
-      await expect(readCandidateDescriptor(root)).rejects.toThrow(
-        "Invalid candidate artifact",
-      );
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
+  it.each(["candidate", "defense"] as const)(
+    "requires an explicit %s descriptor and binds the actual leaf bytes without a controller fallback",
+    async (selection) => {
+      const root = await mkdtemp(join(tmpdir(), "osui-candidate-"));
+      try {
+        await mkdir(join(root, "local/core-prototype"), { recursive: true });
+        const descriptor = {
+          schema: "open_shogi_development_candidate/v1",
+          runId: "test-run",
+          leaf: { path: "local/model.osaval03", sha256: "a".repeat(64) },
+          controller: null,
+        };
+        await writeFile(
+          join(root, `local/core-prototype/${selection}.json`),
+          JSON.stringify(descriptor),
+        );
+        expect(
+          (await readCandidateDescriptor(root, selection)).controller,
+        ).toBeNull();
+        await writeFile(join(root, "local/model.osaval03"), "changed-model");
+        await expect(
+          readPrototypeArtifact(root, "leaf.osaval03", selection),
+        ).rejects.toThrow("hash mismatch");
+        await expect(
+          readPrototypeArtifact(root, "controller.json", selection),
+        ).rejects.toThrow("no matching controller");
+        descriptor.leaf.path = "local/../outside";
+        await writeFile(
+          join(root, `local/core-prototype/${selection}.json`),
+          JSON.stringify(descriptor),
+        );
+        await expect(readCandidateDescriptor(root, selection)).rejects.toThrow(
+          "Invalid candidate artifact",
+        );
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("rejects non-loopback, cross-site, foreign host and non-read requests", () => {
     const request = {

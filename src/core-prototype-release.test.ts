@@ -59,6 +59,9 @@ describe("production runtime manifest pin", () => {
     await expect(loadPrototypeManifest("baseline")).rejects.toThrow(
       "unavailable",
     );
+    await expect(loadPrototypeManifest("defense")).rejects.toThrow(
+      "Development model selection is unavailable",
+    );
     await expect(loadPrototypeManifest("candidate")).rejects.toThrow(
       "unavailable",
     );

@@ -12,7 +12,11 @@ export const LEAF_SHA256 = import.meta.env.DEV
   ? "859e922b3f503ddeecf0afeb9a05fccac080a9faca3b19fce9d8253c9039c480"
   : (releaseManifest?.artifacts["leaf.osaval03"].sha256 ?? "");
 export const ASSET_PREFIX = assetPrefix;
-export type PrototypeSelection = "baseline" | "candidate" | "release";
+export type PrototypeSelection =
+  | "baseline"
+  | "candidate"
+  | "defense"
+  | "release";
 export const DEFAULT_SELECTION: PrototypeSelection = import.meta.env.DEV
   ? "candidate"
   : "release";
@@ -182,7 +186,11 @@ export function parsePrototypeManifest(value: unknown): PrototypeManifest {
   const record = object(value, ["schema", "selection", "runId", "artifacts"]);
   expect(record.schema, "open_shogi_core_prototype_assets/v2");
   if (import.meta.env.DEV) {
-    if (record.selection !== "baseline" && record.selection !== "candidate")
+    if (
+      record.selection !== "baseline" &&
+      record.selection !== "candidate" &&
+      record.selection !== "defense"
+    )
       throw new Error("Invalid development model selection");
   } else if (record.selection !== "release" || releaseManifest === null) {
     throw new Error("A pinned release model is required");

@@ -99,13 +99,17 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
     state.identity?.expectedHashVerified === true &&
     state.identity.leafSha256 === position.leafSha256;
   const modelLabel = import.meta.env.DEV
-    ? state.selection === "candidate"
+    ? state.selection === "defense"
       ? ja
-        ? "r3候補"
-        : "r3 candidate"
-      : ja
-        ? "旧基準 (W256)"
-        : "Previous baseline (W256)"
+        ? "防御学習候補"
+        : "Defense learning candidate"
+      : state.selection === "candidate"
+        ? ja
+          ? "r3候補"
+          : "r3 candidate"
+        : ja
+          ? "旧基準 (W256)"
+          : "Previous baseline (W256)"
     : messages.match.engine;
   const result = state.result;
   const status =
@@ -174,7 +178,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           <fieldset className="segmented-control" disabled={!canSelectModel}>
             <legend>{ja ? "モデル" : "Model"}</legend>
             <div>
-              {(["candidate", "baseline"] as const).map((value) => (
+              {(["defense", "candidate", "baseline"] as const).map((value) => (
                 <button
                   type="button"
                   key={value}
@@ -184,13 +188,17 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
                     void sessionRef.current?.prepare(value);
                   }}
                 >
-                  {value === "candidate"
+                  {value === "defense"
                     ? ja
-                      ? "r3候補"
-                      : "r3 candidate"
-                    : ja
-                      ? "旧基準 (W256)"
-                      : "Previous baseline (W256)"}
+                      ? "防御学習候補"
+                      : "Defense learning candidate"
+                    : value === "candidate"
+                      ? ja
+                        ? "r3候補"
+                        : "r3 candidate"
+                      : ja
+                        ? "旧基準 (W256)"
+                        : "Previous baseline (W256)"}
                 </button>
               ))}
             </div>
