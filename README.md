@@ -99,7 +99,7 @@ checks the leaf identity and controller-to-leaf binding. Search diagnostics reta
 evaluation proof and zero forbidden-path counters. No Service Worker or model storage cache is used. The artifact panel
 shows the run, leaf/controller/Wasm identities, preparation stages, and each last move's
 remaining clocks, quality, target, hard limit, actual search time, total charged user wait,
-depth/nodes and stop reason. Save diagnostics exports the bounded latest 128 search records.
+depth/nodes and stop reason. Save diagnostics exports the full game move list, result, model/runtime identities and search records including PVs. Downloads stay local.
 
 The dev server sets COOP `same-origin` and COEP `require-corp`. This creates the actual
 cross-origin isolation needed for a four-byte SharedArrayBuffer cancellation flag; unsupported

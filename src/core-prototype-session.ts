@@ -40,6 +40,7 @@ export interface PlayDiagnostic extends ComputeTelemetry {
   remaining: MatchClock;
   side: Side;
   movement: string | null;
+  pv: string[];
   leafSha256: string;
   wasmSha256: string;
   sfen: string;
@@ -382,6 +383,7 @@ export class PrototypeMatchSession {
       remaining,
       side: position.sideToMove,
       movement: response.bestMove,
+      pv: response.pv,
       leafSha256: position.leafSha256,
       wasmSha256: this.state.manifest!.artifacts["engine.wasm"].sha256,
       sfen: position.sfen,
@@ -389,7 +391,7 @@ export class PrototypeMatchSession {
     };
     this.publish({
       telemetry,
-      diagnostics: [...this.state.diagnostics.slice(-127), telemetry],
+      diagnostics: [...this.state.diagnostics, telemetry],
     });
   }
   private acceptMove(

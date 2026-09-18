@@ -155,6 +155,7 @@ const timing = {
 function searchResult(side: "black" | "white" = "white"): PrototypeSearch {
   return {
     bestMove: side === "black" ? "7g7f" : "3c3d",
+    pv: [side === "black" ? "7g7f" : "3c3d"],
     perspective: side,
     computeControl: telemetry(),
     depth: 1,

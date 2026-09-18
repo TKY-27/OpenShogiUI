@@ -52,6 +52,7 @@ export interface PrototypeSnapshot extends BoardPosition {
   leafSha256: string;
 }
 export interface PrototypeSearch {
+  pv: string[];
   bestMove: string | null;
   perspective: Side;
   computeControl: ComputeTelemetry;
@@ -621,6 +622,7 @@ export function parsePureSearch(
   };
   return {
     bestMove,
+    pv,
     perspective: search.perspective,
     computeControl,
     depth,
