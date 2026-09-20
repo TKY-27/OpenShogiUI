@@ -16,9 +16,10 @@ export type PrototypeSelection =
   | "baseline"
   | "candidate"
   | "defense"
+  | "r4c1"
   | "release";
 export const DEFAULT_SELECTION: PrototypeSelection = import.meta.env.DEV
-  ? "candidate"
+  ? "defense"
   : "release";
 export const ASSET_NAMES = [
   "engine.js",
@@ -190,7 +191,8 @@ export function parsePrototypeManifest(value: unknown): PrototypeManifest {
     if (
       record.selection !== "baseline" &&
       record.selection !== "candidate" &&
-      record.selection !== "defense"
+      record.selection !== "defense" &&
+      record.selection !== "r4c1"
     )
       throw new Error("Invalid development model selection");
   } else if (record.selection !== "release" || releaseManifest === null) {

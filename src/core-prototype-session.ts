@@ -72,6 +72,12 @@ export interface PrototypeState {
   preparation: PreparationTelemetry | null;
   telemetry: PlayDiagnostic | null;
   diagnostics: PlayDiagnostic[];
+  moveTimes: {
+    side: Side;
+    movement: string;
+    elapsedMs: number;
+    remaining: MatchClock;
+  }[];
 }
 export function initialPrototypeState(): PrototypeState {
   return {
@@ -93,6 +99,7 @@ export function initialPrototypeState(): PrototypeState {
     preparation: null,
     telemetry: null,
     diagnostics: [],
+    moveTimes: [],
   };
 }
 
@@ -188,6 +195,7 @@ export class PrototypeMatchSession {
         result: null,
         telemetry: null,
         diagnostics: [],
+        moveTimes: [],
       });
       if (this.finishTerminal()) return;
       if (this.state.snapshot!.sideToMove !== humanSide)
@@ -407,7 +415,22 @@ export class PrototypeMatchSession {
       JSON.stringify(next.moves) !== JSON.stringify([...before.moves, movement])
     )
       throw new Error("Move response does not extend the committed game");
+    const clockKey =
+      before.sideToMove === "black" ? "blackTimeMs" : "whiteTimeMs";
+    const previousClock =
+      this.state.moveTimes.at(-1)?.remaining ??
+      initialClockFor(this.state.preset);
     this.publish({
+      moveTimes: [
+        ...this.state.moveTimes,
+        {
+          side: before.sideToMove,
+          movement,
+          // Clock deltas include earlier cancelled searches, but exclude paused time.
+          elapsedMs: previousClock[clockKey] - this.state.clock[clockKey],
+          remaining: { ...this.state.clock },
+        },
+      ],
       previous: before,
       snapshot: next,
       busy: false,

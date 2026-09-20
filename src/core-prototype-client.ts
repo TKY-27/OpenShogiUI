@@ -299,7 +299,8 @@ export async function loadPrototypeManifest(
   if (
     selection !== "baseline" &&
     selection !== "candidate" &&
-    selection !== "defense"
+    selection !== "defense" &&
+    selection !== "r4c1"
   )
     throw new Error("Invalid development model selection");
   const response = await fetch(`${ASSET_PREFIX}${selection}/manifest.json`, {

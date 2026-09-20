@@ -40,7 +40,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
   useEffect(() => {
     const session = new PrototypeMatchSession(setState);
     sessionRef.current = session;
-    void session.prepare(import.meta.env.DEV ? "candidate" : "release");
+    void session.prepare();
     const timer = window.setInterval(() => session.tick(), 100);
     return () => {
       window.clearInterval(timer);
@@ -99,17 +99,21 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
     state.identity?.expectedHashVerified === true &&
     state.identity.leafSha256 === position.leafSha256;
   const modelLabel = import.meta.env.DEV
-    ? state.selection === "defense"
+    ? state.selection === "r4c1"
       ? ja
-        ? "防御学習候補"
-        : "Defense learning candidate"
-      : state.selection === "candidate"
+        ? "R4-C1（比較候補・未採用）"
+        : "R4-C1 (comparison only)"
+      : state.selection === "defense"
         ? ja
-          ? "r3候補"
-          : "r3 candidate"
-        : ja
-          ? "旧基準 (W256)"
-          : "Previous baseline (W256)"
+          ? "防御学習候補"
+          : "Defense learning candidate"
+        : state.selection === "candidate"
+          ? ja
+            ? "r3候補"
+            : "r3 candidate"
+          : ja
+            ? "旧基準 (W256)"
+            : "Previous baseline (W256)"
     : messages.match.engine;
   const result = state.result;
   const status =
@@ -178,29 +182,35 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           <fieldset className="segmented-control" disabled={!canSelectModel}>
             <legend>{ja ? "モデル" : "Model"}</legend>
             <div>
-              {(["defense", "candidate", "baseline"] as const).map((value) => (
-                <button
-                  type="button"
-                  key={value}
-                  aria-pressed={state.selection === value}
-                  onClick={() => {
-                    setEnabled(false);
-                    void sessionRef.current?.prepare(value);
-                  }}
-                >
-                  {value === "defense"
-                    ? ja
-                      ? "防御学習候補"
-                      : "Defense learning candidate"
-                    : value === "candidate"
+              {(["defense", "r4c1", "candidate", "baseline"] as const).map(
+                (value) => (
+                  <button
+                    type="button"
+                    key={value}
+                    aria-pressed={state.selection === value}
+                    onClick={() => {
+                      setEnabled(false);
+                      void sessionRef.current?.prepare(value);
+                    }}
+                  >
+                    {value === "r4c1"
                       ? ja
-                        ? "r3候補"
-                        : "r3 candidate"
-                      : ja
-                        ? "旧基準 (W256)"
-                        : "Previous baseline (W256)"}
-                </button>
-              ))}
+                        ? "R4-C1（比較候補・未採用）"
+                        : "R4-C1 (comparison only)"
+                      : value === "defense"
+                        ? ja
+                          ? "防御学習候補"
+                          : "Defense learning candidate"
+                        : value === "candidate"
+                          ? ja
+                            ? "r3候補"
+                            : "r3 candidate"
+                          : ja
+                            ? "旧基準 (W256)"
+                            : "Previous baseline (W256)"}
+                  </button>
+                ),
+              )}
             </div>
           </fieldset>
           <p
@@ -587,6 +597,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
                     game: {
                       initialSfen: state.snapshot?.initialSfen,
                       moves: state.snapshot?.moves,
+                      moveTimes: state.moveTimes,
                       finalSfen: state.snapshot?.sfen,
                       result: state.result,
                       humanSide: state.humanSide,
@@ -640,7 +651,11 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
                   setConfirmAction(null);
                 }}
               >
-                {messages.match.confirm}
+                {confirmAction === "resign"
+                  ? messages.match.confirm
+                  : ja
+                    ? "終了する"
+                    : "End game"}
               </button>
             </div>
           </article>

@@ -13,6 +13,7 @@ import {
 } from "./core-prototype-client";
 import {
   ASSET_NAMES,
+  DEFAULT_SELECTION,
   ASSET_PREFIX,
   LEAF_SHA256,
   parseComputeIdentity,
@@ -248,14 +249,18 @@ function runtimeIdentity(selected: PrototypeManifest = manifest) {
   );
 }
 function candidateManifest(
-  selection: "candidate" | "defense" = "candidate",
+  selection: "candidate" | "defense" | "r4c1" = "candidate",
 ): PrototypeManifest {
   const candidate = structuredClone(manifest);
   candidate.selection = selection;
   candidate.runId =
-    selection === "defense" ? "defense-best-step1536" : "r3-best-step6144";
+    selection === "r4c1"
+      ? "r4-c1-best-step512"
+      : selection === "defense"
+        ? "defense-best-step1536"
+        : "r3-best-step6144";
   candidate.artifacts["leaf.osaval03"].sha256 = (
-    selection === "defense" ? "c" : "b"
+    selection === "r4c1" ? "d" : selection === "defense" ? "c" : "b"
   ).repeat(64);
   candidate.artifacts["controller.json"] = null;
   for (const [name, asset] of Object.entries(candidate.artifacts)) {
@@ -578,7 +583,8 @@ describe("prototype game clock and cancellation", () => {
     session.dispose();
   });
 
-  it("recreates one Worker for reload and baseline/r3/defense changes without retaining state", async () => {
+  it("recreates one Worker for reload and baseline/r3/defense/C1 changes without retaining state", async () => {
+    expect(DEFAULT_SELECTION).toBe("defense");
     const clients: FakeEngine[] = [];
     const session = new PrototypeMatchSession(
       vi.fn(),
@@ -588,7 +594,9 @@ describe("prototype game clock and cancellation", () => {
         return client;
       },
       async (selection) =>
-        selection === "candidate" || selection === "defense"
+        selection === "candidate" ||
+        selection === "defense" ||
+        selection === "r4c1"
           ? candidateManifest(selection)
           : manifest,
     );
@@ -597,6 +605,7 @@ describe("prototype game clock and cancellation", () => {
       "baseline",
       "candidate",
       "defense",
+      "r4c1",
       "candidate",
       "baseline",
     ] as const) {
@@ -611,10 +620,10 @@ describe("prototype game clock and cancellation", () => {
       expect(session.state.snapshot?.moves).toEqual([]);
       expect(session.state.diagnostics).toEqual([]);
     }
-    expect(clients).toHaveLength(6);
+    expect(clients).toHaveLength(7);
     for (const client of clients.slice(0, -1))
       expect(client.dispose).toHaveBeenCalledOnce();
-    expect(clients[5].dispose).not.toHaveBeenCalled();
+    expect(clients[6].dispose).not.toHaveBeenCalled();
     session.dispose();
   });
 
@@ -733,9 +742,28 @@ describe("prototype game clock and cancellation", () => {
     await start;
     expect(h.session.state.phase).toBe("stopped");
     expect(h.session.state.snapshot?.moves).toEqual([]);
+    expect(h.session.state.moveTimes).toEqual([]);
     expect(h.session.state.clock.blackTimeMs).toBe(178960);
     expect(h.session.state.telemetry?.movement).toBe("7g7f");
     expect(h.clients[0].move).not.toHaveBeenCalled();
+    h.clients[0].result = deferred<PrototypeSearch>();
+    h.at(10000);
+    const resumed = h.session.resume();
+    await vi.waitFor(() =>
+      expect(h.clients[0].search).toHaveBeenCalledTimes(2),
+    );
+    h.at(10500);
+    h.clients[0].result.resolve(searchResult("black"));
+    await resumed;
+    expect(h.session.state.moveTimes).toEqual([
+      {
+        side: "black",
+        movement: "7g7f",
+        elapsedMs: 1540,
+        remaining: { blackTimeMs: 178460, whiteTimeMs: 180000 },
+      },
+    ]);
+    h.session.dispose();
   });
   it("rejects a human move whose Worker validation finishes at flag fall", async () => {
     const h = await harness();
@@ -791,6 +819,22 @@ describe("prototype game clock and cancellation", () => {
     );
     expect(h.session.state.snapshot?.moves).toEqual(["7g7f", "3c3d"]);
     expect(h.session.state.snapshot?.sideToMove).toBe("black");
+    expect(h.session.state.moveTimes).toEqual([
+      {
+        side: "black",
+        movement: "7g7f",
+        elapsedMs: 1500,
+        remaining: { blackTimeMs: 178500, whiteTimeMs: 180000 },
+      },
+      {
+        side: "white",
+        movement: "3c3d",
+        elapsedMs: 3200,
+        remaining: { blackTimeMs: 178500, whiteTimeMs: 176800 },
+      },
+    ]);
+    await h.session.configure();
+    expect(h.session.state.moveTimes).toEqual([]);
   });
   it("starts the AI as black when the human selects gote", async () => {
     const h = await harness();
@@ -1030,7 +1074,7 @@ describe("prototype Worker transport", () => {
 });
 
 describe("local artifact serving boundary", () => {
-  it.each(["candidate", "defense"] as const)(
+  it.each(["candidate", "defense", "r4c1"] as const)(
     "requires an explicit %s descriptor and binds the actual leaf bytes without a controller fallback",
     async (selection) => {
       const root = await mkdtemp(join(tmpdir(), "osui-candidate-"));

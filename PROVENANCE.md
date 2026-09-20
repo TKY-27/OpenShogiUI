@@ -40,14 +40,20 @@ The original analysis/time-control protocol snapshot was introduced from OpenSho
 `open_shogi_analysis/v1`, `open_shogi_time_control/v1`, and
 `open_shogi_resource_budget/v1` contracts.
 
-The current snapshot was regenerated on 2026-09-12 for the book-free defense campaign.
+The previous snapshot was regenerated on 2026-09-12 for the book-free defense campaign.
 Its source code commit is `ea7dc1376a30ead0b9571fbe640e24f513198f4c` (tree
-`42e38eef28395aa2935382795c46fc440701c7fb`). All four files were copied together from `bindings/wasm/` after `make check`
-and remain byte-identical under `npm run integration:ai`.
+`42e38eef28395aa2935382795c46fc440701c7fb`).
+
+On 2026-09-20 the standard analysis Wasm was synchronized with the R4 bounded-mate
+source commit `3e83f59cd351dff733e8db390f5ae1304f6921ab`. The other three bindings
+were unchanged. All four files match `bindings/wasm/` after `make check` and
+`npm run integration:ai`. This standard runtime is separate from the pure-only
+Wasm used for the defense/C1 Arena and development matches; those hashes and
+results are unchanged.
 
 | Generated file | SHA-256 |
 | --- | --- |
 | `open_shogi_wasm.d.ts` | `8b899de7246585f5c7ccafe0b5b2dde012eec0af12a8032d5d4e5741be9cf063` |
 | `open_shogi_wasm.js` | `8d36745850bb91e90f93436a9c40d833686cca6c1232ab2c7c9346a59e109023` |
-| `open_shogi_wasm_bg.wasm` | `ac6e26e539a7792cc9d53d3bbbd99e3113d97a65ea76d433c9f8daa6280d131d` |
+| `open_shogi_wasm_bg.wasm` | `6ad83e2a0631021e08206e505432d940852e94ad46acac6a7b781af1a5de22e6` |
 | `open_shogi_wasm_bg.wasm.d.ts` | `efb20b72f02808e77a8baed92fc80fa2f3e1c9b8ce0709f2cd49ed7259933068` |
