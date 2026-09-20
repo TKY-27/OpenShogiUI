@@ -100,7 +100,7 @@ try {
     ["white", "10分", "標準"],
   ]) {
     const caseName = `${side}-${preset}-${profile}`;
-    await page.getByRole("button", { name: preset, exact: true }).click();
+    await page.getByRole("button", { name: new RegExp(`^${preset}`) }).click();
     await page.getByRole("button", { name: profile, exact: true }).click();
     await page
       .getByRole("button", {
