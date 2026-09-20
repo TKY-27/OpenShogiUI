@@ -627,6 +627,20 @@ describe("prototype game clock and cancellation", () => {
     session.dispose();
   });
 
+  it("maps a restored C2 selection to the defense identity before loading", async () => {
+    const loader = vi.fn(async () => candidateManifest("defense"));
+    const session = new PrototypeMatchSession(
+      vi.fn(),
+      () => new FakeEngine(),
+      loader,
+    );
+    await session.prepare("r4c2");
+    expect(loader).toHaveBeenCalledWith("defense", expect.any(AbortSignal));
+    expect(session.state.selection).toBe("defense");
+    expect(session.state.identity?.leafSha256).toBe("c".repeat(64));
+    session.dispose();
+  });
+
   it("keeps a failed selection explicit, requires retry and rejects mismatched loaded identity", async () => {
     const loader = vi
       .fn()
@@ -1074,7 +1088,7 @@ describe("prototype Worker transport", () => {
 });
 
 describe("local artifact serving boundary", () => {
-  it.each(["candidate", "defense", "r4c1"] as const)(
+  it.each(["candidate", "defense", "r4c1", "r4c3"] as const)(
     "requires an explicit %s descriptor and binds the actual leaf bytes without a controller fallback",
     async (selection) => {
       const root = await mkdtemp(join(tmpdir(), "osui-candidate-"));

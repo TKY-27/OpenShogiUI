@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 const [url, selection, expectedHash, output] = process.argv.slice(2);
 assert(/^http:\/\/127\.0\.0\.1:\d+\/#\/match$/.test(url));
 assert(
-  ["r4c1", "r4c2", "defense", "candidate", "baseline"].includes(selection),
+  ["r4c1", "r4c3", "defense", "candidate", "baseline"].includes(selection),
 );
 assert(/^[a-f0-9]{64}$/.test(expectedHash));
 await mkdir(output, { recursive: true });
@@ -41,11 +41,24 @@ try {
   page.on("request", (r) => {
     if (r.url().includes("leaf.osaval03")) report.requestedModels.push(r.url());
   });
-  await page.goto(url);
+  await page.goto(url.replace("/#/match", "/?model=r4c2#/match"));
   report.title = await page.title();
   assert(report.title.length > 0);
+  await page.waitForFunction(() =>
+    document
+      .querySelector(".prototype-model__status")
+      ?.textContent?.includes("8c1c875038b7"),
+  );
+  assert.equal(await page.getByRole("button", { name: /^R4-C2/ }).count(), 0);
+  assert.equal(
+    await page
+      .getByRole("button", { name: "防御学習候補", exact: true })
+      .getAttribute("aria-pressed"),
+    "true",
+  );
+  report.legacyC2Alias = "defense";
   const labels = {
-    r4c2: /^R4-C2/,
+    r4c3: /^R4-C3/,
     r4c1: /^R4-C1/,
     defense: /^防御学習候補$/,
     candidate: /^r3候補$/,
@@ -79,8 +92,16 @@ try {
     await (await download).saveAs(file);
     return JSON.parse(await readFile(file, "utf8"));
   };
-  for (const side of ["black", "white"]) {
-    await page.getByRole("button", { name: "高品質", exact: true }).click();
+  for (const [side, preset, profile] of [
+    ["black", "3分", "高品質"],
+    ["white", "3分", "高品質"],
+    ["white", "3分", "標準"],
+    ["black", "10分", "高品質"],
+    ["white", "10分", "標準"],
+  ]) {
+    const caseName = `${side}-${preset}-${profile}`;
+    await page.getByRole("button", { name: preset, exact: true }).click();
+    await page.getByRole("button", { name: profile, exact: true }).click();
     await page
       .getByRole("button", {
         name: side === "black" ? "先手" : "後手",
@@ -112,14 +133,18 @@ try {
     );
     await page.getByRole("button", { name: "停止", exact: true }).click();
     await page.getByRole("button", { name: "再開", exact: true }).waitFor();
-    const result = await diagnostics(side);
+    const result = await diagnostics(caseName);
     assert.equal(result.identity.leafSha256, expectedHash);
     assert.equal(
       result.manifest.artifacts["leaf.osaval03"].sha256,
       expectedHash,
     );
     assert.equal(result.game.humanSide, side);
-    assert.equal(result.game.profile, "quality");
+    assert.equal(
+      result.game.profile,
+      profile === "高品質" ? "quality" : "balanced",
+    );
+    assert.equal(result.game.preset, preset === "3分" ? "blitz3" : "rapid10");
     assert(result.searches.length >= 1);
     for (const search of result.searches) {
       assert.equal(search.leafSha256, expectedHash);
@@ -145,6 +170,8 @@ try {
     );
     report.games.push({
       side,
+      preset,
+      profile,
       moves: result.game.moves,
       identity: result.identity,
       preparation: result.preparation,
@@ -154,7 +181,7 @@ try {
     await page
       .getByRole("button", { name: "棋譜を保存 (USI)", exact: true })
       .click();
-    const gamePath = resolve(output, side + ".usi");
+    const gamePath = resolve(output, caseName + ".usi");
     await (await gameDownload).saveAs(gamePath);
     assert(
       (await readFile(gamePath, "utf8")).endsWith(result.game.moves.join(" ")),
@@ -162,7 +189,7 @@ try {
     await page.locator("details.prototype-artifacts summary").click();
     await page.locator(".prototype-heading").scrollIntoViewIfNeeded();
     await page.screenshot({
-      path: resolve(output, side + ".png"),
+      path: resolve(output, caseName + ".png"),
       fullPage: true,
     });
     if (side === "white") {
@@ -180,10 +207,16 @@ try {
       });
       await page.setViewportSize({ width: 1280, height: 900 });
     }
+    await page.getByRole("button", { name: "再開", exact: true }).click();
+    await page.getByRole("button", { name: "停止", exact: true }).waitFor();
+    await page.getByRole("button", { name: "投了", exact: true }).click();
     await page
-      .getByRole("button", { name: "対局を終了して設定へ", exact: true })
+      .getByRole("dialog")
+      .getByRole("button", { name: "投了する", exact: true })
       .click();
-    await page.getByRole("button", { name: "終了する", exact: true }).click();
+    const ended = await diagnostics(caseName + "-terminal");
+    assert.equal(ended.game.result.reason, "resignation");
+    await page.getByRole("button", { name: "もう一局", exact: true }).click();
     await page.locator(".match-start").waitFor();
   }
   await page.setViewportSize({ width: 390, height: 844 });

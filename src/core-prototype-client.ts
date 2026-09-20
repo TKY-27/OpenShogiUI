@@ -292,6 +292,7 @@ export async function loadPrototypeManifest(
   signal?: AbortSignal,
 ): Promise<PrototypeManifest> {
   signal?.throwIfAborted();
+  if (import.meta.env.DEV && selection === "r4c2") selection = "defense";
   if (!import.meta.env.DEV) {
     const selected =
       releaseModels.find((m) => m.manifest.selection === selection)?.manifest ??
@@ -305,7 +306,8 @@ export async function loadPrototypeManifest(
     selection !== "candidate" &&
     selection !== "defense" &&
     selection !== "r4c1" &&
-    selection !== "r4c2"
+    selection !== "r4c2" &&
+    selection !== "r4c3"
   )
     throw new Error("Invalid development model selection");
   const response = await fetch(`${ASSET_PREFIX}${selection}/manifest.json`, {

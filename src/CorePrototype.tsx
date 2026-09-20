@@ -40,7 +40,8 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
   useEffect(() => {
     const session = new PrototypeMatchSession(setState);
     sessionRef.current = session;
-    void session.prepare();
+    const legacy = new URLSearchParams(window.location.search).get("model");
+    void session.prepare(legacy === "r4c2" ? "r4c2" : undefined);
     const timer = window.setInterval(() => session.tick(), 100);
     return () => {
       window.clearInterval(timer);
@@ -99,8 +100,8 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
     state.identity?.expectedHashVerified === true &&
     state.identity.leafSha256 === position.leafSha256;
   const modelLabel = import.meta.env.DEV
-    ? state.selection === "r4c2"
-      ? "R4-C2（比較候補・未採用）"
+    ? state.selection === "r4c3"
+      ? "R4-C3（比較候補・未採用）"
       : state.selection === "r4c1"
         ? ja
           ? "R4-C1（比較候補・未採用）"
@@ -189,7 +190,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
             <div>
               {(import.meta.env.DEV
                 ? ([
-                    "r4c2",
+                    "r4c3",
                     "r4c1",
                     "defense",
                     "candidate",
@@ -209,10 +210,10 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
                   {!import.meta.env.DEV
                     ? releaseModels.find((m) => m.manifest.selection === value)!
                         .label
-                    : value === "r4c2"
+                    : value === "r4c3"
                       ? ja
-                        ? "R4-C2（比較候補・未採用）"
-                        : "R4-C2 (comparison only)"
+                        ? "R4-C3（比較候補・未採用）"
+                        : "R4-C3 (comparison only)"
                       : value === "r4c1"
                         ? ja
                           ? "R4-C1（比較候補・未採用）"
@@ -234,8 +235,8 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           </fieldset>
           <p className="match-setup__note">
             {ja
-              ? "開発世代の順です。強さの順位ではありません。"
-              : "Ordered by development generation; this is not a strength ranking."}
+              ? "開発世代の順です。強さの順位ではありません。C2は同一重み・同一探索の防御候補へ統合しました。"
+              : "Ordered by development generation; this is not a strength ranking. C2 is an alias of Defense: identical weights and search."}
           </p>
           <p
             className="prototype-model__status"

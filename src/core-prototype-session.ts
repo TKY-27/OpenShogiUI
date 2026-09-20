@@ -127,6 +127,7 @@ export class PrototypeMatchSession {
       ["playing", "stopping", "stopped"].includes(this.state.phase)
     )
       return;
+    if (import.meta.env.DEV && selection === "r4c2") selection = "defense";
     const generation = this.invalidate();
     const abort = new AbortController();
     this.preparationAbort = abort;

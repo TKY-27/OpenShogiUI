@@ -106,7 +106,7 @@ export function parseReleaseAllowlist(value: unknown) {
     .map((entry) => {
       exact(entry, ["selection", "label", "generation", "provenance", "model"]);
       if (
-        !["baseline", "candidate", "defense", "r4c1", "r4c2"].includes(
+        !["baseline", "candidate", "defense", "r4c1", "r4c2", "r4c3"].includes(
           String(entry.selection),
         ) ||
         typeof entry.label !== "string" ||

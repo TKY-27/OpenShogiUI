@@ -97,15 +97,17 @@ async function containedFile(
 }
 export async function readCandidateDescriptor(
   aiRoot: string,
-  selection: "candidate" | "defense" | "r4c1" | "r4c2" = "candidate",
+  selection: "candidate" | "defense" | "r4c1" | "r4c2" | "r4c3" = "candidate",
 ): Promise<CandidateDescriptor> {
   if (
     selection !== "candidate" &&
     selection !== "defense" &&
     selection !== "r4c1" &&
-    selection !== "r4c2"
+    selection !== "r4c2" &&
+    selection !== "r4c3"
   )
     throw new Error("Invalid candidate selection");
+  if (selection === "r4c2") selection = "defense";
   const root = await realpath(aiRoot);
   const value = JSON.parse(
     (
@@ -143,7 +145,8 @@ export async function readPrototypeArtifact(
     | "candidate"
     | "defense"
     | "r4c1"
-    | "r4c2" = "baseline",
+    | "r4c2"
+    | "r4c3" = "baseline",
 ) {
   if (!Object.hasOwn(artifacts, name))
     throw new Error("Unknown prototype artifact");
@@ -202,14 +205,17 @@ export function corePrototypeDev(): Plugin {
         void (async () => {
           const url = new URL(request.url!, `http://${request.headers.host}`);
           const parts = url.pathname.slice(PROTOTYPE_PREFIX.length).split("/");
-          const [selection, name] = parts;
+          const [requestedSelection, name] = parts;
+          const selection =
+            requestedSelection === "r4c2" ? "defense" : requestedSelection;
           if (
             parts.length !== 2 ||
             (selection !== "baseline" &&
               selection !== "candidate" &&
               selection !== "defense" &&
               selection !== "r4c1" &&
-              selection !== "r4c2")
+              selection !== "r4c2" &&
+              selection !== "r4c3")
           )
             throw new Error("Explicit candidate selection required");
           if (name === "manifest.json" && !url.search) {

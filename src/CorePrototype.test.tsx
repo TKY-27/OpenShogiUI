@@ -70,6 +70,13 @@ describe("learned-model match setup", () => {
     view.state = loadedState();
   });
 
+  it("lists C3 and explains C2's canonical defense alias", () => {
+    const html = render();
+    expect(modelFieldset(html)).toContain("R4-C3");
+    expect(modelFieldset(html)).not.toContain("R4-C2");
+    expect(html).toContain("C2は同一重み・同一探索の防御候補へ統合");
+  });
+
   it("keeps model selection available while loading and forbids starting", () => {
     view.state = { ...initialPrototypeState(), phase: "loading", busy: true };
     const html = render();

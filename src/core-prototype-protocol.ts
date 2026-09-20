@@ -22,6 +22,7 @@ export type PrototypeSelection =
   | "defense"
   | "r4c1"
   | "r4c2"
+  | "r4c3"
   | "release";
 export const DEFAULT_SELECTION: PrototypeSelection = import.meta.env.DEV
   ? "defense"
@@ -202,7 +203,8 @@ export function parsePrototypeManifest(value: unknown): PrototypeManifest {
       record.selection !== "candidate" &&
       record.selection !== "defense" &&
       record.selection !== "r4c1" &&
-      record.selection !== "r4c2"
+      record.selection !== "r4c2" &&
+      record.selection !== "r4c3"
     )
       throw new Error("Invalid development model selection");
   } else if (pinnedManifest === null) {

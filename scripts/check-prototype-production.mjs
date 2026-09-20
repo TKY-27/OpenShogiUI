@@ -20,9 +20,15 @@ const selections = new Set();
 for (const model of manifest.models) {
   if (
     selections.has(model.selection) ||
-    !["release", "baseline", "candidate", "defense", "r4c1", "r4c2"].includes(
-      model.selection,
-    ) ||
+    ![
+      "release",
+      "baseline",
+      "candidate",
+      "defense",
+      "r4c1",
+      "r4c2",
+      "r4c3",
+    ].includes(model.selection) ||
     model.schema !== "open_shogi_core_prototype_assets/v2" ||
     model.runtimeProfile !== "pure_learned-v3"
   )
