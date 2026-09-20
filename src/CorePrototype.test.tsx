@@ -61,7 +61,7 @@ function render() {
 }
 function modelFieldset(html: string) {
   return html.match(
-    /<fieldset[^>]*>[\s\S]*?<legend>モデル<\/legend>[\s\S]*?<\/fieldset>/,
+    /<fieldset[^>]*>[\s\S]*?<legend>最新←→開発初期<\/legend>[\s\S]*?<\/fieldset>/,
   )?.[0];
 }
 

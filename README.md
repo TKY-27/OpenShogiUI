@@ -21,7 +21,7 @@ npm run dev -- --host 127.0.0.1 --port 5174 --strictPort
 ```
 
 Open `http://127.0.0.1:5174/#/match`. The development match defaults to defense best1536
-and offers R4-C1 (comparison only, not adopted), r3 and frozen W256 comparisons.
+and offers R4-C2/R4-C1 (comparison only, not adopted), r3 and frozen W256 comparisons, in `最新←→開発初期` order. C2 becomes loadable after the reviewed training/registration path completes.
 The legacy analysis/lab routes are development only. Production builds require a separate explicit selection, as described below.
 
 Development-only Browser Play includes independent Sente/Gote role and board-orientation controls, move-history
@@ -39,7 +39,7 @@ All development games, strength evaluation and any future production play use or
 without an opening book, fixed first moves, position-to-answer tables, preloaded past analysis or
 external teachers during play. Normal search transposition tables remain allowed. Opening game
 records and teachers may inform training; teachers may also be used for offline diagnosis.
-Production remains one explicitly adopted model, while development retains candidate comparison.
+Future production uses an explicitly reviewed representative-model allowlist. Each game uses one selected configuration throughout; generation order is not strength order.
 No new public adoption or weight publication is implied by development changes.
 
 Astra owns strength diagnosis, design, evaluator/search/teacher/training changes, selection,
@@ -121,45 +121,52 @@ and the controller. The physical watchdog allows at most 100 ms to acknowledge c
 Flag fall uses elapsed wall time even in hidden tabs, and operation generations reject old
 responses after stop, resignation or rematch.
 
-## One-model production build
+## Explicit representative-model production allowlist
 
-`release-model.json` is the explicit release selection and currently contains `model: null`:
-public adoption is **undecided**. An ordinary `npm run build` therefore fails clearly. It never
-selects latest, the development candidate, or a champion automatically. Model files remain outside
-this Git repository. The existing standard snapshot is retained for development analysis and is
-not included in the production output.
+`release-model.json` uses `open_shogi_release_allowlist/v1`, with `default: null` and
+`models: []` until a separate publication GO. Ordinary builds fail closed. No model is
+promoted automatically. Each entry contains `selection`, `label`, `generation`, hash-bound
+`provenance`, and the complete model configuration (`id`, `format`, `runtimeProfile`,
+`controllerEnabled`, and four exact artifact keys). Generation values are unique and sorted
+newest first. Known representative selections are `r4c2`, `r4c1`, `defense`, `candidate`, `baseline`.
+Rights records have schema `open_shogi_model_distribution/v1`, exact `modelSha256`,
+`trainingAllowed`, `derivedWeightsAllowed`, and explicit source-audit identifiers.
+A rights record is evidence to review, not permission to publish without GO.
 
-For the authorized local structure test, the adjacent AI checkout holds a temporary selection:
+All registered bytes, model format, profile and real Wasm load identity are checked before
+output. Only allowlisted assets are emitted under `/model/<selection>/`; the public index is
+`/model/manifest.json`. Page/Worker bundles contain only public identity/label/generation,
+never source paths, training records or optimizer state. Only the selected model is fetched.
+The old v1 selection parser remains for local compatibility tests, not a one-model policy.
+
+Local validation (no publication):
 
 ```sh
-OPENSHOGI_RELEASE_CONFIG=local/r4-c1-preparation/release-selection.local.json npm run check
-npm run preview -- --host 127.0.0.1 --port 4176 --strictPort
+OPENSHOGI_RELEASE_CONFIG=local/r4-c2-preparation/release-allowlist.local.json npm run check
 ```
 
-The override path is relative to the adjacent AI checkout and must stay inside it. It is used only
-by the build process. Preview serves the completed `dist/`; it does not read the development
-registry or this environment variable. Open `http://127.0.0.1:4176/#/match`. This local test is not
-release adoption, weight publication, a deployment or a champion change.
+The override is inside the adjacent AI checkout, is build-time only, and has no effect on
+runtime selection. Analysis/lab changes remain a separate post-training Astra task.
 
-A selection has schema `open_shogi_release_selection/v1` and exactly one `model` object with `id`,
-`format: "OSAVAL03"`, `runtimeProfile: "pure_learned-v3"`, `controllerEnabled`, and `artifacts`.
-The exact artifact keys are `engine.js`, `engine.wasm`, `leaf.osaval03`, `controller.json`.
-Each component specifies `{ path, sha256 }`; the controller may be null only when disabled.
-Paths must be registered files inside the AI checkout's `local/` or `target/`. The build checks
-all actual bytes and loads the evaluator/controller with the selected Wasm before emitting.
-Missing/multiple selections, wrong format/hash and incompatible configurations stop the build.
+## C2 local post-training integration
 
-Only this one configuration is emitted under `/model/release/`, with an output identity manifest
-at `/model/manifest.json`. Both the page and Worker compile the sole allowed manifest and controller
-setting. Query/hash/localStorage and runtime flags cannot activate development selection. Model
-selection UI, upload/analysis/lab routes and their alternate runtime are absent from production.
-Standard/high-quality and ordinary match settings remain available.
+The single AI `evaluator_run resume` entry in its `docs/status.md` completes training, audit,
+fixed comparison and the `integrate` stage. It updates only the ignored
+`OpenShogiAI/local/core-prototype/r4c2.json`, starts/reuses loopback OSUI on port 5175, and runs
+`scripts/verify-development-candidate.mjs` against `http://127.0.0.1:5175/#/match`.
+The browser checks the real Worker hash, high-quality responses as both colors, stop/rematch,
+USI/diagnostic downloads, nonempty rendered board, console and mobile layout.
+A failed registration restores the previous descriptor byte-for-byte and leaves failure evidence.
+The default remains defense. Candidate registration is possible even when adoption criteria fail.
+Luna may execute these reviewed scripts and change that descriptor; it may not edit source code.
+The preparation `rehearsal` command uses the same route for the preserved prefix, then restores
+its temporary descriptor and never writes main Arena completion receipts.
 
 Vite's [public directory is copied verbatim by default](https://vite.dev/guide/assets#the-public-directory),
 so this build disables `copyPublicDir` and emits only allowlisted existing UI assets. It rejects
 public symlinks and unexpected assets, ignores Finder metadata, clears its `dist/` output, disables
 source maps and rejects non-production builds. The postbuild audit scans the entire output,
-including Worker bundles, for extra models/runtime binaries, development routes and unselected hashes.
+including Worker bundles, for assets outside the explicit allowlist, development routes and unselected hashes.
 No Service Worker/precache is installed. All model paths use content-bound URLs and no-store.
 
 The committed `public/_headers` and local preview apply COOP/COEP and a same-origin Wasm CSP.

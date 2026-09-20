@@ -49,7 +49,9 @@ const DROP_PIECE_NAMES: Record<string, string> = {
 };
 
 /** `position startpos moves ...`, or the SFEN form for a non-standard start. */
-export function toUsi(game: KifuGame): string {
+export function toUsi(game: {
+  snapshots: Pick<BrowserSnapshot, "initialSfen" | "moves">[];
+}): string {
   const first = game.snapshots[0];
   const last = game.snapshots.at(-1);
   if (first === undefined || last === undefined) return "position startpos";

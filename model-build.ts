@@ -42,7 +42,7 @@ function exact(
     Array.isArray(value) ||
     Object.keys(value).sort().join() !== keys.sort().join()
   )
-    throw new Error("Invalid single-model configuration fields");
+    throw new Error("Invalid model configuration fields");
 }
 export function parseReleaseSelection(value: unknown): ModelConfiguration {
   exact(value, ["schema", "model"]);
@@ -87,6 +87,71 @@ export function parseReleaseSelection(value: unknown): ModelConfiguration {
       throw new Error("Invalid registered model artifact");
   }
   return model as unknown as ModelConfiguration;
+}
+
+export function parseReleaseAllowlist(value: unknown) {
+  exact(value, ["schema", "default", "models"]);
+  if (
+    value.schema !== "open_shogi_release_allowlist/v1" ||
+    !Array.isArray(value.models)
+  )
+    throw new Error("Invalid release allowlist");
+  if (!value.models.length)
+    throw new Error(
+      "Release allowlist is undecided; explicit publication GO required",
+    );
+  if (value.models.length > 8)
+    throw new Error("Only representative models may be distributed");
+  const models = value.models
+    .map((entry) => {
+      exact(entry, ["selection", "label", "generation", "provenance", "model"]);
+      if (
+        !["baseline", "candidate", "defense", "r4c1", "r4c2"].includes(
+          String(entry.selection),
+        ) ||
+        typeof entry.label !== "string" ||
+        !entry.label.length ||
+        entry.label.length > 96 ||
+        !Number.isInteger(entry.generation) ||
+        Number(entry.generation) < 0
+      )
+        throw new Error("Invalid release generation/selection");
+      exact(entry.provenance, ["path", "sha256"]);
+      if (
+        typeof entry.provenance.path !== "string" ||
+        !/^local\/[a-zA-Z0-9._/-]+\.json$/.test(entry.provenance.path) ||
+        entry.provenance.path.split("/").includes("..") ||
+        typeof entry.provenance.sha256 !== "string" ||
+        !/^[a-f0-9]{64}$/.test(entry.provenance.sha256)
+      )
+        throw new Error("Invalid release provenance");
+      const config = parseReleaseSelection({
+        schema: "open_shogi_release_selection/v1",
+        model: entry.model,
+      });
+      if (
+        config.controllerEnabled ||
+        config.artifacts["controller.json"] !== null
+      )
+        throw new Error(
+          "Representative release models use the reviewed controller-off configuration",
+        );
+      return {
+        selection: entry.selection as PrototypeManifest["selection"],
+        label: entry.label,
+        generation: Number(entry.generation),
+        provenance: entry.provenance as { path: string; sha256: string },
+        config,
+      };
+    })
+    .sort((a, b) => b.generation - a.generation);
+  if (
+    new Set(models.map((m) => m.selection)).size !== models.length ||
+    new Set(models.map((m) => m.generation)).size !== models.length ||
+    !models.some((m) => m.selection === value.default)
+  )
+    throw new Error("Ambiguous release allowlist");
+  return { default: value.default as PrototypeManifest["selection"], models };
 }
 export async function readRegisteredFile(
   root: string,
@@ -177,6 +242,11 @@ const resolvedId = "\0" + virtualId;
 export function runtimeModule(
   manifest: PrototypeManifest | null,
   controllerEnabled = false,
+  models: {
+    manifest: PrototypeManifest;
+    label: string;
+    generation: number;
+  }[] = [],
 ): Plugin {
   return {
     name: "shogi-runtime-identity",
@@ -185,7 +255,7 @@ export function runtimeModule(
     },
     load(id) {
       if (id === resolvedId)
-        return `export const assetPrefix = ${JSON.stringify(manifest ? "/model/" : "/__core-prototype/")}; export const releaseManifest = ${JSON.stringify(manifest)}; export const releaseControllerEnabled = ${JSON.stringify(controllerEnabled)};`;
+        return `export const assetPrefix = ${JSON.stringify(manifest ? "/model/" : "/__core-prototype/")}; export const releaseManifest = ${JSON.stringify(manifest)}; export const releaseControllerEnabled = ${JSON.stringify(controllerEnabled)}; export const releaseModels = ${JSON.stringify(models.map(({ manifest, label, generation }) => ({ manifest, label, generation })))};`;
     },
   };
 }
@@ -201,51 +271,99 @@ export async function releaseBuild() {
   )
     throw new Error("Local release selection must stay inside AI checkout");
   const bytes = await readFile(path);
-  if (bytes.length > 16384) throw new Error("Release configuration too large");
-  const config = parseReleaseSelection(JSON.parse(bytes.toString()));
-  const result = await loadModelConfiguration(
-    aiRoot,
-    config,
-    "release",
-    "/model/",
-  );
-  // Use the selected, hash-verified runtime to reject incompatible models before emitting.
-  const module = await import(
-    `data:text/javascript;base64,${result.buffers["engine.js"]!.toString("base64")}#wasm=${config.artifacts["engine.wasm"].sha256}`
-  );
-  await module.default({ module_or_path: result.buffers["engine.wasm"] });
-  const engine = new module.WasmBrowserEngine();
-  try {
-    const identity = JSON.parse(
-      engine.loadModel(
-        result.buffers["leaf.osaval03"],
-        config.artifacts["leaf.osaval03"].sha256,
-      ),
-    );
-    if (
-      identity.modelFormat !== config.format ||
-      identity.artifactSha256 !== config.artifacts["leaf.osaval03"].sha256 ||
-      identity.expectedHashVerified !== true ||
-      identity.buildClass !== "pure-only" ||
-      identity.evaluationMode !== "pure-value"
-    )
-      throw new Error("Release runtime identity mismatch");
-    if (result.buffers["controller.json"])
-      engine.loadComputeModel(
-        result.buffers["controller.json"],
-        config.artifacts["controller.json"]!.sha256,
+  if (bytes.length > 65536) throw new Error("Release configuration too large");
+  const value = JSON.parse(bytes.toString());
+  const allowlist =
+    value.schema === "open_shogi_release_selection/v1"
+      ? {
+          default: "release",
+          models: [
+            {
+              selection: "release" as const,
+              label: value.model?.id ?? "OSAI",
+              generation: 0,
+              provenance: null,
+              config: parseReleaseSelection(value),
+            },
+          ],
+        }
+      : parseReleaseAllowlist(value);
+  const models = [];
+  for (const entry of allowlist.models) {
+    const { config } = entry;
+    if (entry.provenance) {
+      const bytes = await readRegisteredFile(
+        aiRoot,
+        entry.provenance.path,
+        65536,
       );
-    engine.setComputeEnabled(config.controllerEnabled);
-  } finally {
-    engine.free();
+      if (digest(bytes) !== entry.provenance.sha256)
+        throw new Error("Release provenance hash mismatch");
+      const rights = JSON.parse(bytes.toString());
+      if (
+        rights.schema !== "open_shogi_model_distribution/v1" ||
+        rights.modelSha256 !== config.artifacts["leaf.osaval03"].sha256 ||
+        rights.trainingAllowed !== true ||
+        rights.derivedWeightsAllowed !== true ||
+        !Array.isArray(rights.sources) ||
+        !rights.sources.length ||
+        rights.sources.some((s: unknown) => typeof s !== "string" || !s.length)
+      )
+        throw new Error("Model distribution conditions are not verified");
+    }
+    const result = await loadModelConfiguration(
+      aiRoot,
+      config,
+      entry.selection,
+      "/model/",
+    );
+    // Use the selected, hash-verified runtime to reject incompatible models before emitting.
+    const module = await import(
+      `data:text/javascript;base64,${result.buffers["engine.js"]!.toString("base64")}#wasm=${config.artifacts["engine.wasm"].sha256}`
+    );
+    await module.default({ module_or_path: result.buffers["engine.wasm"] });
+    const engine = new module.WasmBrowserEngine();
+    try {
+      const identity = JSON.parse(
+        engine.loadModel(
+          result.buffers["leaf.osaval03"],
+          config.artifacts["leaf.osaval03"].sha256,
+        ),
+      );
+      if (
+        identity.modelFormat !== config.format ||
+        identity.artifactSha256 !== config.artifacts["leaf.osaval03"].sha256 ||
+        identity.expectedHashVerified !== true ||
+        identity.buildClass !== "pure-only" ||
+        identity.evaluationMode !== "pure-value"
+      )
+        throw new Error("Release runtime identity mismatch");
+      if (result.buffers["controller.json"])
+        engine.loadComputeModel(
+          result.buffers["controller.json"],
+          config.artifacts["controller.json"]!.sha256,
+        );
+      engine.setComputeEnabled(config.controllerEnabled);
+    } finally {
+      engine.free();
+    }
+    models.push({
+      ...result,
+      config,
+      label: entry.label,
+      generation: entry.generation,
+    });
   }
-  return { ...result, config };
+  return {
+    ...models.find((m) => m.manifest.selection === allowlist.default)!,
+    models,
+  };
 }
 export function emitRelease(
   model: Awaited<ReturnType<typeof releaseBuild>>,
 ): Plugin {
   return {
-    name: "one-shogi-model",
+    name: "allowlisted-shogi-models",
     configResolved(config) {
       if (
         !config.isProduction ||
@@ -254,7 +372,7 @@ export function emitRelease(
         resolve(config.root, config.build.outDir) !== resolve(uiRoot, "dist")
       )
         throw new Error(
-          "Single-model production requires production mode, dist output, no source maps and explicit public assets",
+          "Allowlisted production requires production mode, dist output, no source maps and explicit public assets",
         );
     },
     async buildStart() {
@@ -290,22 +408,30 @@ export function emitRelease(
       await check(resolve(uiRoot, "public"));
     },
     generateBundle() {
-      for (const name of MODEL_NAMES) {
-        const source = model.buffers[name];
-        if (source)
-          this.emitFile({
-            type: "asset",
-            fileName: `model/release/${name}`,
-            source,
-          });
+      for (const selected of model.models) {
+        for (const name of MODEL_NAMES) {
+          const source = selected.buffers[name];
+          if (source)
+            this.emitFile({
+              type: "asset",
+              fileName: `model/${selected.manifest.selection}/${name}`,
+              source,
+            });
+        }
       }
       this.emitFile({
         type: "asset",
         fileName: "model/manifest.json",
         source: JSON.stringify({
-          ...model.manifest,
-          runtimeProfile: model.config.runtimeProfile,
-          controllerEnabled: model.config.controllerEnabled,
+          schema: "open_shogi_release_assets/v1",
+          default: model.manifest.selection,
+          models: model.models.map((m) => ({
+            ...m.manifest,
+            label: m.label,
+            generation: m.generation,
+            runtimeProfile: m.config.runtimeProfile,
+            controllerEnabled: m.config.controllerEnabled,
+          })),
         }),
       });
     },

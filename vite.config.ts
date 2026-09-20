@@ -17,6 +17,7 @@ export default defineConfig(async ({ command, isPreview }) => {
       runtimeModule(
         model?.manifest ?? null,
         model?.config.controllerEnabled ?? false,
+        model?.models ?? [],
       ),
       ...(model ? [emitRelease(model)] : isPreview ? [] : [corePrototypeDev()]),
     ],
@@ -32,6 +33,7 @@ export default defineConfig(async ({ command, isPreview }) => {
         runtimeModule(
           model?.manifest ?? null,
           model?.config.controllerEnabled ?? false,
+          model?.models ?? [],
         ),
       ],
     },

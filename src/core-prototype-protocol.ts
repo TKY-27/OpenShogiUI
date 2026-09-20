@@ -6,7 +6,11 @@ import {
   type TimeControl,
   type SearchProfile,
 } from "./browser-engine";
-import { assetPrefix, releaseManifest } from "virtual:shogi-runtime";
+import {
+  assetPrefix,
+  releaseManifest,
+  releaseModels,
+} from "virtual:shogi-runtime";
 
 export const LEAF_SHA256 = import.meta.env.DEV
   ? "859e922b3f503ddeecf0afeb9a05fccac080a9faca3b19fce9d8253c9039c480"
@@ -17,10 +21,11 @@ export type PrototypeSelection =
   | "candidate"
   | "defense"
   | "r4c1"
+  | "r4c2"
   | "release";
 export const DEFAULT_SELECTION: PrototypeSelection = import.meta.env.DEV
   ? "defense"
-  : "release";
+  : (releaseManifest?.selection ?? "release");
 export const ASSET_NAMES = [
   "engine.js",
   "engine.wasm",
@@ -186,16 +191,21 @@ function expect(value: unknown, expected: unknown): void {
 
 export function parsePrototypeManifest(value: unknown): PrototypeManifest {
   const record = object(value, ["schema", "selection", "runId", "artifacts"]);
+  const pinnedManifest =
+    releaseModels.find((m) => m.manifest.selection === record.selection)
+      ?.manifest ??
+    (releaseManifest?.selection === record.selection ? releaseManifest : null);
   expect(record.schema, "open_shogi_core_prototype_assets/v2");
   if (import.meta.env.DEV) {
     if (
       record.selection !== "baseline" &&
       record.selection !== "candidate" &&
       record.selection !== "defense" &&
-      record.selection !== "r4c1"
+      record.selection !== "r4c1" &&
+      record.selection !== "r4c2"
     )
       throw new Error("Invalid development model selection");
-  } else if (record.selection !== "release" || releaseManifest === null) {
+  } else if (pinnedManifest === null) {
     throw new Error("A pinned release model is required");
   }
   if (
@@ -229,7 +239,7 @@ export function parsePrototypeManifest(value: unknown): PrototypeManifest {
       )
         expect(sha256, LEAF_SHA256);
       if (!import.meta.env.DEV) {
-        const pinned = releaseManifest!.artifacts[name];
+        const pinned = pinnedManifest!.artifacts[name];
         if (pinned === null) throw new Error("Unexpected release artifact");
         expect(artifact.url, pinned.url);
         expect(sha256, pinned.sha256);
@@ -239,10 +249,10 @@ export function parsePrototypeManifest(value: unknown): PrototypeManifest {
     }),
   ) as PrototypeManifest["artifacts"];
   if (!import.meta.env.DEV) {
-    expect(record.runId, releaseManifest!.runId);
+    expect(record.runId, pinnedManifest!.runId);
     expect(
       artifacts["controller.json"] === null,
-      releaseManifest!.artifacts["controller.json"] === null,
+      pinnedManifest!.artifacts["controller.json"] === null,
     );
   }
   return {

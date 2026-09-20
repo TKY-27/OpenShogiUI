@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { releaseControllerEnabled } from "virtual:shogi-runtime";
+import { releaseControllerEnabled, releaseModels } from "virtual:shogi-runtime";
 import type { MoveSummary, SearchProfile, Side } from "./browser-engine";
 import {
   initialPrototypeState,
@@ -8,7 +8,7 @@ import {
 import { getMessages, type Locale } from "./localization";
 import { MatchClockPanel } from "./MatchClockPanel";
 import { opposing } from "./match-clock";
-import { downloadText } from "./kifu";
+import { downloadText, toUsi } from "./kifu";
 import { lastMoveHighlight } from "./play-settings";
 import {
   HandStand,
@@ -99,22 +99,25 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
     state.identity?.expectedHashVerified === true &&
     state.identity.leafSha256 === position.leafSha256;
   const modelLabel = import.meta.env.DEV
-    ? state.selection === "r4c1"
-      ? ja
-        ? "R4-C1（比較候補・未採用）"
-        : "R4-C1 (comparison only)"
-      : state.selection === "defense"
+    ? state.selection === "r4c2"
+      ? "R4-C2（比較候補・未採用）"
+      : state.selection === "r4c1"
         ? ja
-          ? "防御学習候補"
-          : "Defense learning candidate"
-        : state.selection === "candidate"
+          ? "R4-C1（比較候補・未採用）"
+          : "R4-C1 (comparison only)"
+        : state.selection === "defense"
           ? ja
-            ? "r3候補"
-            : "r3 candidate"
-          : ja
-            ? "旧基準 (W256)"
-            : "Previous baseline (W256)"
-    : messages.match.engine;
+            ? "防御学習候補"
+            : "Defense learning candidate"
+          : state.selection === "candidate"
+            ? ja
+              ? "r3候補"
+              : "r3 candidate"
+            : ja
+              ? "旧基準 (W256)"
+              : "Previous baseline (W256)"
+    : (releaseModels.find((m) => m.manifest.selection === state.selection)
+        ?.label ?? messages.match.engine);
   const result = state.result;
   const status =
     state.phase === "loading"
@@ -174,45 +177,66 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
               : "3-minute or 10-minute sudden death. No opening book."}
         </p>
       </header>
-      {import.meta.env.DEV ? (
+      {import.meta.env.DEV || releaseModels.length > 1 ? (
         <section
           className="prototype-model"
-          aria-label={ja ? "開発用モデル設定" : "Development model settings"}
+          aria-label={ja ? "モデル設定" : "Model settings"}
         >
           <fieldset className="segmented-control" disabled={!canSelectModel}>
-            <legend>{ja ? "モデル" : "Model"}</legend>
+            <legend>
+              {ja ? "最新←→開発初期" : "Newest ←→ earliest development"}
+            </legend>
             <div>
-              {(["defense", "r4c1", "candidate", "baseline"] as const).map(
-                (value) => (
-                  <button
-                    type="button"
-                    key={value}
-                    aria-pressed={state.selection === value}
-                    onClick={() => {
-                      setEnabled(false);
-                      void sessionRef.current?.prepare(value);
-                    }}
-                  >
-                    {value === "r4c1"
+              {(import.meta.env.DEV
+                ? ([
+                    "r4c2",
+                    "r4c1",
+                    "defense",
+                    "candidate",
+                    "baseline",
+                  ] as const)
+                : releaseModels.map((m) => m.manifest.selection)
+              ).map((value) => (
+                <button
+                  type="button"
+                  key={value}
+                  aria-pressed={state.selection === value}
+                  onClick={() => {
+                    setEnabled(false);
+                    void sessionRef.current?.prepare(value);
+                  }}
+                >
+                  {!import.meta.env.DEV
+                    ? releaseModels.find((m) => m.manifest.selection === value)!
+                        .label
+                    : value === "r4c2"
                       ? ja
-                        ? "R4-C1（比較候補・未採用）"
-                        : "R4-C1 (comparison only)"
-                      : value === "defense"
+                        ? "R4-C2（比較候補・未採用）"
+                        : "R4-C2 (comparison only)"
+                      : value === "r4c1"
                         ? ja
-                          ? "防御学習候補"
-                          : "Defense learning candidate"
-                        : value === "candidate"
+                          ? "R4-C1（比較候補・未採用）"
+                          : "R4-C1 (comparison only)"
+                        : value === "defense"
                           ? ja
-                            ? "r3候補"
-                            : "r3 candidate"
-                          : ja
-                            ? "旧基準 (W256)"
-                            : "Previous baseline (W256)"}
-                  </button>
-                ),
-              )}
+                            ? "防御学習候補"
+                            : "Defense learning candidate"
+                          : value === "candidate"
+                            ? ja
+                              ? "r3候補"
+                              : "r3 candidate"
+                            : ja
+                              ? "旧基準 (W256)"
+                              : "Previous baseline (W256)"}
+                </button>
+              ))}
             </div>
           </fieldset>
+          <p className="match-setup__note">
+            {ja
+              ? "開発世代の順です。強さの順位ではありません。"
+              : "Ordered by development generation; this is not a strength ranking."}
+          </p>
           <p
             className="prototype-model__status"
             role="status"
@@ -449,6 +473,19 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           </strong>
         </p>
         <div className="inline-actions">
+          {position !== null && !setup ? (
+            <button
+              type="button"
+              onClick={() =>
+                downloadText(
+                  "openshogi-game.usi",
+                  toUsi({ snapshots: [position] }),
+                )
+              }
+            >
+              {ja ? "棋譜を保存 (USI)" : "Save game (USI)"}
+            </button>
+          ) : null}
           {active ? (
             <button
               type="button"

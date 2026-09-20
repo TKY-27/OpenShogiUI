@@ -1,4 +1,5 @@
 {
-  "schema": "open_shogi_release_selection/v1",
-  "model": null
+  "schema": "open_shogi_release_allowlist/v1",
+  "default": null,
+  "models": []
 }

@@ -85,13 +85,11 @@
   }
 }
 
-@media (min-width: 80rem) {
-  .core-prototype .board-stage {
-    --board-size: min(
-      calc(100cqw - 2 * var(--hand-width) - 2 * var(--space-2)),
-      100cqh,
-      max(16rem, calc(100dvh - var(--prototype-chrome-height))),
-      32rem
-    );
-  }
+/* Diagnostic details can grow beyond the viewport. Keep the board in flow
+   instead of feeding a collapsed height container into its square size. */
+.core-prototype .board-fit {
+  container-type: inline-size;
+}
+.core-prototype .match-board {
+  flex: 0 0 auto;
 }

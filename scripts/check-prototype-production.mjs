@@ -8,30 +8,46 @@ const manifest = JSON.parse(
   readFileSync(join(root, "model/manifest.json"), "utf8"),
 );
 if (
-  manifest.schema !== "open_shogi_core_prototype_assets/v2" ||
-  manifest.selection !== "release" ||
-  manifest.runtimeProfile !== "pure_learned-v3"
+  manifest.schema !== "open_shogi_release_assets/v1" ||
+  !Array.isArray(manifest.models) ||
+  !manifest.models.length ||
+  manifest.models.length > 8 ||
+  !manifest.models.some((m) => m.selection === manifest.default)
 )
-  throw new Error("Missing single release model manifest");
+  throw new Error("Missing explicit release allowlist");
 const expected = new Map();
-for (const [name, asset] of Object.entries(manifest.artifacts)) {
-  if (asset === null) continue;
+const selections = new Set();
+for (const model of manifest.models) {
   if (
-    !["engine.js", "engine.wasm", "leaf.osaval03", "controller.json"].includes(
-      name,
-    )
+    selections.has(model.selection) ||
+    !["release", "baseline", "candidate", "defense", "r4c1", "r4c2"].includes(
+      model.selection,
+    ) ||
+    model.schema !== "open_shogi_core_prototype_assets/v2" ||
+    model.runtimeProfile !== "pure_learned-v3"
   )
-    throw new Error("Unexpected model component");
-  const path = `model/release/${name}`;
-  if (asset.url !== `/${path}?sha256=${asset.sha256}`)
-    throw new Error("Unbound release URL");
-  expected.set(path, asset);
+    throw new Error("Invalid allowlisted model identity");
+  selections.add(model.selection);
+  for (const [name, asset] of Object.entries(model.artifacts)) {
+    if (asset === null) continue;
+    if (
+      ![
+        "engine.js",
+        "engine.wasm",
+        "leaf.osaval03",
+        "controller.json",
+      ].includes(name)
+    )
+      throw new Error("Unexpected model component");
+    const path = `model/${model.selection}/${name}`;
+    if (asset.url !== `/${path}?sha256=${asset.sha256}`)
+      throw new Error("Unbound release URL");
+    expected.set(path, asset);
+  }
+  for (const name of ["engine.js", "engine.wasm", "leaf.osaval03"])
+    if (!expected.has(`model/${model.selection}/${name}`))
+      throw new Error("Incomplete release model");
 }
-if (
-  !expected.has("model/release/leaf.osaval03") ||
-  !expected.has("model/release/engine.wasm")
-)
-  throw new Error("Incomplete release model");
 const observed = [];
 function inspect(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -61,12 +77,6 @@ function inspect(directory) {
       for (const marker of [
         "/__core-prototype/",
         "#/core-prototype",
-        "r3候補",
-        "R4-C1（比較候補・未採用）",
-        "R4-C1 (comparison only)",
-        "防御学習候補",
-        "Defense learning candidate",
-        "旧基準 (W256)",
         "open-shogi-core-prototype-selection",
         "serviceWorker.register",
         "precacheAndRoute",
@@ -85,7 +95,9 @@ function inspect(directory) {
         "6b49c3361194011c0c8ac114491dcdb6c67a3b4f4cc6c17262a867572aefb3a6";
       for (const hash of [frozen, r3, defense, c1])
         if (
-          hash !== manifest.artifacts["leaf.osaval03"].sha256 &&
+          !manifest.models.some(
+            (m) => m.artifacts["leaf.osaval03"].sha256 === hash,
+          ) &&
           content.includes(hash)
         )
           throw new Error(`Unselected model identity emitted: ${local}`);
@@ -96,5 +108,5 @@ inspect(root);
 if (observed.length !== expected.size)
   throw new Error("Missing selected model components");
 console.log(
-  `Single model verified: ${manifest.runId}; ${observed.length} components, no comparison models/routes/source maps`,
+  `Allowlist verified: ${manifest.models.length} models; ${observed.length} components, no unregistered weights/data/source maps`,
 );

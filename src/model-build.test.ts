@@ -5,6 +5,8 @@ import { join } from "node:path";
 import {
   digest,
   parseReleaseSelection,
+  parseReleaseAllowlist,
+  runtimeModule,
   loadModelConfiguration,
   readRegisteredFile,
 } from "../model-build";
@@ -24,6 +26,52 @@ const selection = () => ({
       "controller.json": null,
     },
   },
+});
+
+it("allows only explicit representative generations and emits no private registration fields", () => {
+  const entry = (id: string, generation: number) => ({
+    selection: id,
+    generation,
+    label: id,
+    provenance: { path: "local/rights.json", sha256: sha },
+    model: selection().model,
+  });
+  const value = {
+    schema: "open_shogi_release_allowlist/v1",
+    default: "defense",
+    models: [entry("defense", 2), entry("r4c2", 4)],
+  };
+  expect(parseReleaseAllowlist(value).models.map((m) => m.selection)).toEqual([
+    "r4c2",
+    "defense",
+  ]);
+  expect(() => parseReleaseAllowlist({ ...value, models: [] })).toThrow(
+    "undecided",
+  );
+  expect(() =>
+    parseReleaseAllowlist({
+      ...value,
+      models: [entry("defense", 2), entry("defense", 4)],
+    }),
+  ).toThrow("Ambiguous");
+  expect(() =>
+    parseReleaseAllowlist({ ...value, models: [entry("checkpoint123", 2)] }),
+  ).toThrow();
+  const models = [
+    {
+      manifest: null,
+      label: "public label",
+      generation: 4,
+      config: { privatePath: "local/secret.pt" },
+      buffers: { optimizer: "PRIVATE_BYTES" },
+    },
+  ];
+  const plugin = runtimeModule(null, false, models as never);
+  const load = plugin.load as (id: string) => string;
+  const source = load("\0virtual:shogi-runtime");
+  expect(source).toContain("public label");
+  expect(source).not.toContain("local/secret");
+  expect(source).not.toContain("PRIVATE_BYTES");
 });
 
 describe("single release configuration", () => {

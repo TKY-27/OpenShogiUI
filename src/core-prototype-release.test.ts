@@ -14,6 +14,7 @@ const release = vi.hoisted(() => ({
 }));
 vi.mock("virtual:shogi-runtime", () => ({
   assetPrefix: "/model/",
+  releaseModels: [],
   get releaseManifest() {
     return release.manifest;
   },

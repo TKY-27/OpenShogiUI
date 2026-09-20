@@ -97,12 +97,13 @@ async function containedFile(
 }
 export async function readCandidateDescriptor(
   aiRoot: string,
-  selection: "candidate" | "defense" | "r4c1" = "candidate",
+  selection: "candidate" | "defense" | "r4c1" | "r4c2" = "candidate",
 ): Promise<CandidateDescriptor> {
   if (
     selection !== "candidate" &&
     selection !== "defense" &&
-    selection !== "r4c1"
+    selection !== "r4c1" &&
+    selection !== "r4c2"
   )
     throw new Error("Invalid candidate selection");
   const root = await realpath(aiRoot);
@@ -137,7 +138,12 @@ export async function readCandidateDescriptor(
 export async function readPrototypeArtifact(
   aiRoot: string,
   name: string,
-  selection: "baseline" | "candidate" | "defense" | "r4c1" = "baseline",
+  selection:
+    | "baseline"
+    | "candidate"
+    | "defense"
+    | "r4c1"
+    | "r4c2" = "baseline",
 ) {
   if (!Object.hasOwn(artifacts, name))
     throw new Error("Unknown prototype artifact");
@@ -202,7 +208,8 @@ export function corePrototypeDev(): Plugin {
             (selection !== "baseline" &&
               selection !== "candidate" &&
               selection !== "defense" &&
-              selection !== "r4c1")
+              selection !== "r4c1" &&
+              selection !== "r4c2")
           )
             throw new Error("Explicit candidate selection required");
           if (name === "manifest.json" && !url.search) {

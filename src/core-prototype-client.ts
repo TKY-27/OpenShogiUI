@@ -2,6 +2,7 @@ import type { SearchProfile, Side, TimeControl } from "./browser-engine";
 import {
   releaseControllerEnabled,
   releaseManifest,
+  releaseModels,
 } from "virtual:shogi-runtime";
 import {
   ASSET_PREFIX,
@@ -292,15 +293,19 @@ export async function loadPrototypeManifest(
 ): Promise<PrototypeManifest> {
   signal?.throwIfAborted();
   if (!import.meta.env.DEV) {
-    if (selection !== "release")
+    const selected =
+      releaseModels.find((m) => m.manifest.selection === selection)?.manifest ??
+      (releaseManifest?.selection === selection ? releaseManifest : null);
+    if (selected === null)
       throw new Error("Development model selection is unavailable");
-    return parsePrototypeManifest(releaseManifest);
+    return parsePrototypeManifest(selected);
   }
   if (
     selection !== "baseline" &&
     selection !== "candidate" &&
     selection !== "defense" &&
-    selection !== "r4c1"
+    selection !== "r4c1" &&
+    selection !== "r4c2"
   )
     throw new Error("Invalid development model selection");
   const response = await fetch(`${ASSET_PREFIX}${selection}/manifest.json`, {
