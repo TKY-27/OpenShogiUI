@@ -72,6 +72,7 @@ describe("learned-model match setup", () => {
 
   it("lists C3 and explains C2's canonical defense alias", () => {
     const html = render();
+    expect(modelFieldset(html)).toContain("R4-C4");
     expect(modelFieldset(html)).toContain("R4-C3");
     expect(modelFieldset(html)).not.toContain("R4-C2");
     expect(html).toContain("C2は同一重み・同一探索の防御候補へ統合");

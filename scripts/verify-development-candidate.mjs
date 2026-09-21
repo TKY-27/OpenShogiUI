@@ -7,7 +7,9 @@ import { pathToFileURL } from "node:url";
 const [url, selection, expectedHash, output] = process.argv.slice(2);
 assert(/^http:\/\/127\.0\.0\.1:\d+\/#\/match$/.test(url));
 assert(
-  ["r4c1", "r4c3", "defense", "candidate", "baseline"].includes(selection),
+  ["r4c1", "r4c3", "r4c4", "defense", "candidate", "baseline"].includes(
+    selection,
+  ),
 );
 assert(/^[a-f0-9]{64}$/.test(expectedHash));
 await mkdir(output, { recursive: true });
@@ -59,6 +61,7 @@ try {
   report.legacyC2Alias = "defense";
   const labels = {
     r4c3: /^R4-C3/,
+    r4c4: /^R4-C4/,
     r4c1: /^R4-C1/,
     defense: /^防御学習候補$/,
     candidate: /^r3候補$/,

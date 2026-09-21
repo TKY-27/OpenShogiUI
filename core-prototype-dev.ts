@@ -10,7 +10,7 @@ const RUNTIME_HASHES: Record<string, string> = {
   "engine.js":
     "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e",
   "engine.wasm":
-    "2cd578b65a2a0afef1f095437260ccad366d8bba7464e2d02adca6a7b9ae556f",
+    "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a",
   "controller.json":
     "66110bae4ef5fbedd6a3c5537813f0fae5b9276b576a745b2364b4a093141b63",
 };
@@ -97,14 +97,21 @@ async function containedFile(
 }
 export async function readCandidateDescriptor(
   aiRoot: string,
-  selection: "candidate" | "defense" | "r4c1" | "r4c2" | "r4c3" = "candidate",
+  selection:
+    | "candidate"
+    | "defense"
+    | "r4c1"
+    | "r4c2"
+    | "r4c3"
+    | "r4c4" = "candidate",
 ): Promise<CandidateDescriptor> {
   if (
     selection !== "candidate" &&
     selection !== "defense" &&
     selection !== "r4c1" &&
     selection !== "r4c2" &&
-    selection !== "r4c3"
+    selection !== "r4c3" &&
+    selection !== "r4c4"
   )
     throw new Error("Invalid candidate selection");
   if (selection === "r4c2") selection = "defense";
@@ -146,7 +153,8 @@ export async function readPrototypeArtifact(
     | "defense"
     | "r4c1"
     | "r4c2"
-    | "r4c3" = "baseline",
+    | "r4c3"
+    | "r4c4" = "baseline",
 ) {
   if (!Object.hasOwn(artifacts, name))
     throw new Error("Unknown prototype artifact");
@@ -215,7 +223,8 @@ export function corePrototypeDev(): Plugin {
               selection !== "defense" &&
               selection !== "r4c1" &&
               selection !== "r4c2" &&
-              selection !== "r4c3")
+              selection !== "r4c3" &&
+              selection !== "r4c4")
           )
             throw new Error("Explicit candidate selection required");
           if (name === "manifest.json" && !url.search) {

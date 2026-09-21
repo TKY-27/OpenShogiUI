@@ -1088,7 +1088,7 @@ describe("prototype Worker transport", () => {
 });
 
 describe("local artifact serving boundary", () => {
-  it.each(["candidate", "defense", "r4c1", "r4c3"] as const)(
+  it.each(["candidate", "defense", "r4c1", "r4c3", "r4c4"] as const)(
     "requires an explicit %s descriptor and binds the actual leaf bytes without a controller fallback",
     async (selection) => {
       const root = await mkdtemp(join(tmpdir(), "osui-candidate-"));
