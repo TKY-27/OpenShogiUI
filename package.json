@@ -14,17 +14,30 @@
     "dev": "vite",
     "build": "tsc -b && vite build && node scripts/check-prototype-production.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run accessibility:check && npm run boundary && npm run license:check && npm run provenance:check && npm run asset-license:audit && npm run build",
+    "build:cloudflare": "node scripts/build-cloudflare.mjs",
+    "deploy:cloudflare": "node scripts/deploy-cloudflare.mjs",
+    "models:fetch": "node scripts/fetch-release-models.mjs",
     "accessibility:check": "node scripts/check-accessibility.mjs",
     "asset-license:audit": "node scripts/check-piece-assets.mjs",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/*.mjs\" \"*.{json,html,ts}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"scripts/*.mjs\" \"*.{json,html,ts}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/*.mjs\" \"worker/**/*.ts\" \"*.{json,jsonc,html,ts}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"scripts/*.mjs\" \"worker/**/*.ts\" \"*.{json,jsonc,html,ts}\"",
     "integration:ai": "node scripts/verify-ai-wasm.mjs",
     "license:check": "node scripts/check-license.mjs",
-    "lint": "oxlint --deny-warnings src vite.config.ts",
+    "lint": "oxlint --deny-warnings src worker vite.config.ts",
     "preview": "vite preview",
     "provenance:check": "node scripts/check-provenance.mjs",
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "dev:isolated": "OSUI_ISOLATED_MODELS=1 vite --host 127.0.0.1 --port 5186 --strictPort",
+    "collection:local": "WRANGLER_SEND_METRICS=false wrangler dev --local --ip 127.0.0.1 --port 5187 --persist-to local/collection-db --log-level error",
+    "collection:migrate:local": "WRANGLER_SEND_METRICS=false wrangler d1 migrations apply DB --local --persist-to local/collection-db",
+    "collection:migrate:deploy-local": "WRANGLER_SEND_METRICS=false wrangler d1 migrations apply DB --local -c wrangler.deploy.jsonc --persist-to local/collection-deploy-db",
+    "collection:serve-deploy-local": "WRANGLER_SEND_METRICS=false wrangler dev --local -c wrangler.deploy.jsonc --ip 127.0.0.1 --port 8787 --persist-to local/collection-deploy-db --log-level error",
+    "test:collection": "vitest run src/collection.test.ts worker/collection-api.test.ts",
+    "test:collection:local": "WRANGLER_SEND_METRICS=false node scripts/verify-local-collection.mjs",
+    "test:collection:browser": "node scripts/verify-collection-browser.mjs",
+    "brand:generate": "node scripts/generate-brand.mjs",
+    "test:ui:local": "node scripts/verify-local-ui.mjs"
   },
   "dependencies": {
     "react": "19.2.7",
@@ -39,6 +52,7 @@
     "prettier": "3.8.3",
     "typescript": "6.0.2",
     "vite": "8.1.5",
-    "vitest": "4.1.6"
+    "vitest": "4.1.6",
+    "wrangler": "4.135.0"
   }
 }

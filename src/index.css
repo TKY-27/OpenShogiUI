@@ -26,10 +26,10 @@
   --wood-rule: #765a35;
   /* Where the piece is now, and the square it left. The origin is a clearly
      lighter wash of the same hue so the pair reads as one move. */
-  --last-to: #f0c3bc;
-  --last-from: #f9e6e3;
-  /* Selected square and its legal targets, in the analysis blue. */
-  --selected-square: #c9cbf0;
+  --last-to: rgb(185 58 50 / 20%);
+  --last-from: rgb(185 58 50 / 9%);
+  /* One accent; shape and weight distinguish interaction states. */
+  --selected-square: rgb(185 58 50 / 30%);
   --rule: rgb(33 29 26 / 18%);
   --rule-strong: rgb(33 29 26 / 32%);
   --field: #938b82;
@@ -81,12 +81,12 @@
 }
 
 html {
-  min-width: 20rem;
+  min-width: 0;
   background: var(--paper);
 }
 
 body {
-  min-width: 20rem;
+  min-width: 0;
   margin: 0;
   background: var(--paper);
 }
@@ -821,21 +821,32 @@ input[type="number"] {
   opacity: 1;
 }
 
-/*
- * Selection is an area fill, not a ring. Rings on a 9x9 grid sit on top of the
- * 1px rules and read as a broken border on the neighbouring squares.
- */
+/* Inset outlines stay inside the square; a single accent ties states together. */
+.board-square:focus-visible,
+.hand-piece:focus-visible {
+  outline-color: var(--accent);
+  outline-offset: -3px;
+}
+
 .board-square--selected {
   background-color: var(--selected-square);
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .board-square--destination .destination-mark {
-  width: 24%;
-  aspect-ratio: 1;
-  border: 2px solid #484daa;
+  position: absolute;
+  inset: 38%;
+  border: 1px solid var(--accent);
   border-radius: 50%;
-  background: rgb(98 104 207 / 44%);
+  background: var(--accent);
   pointer-events: none;
+}
+
+.board-square--capture-target .destination-mark {
+  inset: 7%;
+  border: 2px solid var(--accent);
+  border-radius: 18%;
+  background: rgb(185 58 50 / 8%);
 }
 
 /*
@@ -919,6 +930,9 @@ input[type="number"] {
 .piece-frame .shogi-piece {
   font-size: clamp(0.875rem, 4cqi, 1.75rem);
   transform: none;
+}
+.piece-frame .shogi-piece--white {
+  transform: rotate(180deg);
 }
 
 /*
@@ -1052,56 +1066,66 @@ input[type="number"] {
 .hand-stand {
   display: grid;
   min-width: 0;
-  min-height: 3.25rem;
-  padding: var(--space-1) var(--space-2);
+  padding: 0;
   border: 1px solid #9d7847;
   background: #efd39e;
-  grid-template-columns: 3.5rem minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-1);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .hand-stand h2 {
-  grid-column: 1;
+  margin: 0;
+  padding-inline: 0.25rem;
   color: #3e301f;
   font-size: 0.6875rem;
   font-weight: 600;
 }
 
 .hand-stand__pieces {
-  display: flex;
+  min-height: 2.75rem;
+  display: grid;
   min-width: 0;
-  grid-column: 2;
-  align-items: center;
-  gap: var(--space-1);
-  overflow-x: auto;
-}
-
-.hand-stand__pieces > p {
-  margin: 0;
-  color: #7b6b57;
-  font-size: 0.6875rem;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 .hand-piece {
-  display: flex;
-  min-width: 2.5rem;
-  min-height: 2.75rem;
+  position: relative;
+  display: grid;
+  min-width: 0;
+  height: 2.75rem;
   padding: 0;
   border: 1px solid transparent;
   background: transparent;
-  align-items: center;
   cursor: pointer;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hand-piece .piece-frame {
+  width: 1.75rem;
+  height: 2rem;
+  justify-self: center;
+}
+
+.hand-piece > span:last-child {
+  position: absolute;
+  bottom: 0;
+  right: 0.125rem;
+  min-width: 1.125rem;
+  background: #efd39e;
+  color: #211d1a;
+  line-height: 1;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .hand-piece[aria-pressed="true"] {
+  border-color: var(--accent);
   background: var(--selected-square);
 }
 
 .hand-piece:disabled {
   cursor: default;
-  opacity: 0.5;
+  opacity: 1;
 }
 
 /* Position facts and detail ------------------------------------------------ */
@@ -2242,9 +2266,8 @@ td {
   .hand-stand__pieces {
     grid-column: 1;
     grid-row: 2;
-    align-content: flex-start;
-    flex-direction: column;
-    overflow-x: hidden;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
     overflow-y: auto;
   }
 
@@ -2401,4 +2424,14 @@ td {
     animation-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+.wordmark img {
+  flex: none;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.workspace p {
+  max-width: 75ch;
+  line-height: 1.8;
 }

@@ -18,3 +18,13 @@
 .vscode/
 *.swp
 *~
+
+# Isolated model copies, local collection data and QA evidence
+/local/
+/.wrangler/
+/.dev.vars*
+
+/.qa-*
+
+# Account-specific generated deploy configuration
+/wrangler.deploy.jsonc

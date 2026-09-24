@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { releaseControllerEnabled, releaseModels } from "virtual:shogi-runtime";
+import {
+  collectionPolicy,
+  releaseControllerEnabled,
+  releaseModels,
+} from "virtual:shogi-runtime";
 import type { MoveSummary, SearchProfile, Side } from "./browser-engine";
 import {
   initialPrototypeState,
@@ -19,8 +23,22 @@ import {
   type BoardSelection,
 } from "./ShogiBoardView";
 import "./core-prototype.css";
+import { ModelPicker, modelLabel as selectedModelLabel } from "./ModelPicker";
+import { ConsentDialog, CollectionSettings } from "./CollectionConsent";
+import {
+  GameCollection,
+  getConsent,
+  type CollectionStatus,
+} from "./collection";
+import { useBoardFit } from "./useBoardFit";
 
 export default function CorePrototype({ locale }: { locale: Locale }) {
+  const surfaceRef = useRef<HTMLElement>(null);
+  const collectorRef = useRef<GameCollection | null>(null);
+  const [collectionStatus, setCollectionStatus] =
+    useState<CollectionStatus>("idle");
+  const [consentPrompt, setConsentPrompt] = useState(false);
+  const [flipped, setFlipped] = useState(false);
   const messages = getMessages(locale);
   const ja = locale === "ja";
   const sessionRef = useRef<PrototypeMatchSession | null>(null);
@@ -38,13 +56,20 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
   const [pieceSet] = useState(persistedPieceSet);
 
   useEffect(() => {
-    const session = new PrototypeMatchSession(setState);
+    const collector = new GameCollection(setCollectionStatus);
+    collectorRef.current = collector;
+    const session = new PrototypeMatchSession((next) => {
+      setState(next);
+      if (next.phase === "finished") void collector.finish(next);
+      else if (next.phase === "error") collector.cancel();
+    });
     sessionRef.current = session;
     const legacy = new URLSearchParams(window.location.search).get("model");
     void session.prepare(legacy === "r4c2" ? "r4c2" : undefined);
     const timer = window.setInterval(() => session.tick(), 100);
     return () => {
       window.clearInterval(timer);
+      collector.dispose();
       session.dispose();
       sessionRef.current = null;
     };
@@ -60,12 +85,12 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
 
   const position = state.snapshot;
   const orientation =
-    state.humanSide === "black" ? "sente-bottom" : "gote-bottom";
+    (state.humanSide === "black") !== flipped ? "sente-bottom" : "gote-bottom";
   const canMove =
     state.phase === "playing" &&
     !state.busy &&
     position?.sideToMove === state.humanSide;
-  const topSide = opposing(state.humanSide);
+  const topSide: Side = orientation === "sente-bottom" ? "white" : "black";
   const running = (side: Side) =>
     (state.phase === "playing" || state.phase === "stopping") &&
     position?.sideToMove === side
@@ -99,30 +124,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
     position !== null &&
     state.identity?.expectedHashVerified === true &&
     state.identity.leafSha256 === position.leafSha256;
-  const modelLabel = import.meta.env.DEV
-    ? state.selection === "r4c4"
-      ? ja
-        ? "R4-C4（比較候補・未採用）"
-        : "R4-C4 (comparison only)"
-      : state.selection === "r4c3"
-        ? "R4-C3（比較候補・未採用）"
-        : state.selection === "r4c1"
-          ? ja
-            ? "R4-C1（比較候補・未採用）"
-            : "R4-C1 (comparison only)"
-          : state.selection === "defense"
-            ? ja
-              ? "防御学習候補"
-              : "Defense learning candidate"
-            : state.selection === "candidate"
-              ? ja
-                ? "r3候補"
-                : "r3 candidate"
-              : ja
-                ? "旧基準 (W256)"
-                : "Previous baseline (W256)"
-    : (releaseModels.find((m) => m.manifest.selection === state.selection)
-        ?.label ?? messages.match.engine);
+  const modelLabel = selectedModelLabel(state.selection, locale);
   const result = state.result;
   const status =
     state.phase === "loading"
@@ -135,7 +137,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           : "Cancelling search…"
         : state.phase === "stopped"
           ? ja
-            ? "対局を停止しました。残り時間を保持しています。"
+            ? "停止中 · 残り時間を保持しています。"
             : "Paused. Remaining time is preserved."
           : result !== null
             ? `${result.winner === null ? (ja ? "引き分け" : "Draw") : `${sideLabel(result.winner)}${ja ? "の勝ち" : " wins"}`} · ${result.reason === "timeout" ? (ja ? "時間切れ" : "Time expired") : result.reason.includes("resignation") ? (ja ? "投了" : "Resignation") : ja ? "終局" : "Game ended"}`
@@ -147,10 +149,40 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
                 ? "持ち時間制・定跡なし"
                 : "Sudden death; no opening book";
 
+  useBoardFit(surfaceRef, !setup && position !== null);
+  function beginMatch() {
+    setConsentPrompt(false);
+    const session = sessionRef.current;
+    if (!session || session.state.phase !== "setup" || session.state.busy)
+      return;
+    collectorRef.current?.begin(session.state);
+    setFlipped(false);
+    void session.start(
+      humanSide,
+      import.meta.env.DEV ? enabled : releaseControllerEnabled,
+      preset,
+      profile,
+    );
+  }
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelection(null);
+        setPromotion(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const clock = (side: Side) => (
     <MatchClockPanel
       label={sideLabel(side)}
-      name={side === state.humanSide ? messages.match.you : modelLabel}
+      name={
+        side === state.humanSide
+          ? messages.match.you
+          : modelLabel.replace(/（.*?）/, "")
+      }
       baseMs={state.clock[side === "black" ? "blackTimeMs" : "whiteTimeMs"]}
       runningSince={running(side)}
       showClock
@@ -159,12 +191,62 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
     />
   );
 
+  const modelPanel =
+    import.meta.env.DEV || releaseModels.length > 1 ? (
+      <section
+        className="prototype-model"
+        aria-label={ja ? "モデル設定" : "Model settings"}
+      >
+        <ModelPicker
+          locale={locale}
+          selection={state.selection}
+          disabled={!canSelectModel}
+          onSelect={(value) => {
+            setEnabled(false);
+            void sessionRef.current?.prepare(value);
+          }}
+        />
+        <p className="prototype-model__status" role="status" aria-live="polite">
+          {state.phase === "loading" ? (
+            ja ? (
+              `${modelLabel}を読み込み、照合しています…`
+            ) : (
+              `Loading and verifying ${modelLabel}…`
+            )
+          ) : state.identity === null ? (
+            ja ? (
+              "モデルは未読込です"
+            ) : (
+              "No verified model is loaded"
+            )
+          ) : (
+            <>
+              {modelLabel} · {ja ? "照合済み" : "Verified"} ·{" "}
+              <code>{state.identity.modelId}</code>
+              <br />
+              OSAVAL03 · <code>
+                {state.identity.leafSha256.slice(0, 12)}
+              </code> · {ja ? "思考制御" : "Controller"}{" "}
+              {(setup ? enabled : state.enabled) ? "ON" : "OFF"} ·{" "}
+              {messages.play.profileName[setup ? profile : state.profile]}
+            </>
+          )}
+        </p>
+        {!setup ? (
+          <p className="match-setup__note">
+            {ja
+              ? "モデルを変更するには、対局を終了して設定に戻ってください。"
+              : "End this game and return to settings to change models."}
+          </p>
+        ) : null}
+      </section>
+    ) : null;
   return (
     <main
       className={`match-page core-prototype ${import.meta.env.DEV ? "core-prototype--development" : ""} ${setup ? "" : "match-page--playing"}`}
       aria-labelledby="prototype-title"
     >
-      <header className="prototype-heading">
+      <header className={setup ? "prototype-heading" : "visually-hidden"}>
         <h1 id="prototype-title">
           {import.meta.env.DEV
             ? ja
@@ -182,111 +264,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
               : "3-minute or 10-minute sudden death. No opening book."}
         </p>
       </header>
-      {import.meta.env.DEV || releaseModels.length > 1 ? (
-        <section
-          className="prototype-model"
-          aria-label={ja ? "モデル設定" : "Model settings"}
-        >
-          <fieldset className="segmented-control" disabled={!canSelectModel}>
-            <legend>
-              {ja ? "最新←→開発初期" : "Newest ←→ earliest development"}
-            </legend>
-            <div>
-              {(import.meta.env.DEV
-                ? ([
-                    "r4c4",
-                    "r4c3",
-                    "r4c1",
-                    "defense",
-                    "candidate",
-                    "baseline",
-                  ] as const)
-                : releaseModels.map((m) => m.manifest.selection)
-              ).map((value) => (
-                <button
-                  type="button"
-                  key={value}
-                  aria-pressed={state.selection === value}
-                  onClick={() => {
-                    setEnabled(false);
-                    void sessionRef.current?.prepare(value);
-                  }}
-                >
-                  {!import.meta.env.DEV
-                    ? releaseModels.find((m) => m.manifest.selection === value)!
-                        .label
-                    : value === "r4c4"
-                      ? ja
-                        ? "R4-C4（比較候補・未採用）"
-                        : "R4-C4 (comparison only)"
-                      : value === "r4c3"
-                        ? ja
-                          ? "R4-C3（比較候補・未採用）"
-                          : "R4-C3 (comparison only)"
-                        : value === "r4c1"
-                          ? ja
-                            ? "R4-C1（比較候補・未採用）"
-                            : "R4-C1 (comparison only)"
-                          : value === "defense"
-                            ? ja
-                              ? "防御学習候補"
-                              : "Defense learning candidate"
-                            : value === "candidate"
-                              ? ja
-                                ? "r3候補"
-                                : "r3 candidate"
-                              : ja
-                                ? "旧基準 (W256)"
-                                : "Previous baseline (W256)"}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-          <p className="match-setup__note">
-            {ja
-              ? "開発世代の順です。強さの順位ではありません。C2は同一重み・同一探索の防御候補へ統合しました。"
-              : "Ordered by development generation; this is not a strength ranking. C2 is an alias of Defense: identical weights and search."}
-          </p>
-          <p
-            className="prototype-model__status"
-            role="status"
-            aria-live="polite"
-          >
-            {state.phase === "loading" ? (
-              ja ? (
-                `${modelLabel}を読み込み、照合しています…`
-              ) : (
-                `Loading and verifying ${modelLabel}…`
-              )
-            ) : state.identity === null ? (
-              ja ? (
-                "モデルは未読込です"
-              ) : (
-                "No verified model is loaded"
-              )
-            ) : (
-              <>
-                {modelLabel} · {ja ? "照合済み" : "Verified"} ·{" "}
-                <code>{state.identity.modelId}</code>
-                <br />
-                OSAVAL03 · <code>
-                  {state.identity.leafSha256.slice(0, 12)}
-                </code>{" "}
-                · {ja ? "思考制御" : "Controller"}{" "}
-                {(setup ? enabled : state.enabled) ? "ON" : "OFF"} ·{" "}
-                {messages.play.profileName[setup ? profile : state.profile]}
-              </>
-            )}
-          </p>
-          {!setup ? (
-            <p className="match-setup__note">
-              {ja
-                ? "モデルを変更するには、対局を終了して設定に戻ってください。"
-                : "End this game and return to settings to change models."}
-            </p>
-          ) : null}
-        </section>
-      ) : null}
+      {setup ? modelPanel : null}
       {setup ? (
         <div className="match-setup">
           <fieldset
@@ -378,14 +356,11 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
             className="match-start"
             type="button"
             disabled={!ready}
-            onClick={() =>
-              void sessionRef.current?.start(
-                humanSide,
-                import.meta.env.DEV ? enabled : releaseControllerEnabled,
-                preset,
-                profile,
-              )
-            }
+            onClick={() => {
+              if (collectionPolicy.enabled && !getConsent().decided)
+                setConsentPrompt(true);
+              else beginMatch();
+            }}
           >
             {messages.match.start}
           </button>
@@ -402,141 +377,198 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           </button>
         </div>
       )}
-      {position === null || setup ? null : (
-        <div className="match-board">
-          {clock(topSide)}
-          <div className="board-fit">
-            <div className={`board-stage board-stage--${orientation}`}>
-              <HandStand
-                disabled={!canMove || position.sideToMove !== "white"}
-                entries={position.hands.white}
-                legalDrops={legalDrops}
-                messages={messages}
-                onSelect={(piece) =>
-                  setSelection(toggleHandSelection(selection, piece))
-                }
-                orientation={orientation}
-                pieceSet={pieceSet}
-                selection={selection}
-                side="white"
-              />
-              <ShogiBoard
-                snapshot={position}
-                selection={selection}
-                disabled={!canMove}
-                messages={messages}
-                orientation={orientation}
-                pieceSet={pieceSet}
-                lastMove={
-                  state.previous === null
-                    ? null
-                    : lastMoveHighlight([state.previous, position], 1)
-                }
-                promotion={
-                  promotion === null || !canMove
-                    ? null
-                    : {
-                        moves: promotion,
-                        onChoose: move,
-                        onCancel: () => setPromotion(null),
-                      }
-                }
-                onSquare={(index) => {
-                  if (!canMove) return;
-                  const result = resolveBoardClick(position, selection, index);
-                  if (result.kind === "move") choose(result.candidates);
-                  else setSelection(result.selection);
-                }}
-              />
-              <HandStand
-                disabled={!canMove || position.sideToMove !== "black"}
-                entries={position.hands.black}
-                legalDrops={legalDrops}
-                messages={messages}
-                onSelect={(piece) =>
-                  setSelection(toggleHandSelection(selection, piece))
-                }
-                orientation={orientation}
-                pieceSet={pieceSet}
-                selection={selection}
-                side="black"
-              />
+      <section
+        className="play-surface"
+        ref={surfaceRef}
+        aria-label={ja ? "対局盤と操作" : "Game board and controls"}
+      >
+        {position === null || setup ? null : (
+          <div className="match-board">
+            {clock(topSide)}
+            <div className="board-fit">
+              <div className={`board-stage board-stage--${orientation}`}>
+                <HandStand
+                  disabled={!canMove || position.sideToMove !== "white"}
+                  entries={position.hands.white}
+                  legalDrops={legalDrops}
+                  messages={messages}
+                  onSelect={(piece) =>
+                    setSelection(toggleHandSelection(selection, piece))
+                  }
+                  orientation={orientation}
+                  pieceSet={pieceSet}
+                  selection={selection}
+                  side="white"
+                />
+                <ShogiBoard
+                  snapshot={position}
+                  selection={selection}
+                  disabled={!canMove}
+                  messages={messages}
+                  orientation={orientation}
+                  pieceSet={pieceSet}
+                  lastMove={
+                    state.previous === null
+                      ? null
+                      : lastMoveHighlight([state.previous, position], 1)
+                  }
+                  promotion={
+                    promotion === null || !canMove
+                      ? null
+                      : {
+                          moves: promotion,
+                          onChoose: move,
+                          onCancel: () => setPromotion(null),
+                        }
+                  }
+                  onSquare={(index) => {
+                    if (!canMove) return;
+                    const result = resolveBoardClick(
+                      position,
+                      selection,
+                      index,
+                    );
+                    if (result.kind === "move") choose(result.candidates);
+                    else setSelection(result.selection);
+                  }}
+                />
+                <HandStand
+                  disabled={!canMove || position.sideToMove !== "black"}
+                  entries={position.hands.black}
+                  legalDrops={legalDrops}
+                  messages={messages}
+                  onSelect={(piece) =>
+                    setSelection(toggleHandSelection(selection, piece))
+                  }
+                  orientation={orientation}
+                  pieceSet={pieceSet}
+                  selection={selection}
+                  side="black"
+                />
+              </div>
             </div>
+            {clock(opposing(topSide))}
           </div>
-          {clock(state.humanSide)}
+        )}
+        <div className="match-controls">
+          <p role="status" aria-live="polite" className="match-status">
+            {status}
+          </p>
+          <p className="match-move-number">
+            {import.meta.env.DEV ? (
+              <span>
+                {ja ? "思考制御" : "Control"}{" "}
+                {(setup ? enabled : state.enabled) ? "ON" : "OFF"}
+              </span>
+            ) : null}
+            <strong>
+              {position?.moveNumber ?? 1}
+              {ja ? "手目" : " ply"}
+            </strong>
+          </p>
+          <div className="inline-actions">
+            {active ? (
+              <button
+                type="button"
+                disabled={state.phase === "stopping"}
+                onClick={() => sessionRef.current?.stop()}
+              >
+                {ja ? "停止" : "Stop"}
+              </button>
+            ) : null}
+            {state.phase === "stopped" ? (
+              <button
+                type="button"
+                onClick={() => void sessionRef.current?.resume()}
+              >
+                {ja ? "再開" : "Resume"}
+              </button>
+            ) : null}
+            {state.phase === "playing" || state.phase === "stopped" ? (
+              <button type="button" onClick={() => setConfirmAction("resign")}>
+                {messages.match.resign}
+              </button>
+            ) : null}
+            {state.phase === "finished" ? (
+              <button
+                type="button"
+                onClick={() => void sessionRef.current?.configure()}
+              >
+                {messages.match.rematch}
+              </button>
+            ) : null}
+            {!setup ? (
+              <button
+                type="button"
+                onClick={() => setFlipped((value) => !value)}
+              >
+                {ja ? "盤面反転" : "Flip board"}
+              </button>
+            ) : null}
+          </div>
         </div>
-      )}
-      <div className="match-controls">
-        <p role="status" aria-live="polite" className="match-status">
-          {status}
+      </section>
+      {!setup ? (
+        <details className="match-more">
+          <summary>{ja ? "棋譜保存・設定" : "Save and settings"}</summary>
+          <div className="inline-actions">
+            {position !== null && !setup ? (
+              <button
+                type="button"
+                onClick={() =>
+                  downloadText(
+                    "openshogi-game.usi",
+                    toUsi({ snapshots: [position] }),
+                  )
+                }
+              >
+                {ja ? "棋譜を保存 (USI)" : "Save game (USI)"}
+              </button>
+            ) : null}
+            {position !== null && (active || state.phase === "stopped") ? (
+              <button
+                type="button"
+                disabled={state.phase === "stopping"}
+                onClick={() => {
+                  if (active || state.phase === "stopped")
+                    setConfirmAction("reset");
+                  else sessionRef.current?.configure();
+                }}
+              >
+                {active || state.phase === "stopped"
+                  ? ja
+                    ? "対局を終了して設定へ"
+                    : "End game and return to settings"
+                  : messages.match.rematch}
+              </button>
+            ) : null}{" "}
+          </div>
+          {modelPanel}
+          {collectionPolicy.enabled ? (
+            <CollectionSettings locale={locale} />
+          ) : null}
+        </details>
+      ) : collectionPolicy.enabled ? (
+        <CollectionSettings locale={locale} />
+      ) : null}
+      {collectionStatus !== "idle" ? (
+        <p role="status" className="collection-status">
+          {collectionStatus === "sending"
+            ? ja
+              ? "棋譜を提供しています…"
+              : "Sending game…"
+            : collectionStatus === "accepted"
+              ? ja
+                ? "棋譜を受け付けました（未検証）。"
+                : "Game received (unverified)."
+              : ja
+                ? "棋譜の提供はできませんでした。対局・保存は引き続き利用できます。"
+                : "The game could not be sent. You can still play and save locally."}
         </p>
-        <p className="match-move-number">
-          {import.meta.env.DEV ? (
-            <span>
-              {ja ? "思考制御" : "Control"}{" "}
-              {(setup ? enabled : state.enabled) ? "ON" : "OFF"}
-            </span>
-          ) : null}
-          <strong>
-            {position?.moveNumber ?? 1}
-            {ja ? "手目" : " ply"}
-          </strong>
-        </p>
-        <div className="inline-actions">
-          {position !== null && !setup ? (
-            <button
-              type="button"
-              onClick={() =>
-                downloadText(
-                  "openshogi-game.usi",
-                  toUsi({ snapshots: [position] }),
-                )
-              }
-            >
-              {ja ? "棋譜を保存 (USI)" : "Save game (USI)"}
-            </button>
-          ) : null}
-          {active ? (
-            <button
-              type="button"
-              disabled={state.phase === "stopping"}
-              onClick={() => sessionRef.current?.stop()}
-            >
-              {ja ? "停止" : "Stop"}
-            </button>
-          ) : null}
-          {state.phase === "stopped" ? (
-            <button
-              type="button"
-              onClick={() => void sessionRef.current?.resume()}
-            >
-              {ja ? "再開" : "Resume"}
-            </button>
-          ) : null}
-          {state.phase === "playing" || state.phase === "stopped" ? (
-            <button type="button" onClick={() => setConfirmAction("resign")}>
-              {messages.match.resign}
-            </button>
-          ) : null}
-          {position !== null && !setup ? (
-            <button
-              type="button"
-              disabled={state.phase === "stopping"}
-              onClick={() => {
-                if (active || state.phase === "stopped")
-                  setConfirmAction("reset");
-                else sessionRef.current?.configure();
-              }}
-            >
-              {active || state.phase === "stopped"
-                ? ja
-                  ? "対局を終了して設定へ"
-                  : "End game and return to settings"
-                : messages.match.rematch}
-            </button>
-          ) : null}
-        </div>
-      </div>
+      ) : null}
+      {consentPrompt ? (
+        <ConsentDialog locale={locale} onContinue={beginMatch} />
+      ) : null}
       {import.meta.env.DEV && state.manifest !== null ? (
         <details className="prototype-artifacts">
           <summary>

@@ -23,3 +23,10 @@
 No third-party interface code, shogi-engine source, game records, datasets, or model weights were
 copied into this UI candidate. Piece-art acquisition is limited to the manifest recorded in
 `ASSET_PROVENANCE.json`.
+
+## 2026-09-21 mobile and consent review
+
+- [Impeccable slop](https://impeccable.style/slop/) and [NN/g AI prototyping](https://www.nngroup.com/articles/ai-prototyping/) informed the review of redundant decoration, weak hierarchy, generated default patterns and the need for rendered task validation. A palette choice alone is not evidence of good UX.
+- [Linear's interface refresh](https://linear.app/now/behind-the-latest-design-refresh): compact navigation and predictable action placement informed the match hierarchy; board/clocks stay primary and diagnostics recede into disclosures. No assets or branding were copied.
+- [GOV.UK buttons](https://design-system.service.gov.uk/components/button/): explicit action labels and grouping informed the equal voluntary-consent choices. Neither choice is visually preselected.
+- Cloudflare deployment references are collected in [deploy-cloudflare.md](deploy-cloudflare.md).

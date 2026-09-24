@@ -1,10 +1,13 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, extname, join, relative, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const ignoredDirectories = new Set([".git", "dist", "node_modules"]);
+
 const forbiddenRoots = new Set([
+  ".wrangler",
+  ".dev.vars",
   "Cargo.lock",
   "Cargo.toml",
   "artifacts",
@@ -40,44 +43,34 @@ const generatedNames = new Set([
 ]);
 const failures = [];
 
-for (const name of [...forbiddenRoots].sort()) {
+const files = execFileSync(
+  "git",
+  ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+  { cwd: root, encoding: "utf8" },
+)
+  .split("\0")
+  .filter(Boolean);
+for (const local of files) {
+  if (
+    forbiddenRoots.has(local.split("/")[0]) ||
+    /(^|\/)(?:\.env(?:\.|$)|\.dev\.vars|\.qa-)/.test(local) ||
+    forbiddenSuffixes.has(extname(local).toLowerCase()) ||
+    /\.(?:sqlite3?|db|osaval03|jsonl|pem|key)$/.test(local)
+  )
+    failures.push(`non-UI source or local artifact: ${local}`);
+  if (extname(local) === ".wasm" || local === "scripts/check-boundaries.mjs")
+    continue;
+  let text;
   try {
-    statSync(join(root, name));
-    failures.push(`forbidden UI-root path: ${name}`);
+    text = readFileSync(join(root, local), "utf8");
   } catch {
-    // The path is correctly absent.
+    continue;
   }
+  const homeMarker = "/" + "Users" + "/";
+  const localUriMarker = "file" + "://";
+  if (text.includes(homeMarker) || text.includes(localUriMarker))
+    failures.push(`machine-local path leaked into versioned text: ${local}`);
 }
-
-function walk(directory) {
-  for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
-    const absolute = join(directory, entry.name);
-    const local = relative(root, absolute).replaceAll("\\", "/");
-    if (entry.isDirectory()) {
-      walk(absolute);
-      continue;
-    }
-    if (forbiddenSuffixes.has(extname(entry.name).toLowerCase())) {
-      failures.push(`non-UI source or local artifact: ${local}`);
-    }
-    if (extname(entry.name).toLowerCase() === ".wasm") continue;
-    if (local === "scripts/check-boundaries.mjs") continue;
-    let text;
-    try {
-      text = readFileSync(absolute, "utf8");
-    } catch {
-      continue;
-    }
-    const homeMarker = "/" + "Users" + "/";
-    const localUriMarker = "file" + "://";
-    if (text.includes(homeMarker) || text.includes(localUriMarker)) {
-      failures.push(`machine-local path leaked into versioned text: ${local}`);
-    }
-  }
-}
-
-walk(root);
 
 const generatedDirectory = join(root, "src/generated");
 let observedGenerated = new Set();

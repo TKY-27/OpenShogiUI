@@ -13,6 +13,8 @@ export const workspaceStatuses = [
 ] as const;
 
 export type WorkspaceRoute =
+  | "privacy"
+  | "analysis"
   | "workspace"
   | "match"
   | "browser-play"
@@ -25,6 +27,8 @@ export function routeForHash(
 ): WorkspaceRoute {
   if (import.meta.env.DEV && development && hash === "#/core-prototype")
     return "core-prototype";
+  if (hash === "#/privacy") return "privacy";
+  if (hash === "#/analysis") return "analysis";
   if (hash === "#/match") return "match";
   if (import.meta.env.DEV && development && hash === "#/browser-play")
     return "browser-play";

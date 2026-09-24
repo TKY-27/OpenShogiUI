@@ -1,5 +1,10 @@
 /// <reference lib="webworker" />
-import { parseTimeControl } from "./browser-engine";
+import {
+  parseTimeControl,
+  parseAnalysisStart,
+  parseAnalysisStep,
+  parseAnalysisResponse,
+} from "./browser-engine";
 import { releaseControllerEnabled } from "virtual:shogi-runtime";
 import {
   boundedJson,
@@ -14,8 +19,7 @@ import {
   parsePlayProgress,
   parsePureSnapshot,
   parseRuntimeIdentity,
-  verifyArtifactBytes,
-  type PrototypeAsset,
+  fetchArtifact,
   type PrototypeRequest,
   type PrototypeManifest,
 } from "./core-prototype-protocol";
@@ -35,6 +39,9 @@ interface PureEngine {
   ): string;
   playRun(): string;
   playStop(): string;
+  analysisStart(profile: string, evaluator: string, request: string): string;
+  analysisStep(request: string): string;
+  analysisStop(): string;
 }
 interface PureModule {
   default(options: { module_or_path: ArrayBuffer }): Promise<unknown>;
@@ -47,36 +54,42 @@ let manifest: PrototypeManifest | null = null;
 let computeEnabled = false;
 let executing = false;
 
-async function fetchArtifact(artifact: PrototypeAsset) {
-  const response = await fetch(artifact.url, {
-    cache: "no-store",
-    credentials: "same-origin",
-    redirect: "error",
-  });
-  if (!response.ok)
-    throw new Error("Prototype artifact unavailable or changed");
-  const bytes = await response.arrayBuffer();
-  const sha256 = await verifyArtifactBytes(bytes, artifact);
-  return { bytes, sha256 };
-}
-
 function parseRequest(value: unknown): PrototypeRequest {
   if (value === null || typeof value !== "object")
     throw new Error("Invalid prototype request");
   const kind = (value as Record<string, unknown>).kind;
   const keys =
-    kind === "initialize"
-      ? ["id", "kind", "manifest", "enabled", "initialSfen", "moves"]
-      : kind === "move"
-        ? ["id", "kind", "movement"]
-        : kind === "configure"
-          ? ["id", "kind", "enabled"]
-          : kind === "stop"
-            ? ["id", "kind", "searchId"]
-            : ["id", "kind", "timeControl", "profile", "cancelBuffer"];
+    kind === "analysis-start"
+      ? ["id", "kind", "request", "profile"]
+      : kind === "analysis-step"
+        ? ["id", "kind", "request"]
+        : kind === "analysis-stop"
+          ? ["id", "kind"]
+          : kind === "initialize"
+            ? ["id", "kind", "manifest", "enabled", "initialSfen", "moves"]
+            : kind === "move"
+              ? ["id", "kind", "movement"]
+              : kind === "configure"
+                ? ["id", "kind", "enabled"]
+                : kind === "stop"
+                  ? ["id", "kind", "searchId"]
+                  : ["id", "kind", "timeControl", "profile", "cancelBuffer"];
   const request = object(value, keys);
   const id = numeric(request.id);
   if (id === 0) throw new Error("Invalid request id");
+  if (kind === "analysis-start") {
+    if (!["balanced", "quality"].includes(String(request.profile)))
+      throw new Error("Invalid analysis quality");
+    return {
+      id,
+      kind,
+      request: parseAnalysisStart(request.request),
+      profile: request.profile as "balanced" | "quality",
+    };
+  }
+  if (kind === "analysis-step")
+    return { id, kind, request: parseAnalysisStep(request.request) };
+  if (kind === "analysis-stop") return { id, kind };
   if (kind === "initialize") {
     if (
       typeof request.enabled !== "boolean" ||
@@ -243,6 +256,22 @@ async function execute(request: PrototypeRequest): Promise<unknown> {
   }
   if (engine === null || manifest === null)
     throw new Error("Prototype engine is not initialized");
+  if (request.kind === "analysis-start")
+    return parseAnalysisResponse(
+      boundedJson(
+        engine.analysisStart(
+          request.profile,
+          "pure_learned",
+          JSON.stringify(request.request),
+        ),
+      ),
+    );
+  if (request.kind === "analysis-step")
+    return parseAnalysisResponse(
+      boundedJson(engine.analysisStep(JSON.stringify(request.request))),
+    );
+  if (request.kind === "analysis-stop")
+    return parseAnalysisResponse(boundedJson(engine.analysisStop()));
   if (request.kind === "configure") {
     if (request.enabled && manifest.artifacts["controller.json"] === null)
       throw new Error("This candidate has no matching controller");

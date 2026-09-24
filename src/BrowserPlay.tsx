@@ -816,8 +816,11 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   }, []);
 
   useEffect(() => {
-    if (typeof localStorage !== "undefined")
+    try {
       localStorage.setItem("open-shogi-ui/piece-set", pieceSet);
+    } catch {
+      /* Keep the in-memory choice when storage is unavailable. */
+    }
   }, [pieceSet]);
 
   useEffect(() => {

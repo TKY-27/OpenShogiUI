@@ -43,6 +43,12 @@ try {
   page.on("request", (r) => {
     if (r.url().includes("leaf.osaval03")) report.requestedModels.push(r.url());
   });
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "open-shogi-ui/collection-consent",
+      JSON.stringify({ version: "2026-09-21-v1", allowed: false }),
+    ),
+  );
   await page.goto(url.replace("/#/match", "/?model=r4c2#/match"));
   report.title = await page.title();
   assert(report.title.length > 0);
@@ -180,6 +186,9 @@ try {
       preparation: result.preparation,
       searches: result.searches,
     });
+    const more = page.locator("details.match-more");
+    if ((await more.getAttribute("open")) === null)
+      await more.locator("summary").click();
     const gameDownload = page.waitForEvent("download");
     await page
       .getByRole("button", { name: "棋譜を保存 (USI)", exact: true })

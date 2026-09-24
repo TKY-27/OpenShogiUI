@@ -5,6 +5,8 @@ import {
   type Side,
   type TimeControl,
   type SearchProfile,
+  type AnalysisStart,
+  type AnalysisStep,
 } from "./browser-engine";
 import {
   assetPrefix,
@@ -134,6 +136,14 @@ export type PrototypeRequest =
       initialSfen: string | null;
       moves: string[];
     }
+  | {
+      id: number;
+      kind: "analysis-start";
+      request: AnalysisStart;
+      profile: SearchProfile;
+    }
+  | { id: number; kind: "analysis-step"; request: AnalysisStep }
+  | { id: number; kind: "analysis-stop" }
   | { id: number; kind: "move"; movement: string }
   | { id: number; kind: "configure"; enabled: boolean }
   | {
@@ -232,10 +242,18 @@ export function parsePrototypeManifest(value: unknown): PrototypeManifest {
       const sha256 = hash(artifact.sha256);
       const size = numeric(artifact.size, maximums[index]);
       if (size === 0) throw new Error("Empty prototype artifact");
-      expect(
-        artifact.url,
-        `${ASSET_PREFIX}${record.selection}/${name}?sha256=${sha256}`,
-      );
+      const urls = import.meta.env.DEV
+        ? [
+            `${ASSET_PREFIX}${record.selection}/${name}?sha256=${sha256}`,
+            ...(name.startsWith("engine.")
+              ? [`${ASSET_PREFIX}baseline/${name}?sha256=${sha256}`]
+              : []),
+          ]
+        : [
+            `${ASSET_PREFIX}${sha256}/${name}${name === "leaf.osaval03" ? ".gz" : ""}`,
+          ];
+      if (!urls.includes(artifact.url as string))
+        throw new Error("Unbound artifact URL");
       if (
         import.meta.env.DEV &&
         name === "leaf.osaval03" &&
@@ -709,4 +727,30 @@ export function boundedJson(raw: string, maximum = 256 * 1024): unknown {
   if (typeof raw !== "string" || raw.length === 0 || raw.length > maximum)
     throw new Error("Prototype response exceeds bound");
   return JSON.parse(raw) as unknown;
+}
+
+/** HTTP cache is optional. Repair corrupt cached bytes once; never run an unverified replacement. */
+export async function fetchArtifact(artifact: PrototypeAsset) {
+  for (const cache of ["force-cache", "reload"] as const) {
+    const response = await fetch(artifact.url, {
+      cache,
+      credentials: "same-origin",
+      redirect: "error",
+    });
+    if (!response.ok)
+      throw new Error("Prototype artifact unavailable or changed");
+    try {
+      const decoded = artifact.url.endsWith("/leaf.osaval03.gz")
+        ? new Response(
+            response.body!.pipeThrough(new DecompressionStream("gzip")),
+          )
+        : response;
+      const bytes = await decoded.arrayBuffer();
+      const sha256 = await verifyArtifactBytes(bytes, artifact);
+      return { bytes, sha256 };
+    } catch (error) {
+      if (cache === "reload") throw error;
+    }
+  }
+  throw new Error("Prototype artifact verification failed");
 }

@@ -1,5 +1,186 @@
 {
   "schema": "open_shogi_release_allowlist/v1",
-  "default": null,
-  "models": []
+  "default": "r4c4",
+  "models": [
+    {
+      "selection": "r4c4",
+      "label": "OSAI R4",
+      "generation": 6,
+      "provenance": {
+        "path": "local/release/rights/r4c4.json",
+        "sha256": "3145a18e141606deea989aea3c538a570ba4268480b97d357cb54fcb0fce786b"
+      },
+      "model": {
+        "id": "r4-c4-osai-r4",
+        "format": "OSAVAL03",
+        "runtimeProfile": "pure_learned-v3",
+        "controllerEnabled": false,
+        "artifacts": {
+          "engine.js": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm.js",
+            "sha256": "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e"
+          },
+          "engine.wasm": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
+            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+          },
+          "leaf.osaval03": {
+            "path": "local/runs/r4-c4/attempt-01/generations/G02/fit/trained_candidate.osaval03",
+            "sha256": "9466a7e8cf11b7d165b325edd9a5a421bdbaa4bed550940afcf33c9faf3bfd0f"
+          },
+          "controller.json": null
+        }
+      }
+    },
+    {
+      "selection": "r4c3",
+      "label": "C3（開発世代）",
+      "generation": 5,
+      "provenance": {
+        "path": "local/release/rights/r4c3.json",
+        "sha256": "4d8de76cd9b1d675d6b607b5e307a886eac4e5a43102d18a57a4ee6046079a93"
+      },
+      "model": {
+        "id": "r4-c3-attempt-01",
+        "format": "OSAVAL03",
+        "runtimeProfile": "pure_learned-v3",
+        "controllerEnabled": false,
+        "artifacts": {
+          "engine.js": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm.js",
+            "sha256": "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e"
+          },
+          "engine.wasm": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
+            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+          },
+          "leaf.osaval03": {
+            "path": "local/runs/r4-c3/attempt-01/fit/trained_candidate.osaval03",
+            "sha256": "839a9f93398d2c989ca823ed01d88dc1c32e706baa32d5c61b17296114b9b262"
+          },
+          "controller.json": null
+        }
+      }
+    },
+    {
+      "selection": "r4c1",
+      "label": "C1（開発世代）",
+      "generation": 4,
+      "provenance": {
+        "path": "local/release/rights/r4c1.json",
+        "sha256": "8f32a16224bc4ff1c6dbdd5e9c0cb157671dafc17b5b7fa89d8e938e9e748748"
+      },
+      "model": {
+        "id": "r4-c1-attempt-01-best-step512",
+        "format": "OSAVAL03",
+        "runtimeProfile": "pure_learned-v3",
+        "controllerEnabled": false,
+        "artifacts": {
+          "engine.js": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm.js",
+            "sha256": "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e"
+          },
+          "engine.wasm": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
+            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+          },
+          "leaf.osaval03": {
+            "path": "local/runs/r4-c1/attempt-01/fit/best.osaval03",
+            "sha256": "6b49c3361194011c0c8ac114491dcdb6c67a3b4f4cc6c17262a867572aefb3a6"
+          },
+          "controller.json": null
+        }
+      }
+    },
+    {
+      "selection": "defense",
+      "label": "防御強化 best1536",
+      "generation": 3,
+      "provenance": {
+        "path": "local/release/rights/defense.json",
+        "sha256": "6527099a78e603da0bcedec736d0c7c2ead9b695a0dc22b5a4c69ce47ba647e0"
+      },
+      "model": {
+        "id": "defense-20260912-recovery-r3-best-step1536",
+        "format": "OSAVAL03",
+        "runtimeProfile": "pure_learned-v3",
+        "controllerEnabled": false,
+        "artifacts": {
+          "engine.js": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm.js",
+            "sha256": "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e"
+          },
+          "engine.wasm": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
+            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+          },
+          "leaf.osaval03": {
+            "path": "local/runs/defense-20260912/recovery-r3/fit/best.osaval03",
+            "sha256": "8c1c875038b74dc475c356d50c635c2e22dcab7aaa201d7d9aea7188e668b35a"
+          },
+          "controller.json": null
+        }
+      }
+    },
+    {
+      "selection": "candidate",
+      "label": "r3（開発世代）",
+      "generation": 2,
+      "provenance": {
+        "path": "local/release/rights/candidate.json",
+        "sha256": "c61c387a95e9ec5c5e1e2af905a4755ee9c555031b4319d78bdff03e76415f73"
+      },
+      "model": {
+        "id": "evaluator-20260910-main-r3-step-6144",
+        "format": "OSAVAL03",
+        "runtimeProfile": "pure_learned-v3",
+        "controllerEnabled": false,
+        "artifacts": {
+          "engine.js": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm.js",
+            "sha256": "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e"
+          },
+          "engine.wasm": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
+            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+          },
+          "leaf.osaval03": {
+            "path": "local/runs/evaluator-20260910/main-r3/fit/best.osaval03",
+            "sha256": "cd07f2a202f6e781afcb6a8af3c7a198c4203373e4505fe089f8c7f05eefd983"
+          },
+          "controller.json": null
+        }
+      }
+    },
+    {
+      "selection": "baseline",
+      "label": "初期 W256",
+      "generation": 1,
+      "provenance": {
+        "path": "local/release/rights/baseline.json",
+        "sha256": "4b1ffaeb3212d49db72d1bc1ef1341af2eddaddb2f598e96fb767e21d8c60c2d"
+      },
+      "model": {
+        "id": "frozen-w256-hard2",
+        "format": "OSAVAL03",
+        "runtimeProfile": "pure_learned-v3",
+        "controllerEnabled": false,
+        "artifacts": {
+          "engine.js": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm.js",
+            "sha256": "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e"
+          },
+          "engine.wasm": {
+            "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
+            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+          },
+          "leaf.osaval03": {
+            "path": "local/frozen/baseline/model.osaval03",
+            "sha256": "859e922b3f503ddeecf0afeb9a05fccac080a9faca3b19fce9d8253c9039c480"
+          },
+          "controller.json": null
+        }
+      }
+    }
+  ]
 }

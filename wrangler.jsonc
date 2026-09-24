@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Tracked base configuration: Worker identity for build detection and the
+  // local dev/test loop. Production deploys use the generated
+  // wrangler.deploy.jsonc (see npm run build:cloudflare), which adds the real
+  // account D1 binding, collection vars and the retention cron. The D1 entry
+  // below is intentionally local-only (wrangler dev --local --persist-to);
+  // it must never receive a real production database ID.
+  "name": "openshogiai",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    "run_worker_first": ["/api/*"],
+    "not_found_handling": "none",
+  },
+  "observability": { "enabled": false },
+  "vars": {
+    "COLLECTION_ENABLED": "false",
+    "COLLECTION_ALLOWLIST": "[]",
+    "COLLECTION_NOTICE_VERSION": "2026-09-21-v1",
+    "COLLECTION_CONTACT": "",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "openshogi-local-only",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "worker/migrations",
+    },
+  ],
+}

@@ -1,0 +1,66 @@
+{
+  "schema": "open_shogi_release_asset_map/v1",
+  "repository": "TKY-27/OpenShogiAI",
+  "release_tag": "models-v1",
+  "download_base": "https://github.com/TKY-27/OpenShogiAI/releases/download/models-v1",
+  "mirror_env": "OPENSHOGI_ASSET_MIRROR",
+  "mirror_note": "Set OPENSHOGI_ASSET_MIRROR to a directory path or base URL serving the same asset names to build before the GitHub release is public, e.g. OPENSHOGI_ASSET_MIRROR=../OpenShogiAI/local/release/models-v1",
+  "assets": {
+    "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e": {
+      "name": "open-shogi-engine.js",
+      "bytes": 38192
+    },
+    "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a": {
+      "name": "open-shogi-engine.wasm",
+      "bytes": 830802
+    },
+    "9466a7e8cf11b7d165b325edd9a5a421bdbaa4bed550940afcf33c9faf3bfd0f": {
+      "name": "osai-r4.osaval03",
+      "bytes": 8679836
+    },
+    "839a9f93398d2c989ca823ed01d88dc1c32e706baa32d5c61b17296114b9b262": {
+      "name": "r4-c3.osaval03",
+      "bytes": 8679836
+    },
+    "6b49c3361194011c0c8ac114491dcdb6c67a3b4f4cc6c17262a867572aefb3a6": {
+      "name": "r4-c1.osaval03",
+      "bytes": 8679836
+    },
+    "8c1c875038b74dc475c356d50c635c2e22dcab7aaa201d7d9aea7188e668b35a": {
+      "name": "defense-best1536.osaval03",
+      "bytes": 8679836
+    },
+    "cd07f2a202f6e781afcb6a8af3c7a198c4203373e4505fe089f8c7f05eefd983": {
+      "name": "r3-step6144.osaval03",
+      "bytes": 8679836
+    },
+    "859e922b3f503ddeecf0afeb9a05fccac080a9faca3b19fce9d8253c9039c480": {
+      "name": "w256-hard2.osaval03",
+      "bytes": 8679836
+    },
+    "3145a18e141606deea989aea3c538a570ba4268480b97d357cb54fcb0fce786b": {
+      "name": "rights-r4c4.json",
+      "bytes": 1493
+    },
+    "4d8de76cd9b1d675d6b607b5e307a886eac4e5a43102d18a57a4ee6046079a93": {
+      "name": "rights-r4c3.json",
+      "bytes": 1488
+    },
+    "8f32a16224bc4ff1c6dbdd5e9c0cb157671dafc17b5b7fa89d8e938e9e748748": {
+      "name": "rights-r4c1.json",
+      "bytes": 1325
+    },
+    "6527099a78e603da0bcedec736d0c7c2ead9b695a0dc22b5a4c69ce47ba647e0": {
+      "name": "rights-defense.json",
+      "bytes": 1347
+    },
+    "c61c387a95e9ec5c5e1e2af905a4755ee9c555031b4319d78bdff03e76415f73": {
+      "name": "rights-candidate.json",
+      "bytes": 1330
+    },
+    "4b1ffaeb3212d49db72d1bc1ef1341af2eddaddb2f598e96fb767e21d8c60c2d": {
+      "name": "rights-baseline.json",
+      "bytes": 1338
+    }
+  }
+}

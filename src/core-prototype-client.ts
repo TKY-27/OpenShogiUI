@@ -1,4 +1,11 @@
-import type { SearchProfile, Side, TimeControl } from "./browser-engine";
+import type {
+  AnalysisStart,
+  AnalysisStep,
+  AnalysisResponse,
+  SearchProfile,
+  Side,
+  TimeControl,
+} from "./browser-engine";
 import {
   releaseControllerEnabled,
   releaseManifest,
@@ -141,7 +148,7 @@ export class PrototypeWorkerClient implements PrototypeEngineClient {
   initialize(
     manifest: PrototypeManifest,
     enabled: boolean,
-    position: PrototypeSnapshot | null,
+    position: Pick<PrototypeSnapshot, "initialSfen" | "moves"> | null,
   ): Promise<PrototypeReady> {
     return (
       this.request({
@@ -220,6 +227,25 @@ export class PrototypeWorkerClient implements PrototypeEngineClient {
       remaining,
     );
     return promise;
+  }
+  analysisStart(
+    request: AnalysisStart,
+    profile: SearchProfile,
+  ): Promise<AnalysisResponse> {
+    return this.request({
+      kind: "analysis-start",
+      request,
+      profile,
+    }) as Promise<AnalysisResponse>;
+  }
+  analysisStep(request: AnalysisStep): Promise<AnalysisResponse> {
+    return this.request({
+      kind: "analysis-step",
+      request,
+    }) as Promise<AnalysisResponse>;
+  }
+  analysisStop(): Promise<AnalysisResponse> {
+    return this.request({ kind: "analysis-stop" }) as Promise<AnalysisResponse>;
   }
   stopSearch(): void {
     this.cancelWithWatchdog("host-cancelled");

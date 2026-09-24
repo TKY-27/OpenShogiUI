@@ -26,7 +26,7 @@ vi.mock("virtual:shogi-runtime", () => ({
 function pinnedManifest(): PrototypeManifest {
   const sha256 = "b".repeat(64);
   const asset = (name: string) => ({
-    url: `/model/release/${name}?sha256=${sha256}`,
+    url: `/model/${sha256}/${name}${name === "leaf.osaval03" ? ".gz" : ""}`,
     size: 3,
     sha256,
   });
@@ -95,7 +95,7 @@ describe("production runtime manifest pin", () => {
       (value: PrototypeManifest) => {
         value.artifacts["controller.json"] = {
           ...expected.artifacts["engine.js"],
-          url: `/model/release/controller.json?sha256=${"b".repeat(64)}`,
+          url: `/model/${"b".repeat(64)}/controller.json`,
         };
       },
     ]) {

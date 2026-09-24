@@ -370,18 +370,18 @@ const messages: Record<Locale, Messages> = {
   ja: {
     header: {
       primaryNavigation: "メインナビゲーション",
-      workspace: "ワークスペース",
+      workspace: "ホーム",
       match: "対局",
-      browserPlay: "解析",
+      browserPlay: "開発用盤面",
       evaluationLab: "評価ラボ",
       language: "表示言語",
       japanese: "日本語",
       english: "English",
     },
     workspace: {
-      headline: "オープンな将棋のAIです",
+      headline: "オープンな将棋のAI",
       summary:
-        "OpenShogiAIのWebAssemblyエンジンで対局・局面解析を行い、ローカルの評価レポートを検証します。",
+        "OpenShogiAIと対局し、学習モデルで指し手や読み筋を確認できます。",
       releaseStatus: { candidate: "" },
       title: "OpenShogiAI",
       adapter: "AI連携境界",
@@ -391,7 +391,7 @@ const messages: Record<Locale, Messages> = {
       inProgress: "進行中",
       startHeading: "はじめる",
       startMatch: "AIと対局",
-      startMatchDetail: "3分切れ負け・10分切れ負け・時間無制限",
+      startMatchDetail: "3分切れ負け・10分切れ負け",
       startAnalysis: "局面を解析",
       startAnalysisDetail: "評価値・候補手・棋譜の確認",
       startLab: "評価ラボ",
@@ -618,16 +618,16 @@ const messages: Record<Locale, Messages> = {
   en: {
     header: {
       primaryNavigation: "Primary navigation",
-      workspace: "Workspace",
+      workspace: "Home",
       match: "Match",
-      browserPlay: "Analysis",
+      browserPlay: "Development board",
       evaluationLab: "Evaluation Lab",
       language: "Display language",
       japanese: "日本語",
       english: "English",
     },
     workspace: {
-      headline: "Play, read, and verify shogi on your device.",
+      headline: "An open shogi AI",
       summary:
         "Play and analyze with the OpenShogiAI WebAssembly engine, then inspect local evaluation reports.",
       releaseStatus: { candidate: "Clean-history release candidate" },
@@ -639,7 +639,7 @@ const messages: Record<Locale, Messages> = {
       inProgress: "In progress",
       startHeading: "Start",
       startMatch: "Play the AI",
-      startMatchDetail: "3-minute, 10-minute, or untimed",
+      startMatchDetail: "3-minute or 10-minute sudden death",
       startAnalysis: "Analyze a position",
       startAnalysisDetail: "Evaluation, candidate lines, and move history",
       startLab: "Evaluation Lab",

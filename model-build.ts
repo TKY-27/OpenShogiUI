@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import { readFile, realpath, readdir, lstat } from "node:fs/promises";
 import { resolve, sep, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -106,9 +107,15 @@ export function parseReleaseAllowlist(value: unknown) {
     .map((entry) => {
       exact(entry, ["selection", "label", "generation", "provenance", "model"]);
       if (
-        !["baseline", "candidate", "defense", "r4c1", "r4c2", "r4c3"].includes(
-          String(entry.selection),
-        ) ||
+        ![
+          "baseline",
+          "candidate",
+          "defense",
+          "r4c1",
+          "r4c2",
+          "r4c3",
+          "r4c4",
+        ].includes(String(entry.selection)) ||
         typeof entry.label !== "string" ||
         !entry.label.length ||
         entry.label.length > 96 ||
@@ -151,6 +158,21 @@ export function parseReleaseAllowlist(value: unknown) {
     !models.some((m) => m.selection === value.default)
   )
     throw new Error("Ambiguous release allowlist");
+  const configurations = models.map(({ config }) =>
+    JSON.stringify([
+      config.format,
+      config.runtimeProfile,
+      config.controllerEnabled,
+      config.artifacts["leaf.osaval03"].sha256,
+      config.artifacts["engine.js"].sha256,
+      config.artifacts["engine.wasm"].sha256,
+      config.artifacts["controller.json"]?.sha256 ?? null,
+    ]),
+  );
+  if (new Set(configurations).size !== models.length)
+    throw new Error(
+      "Duplicate model/runtime configuration in release allowlist",
+    );
   return { default: value.default as PrototypeManifest["selection"], models };
 }
 export async function readRegisteredFile(
@@ -195,7 +217,7 @@ export async function loadModelConfiguration(
     entries.push([
       name,
       {
-        url: `${prefix}${selection}/${name}?sha256=${spec.sha256}`,
+        url: `${prefix}${spec.sha256}/${name}${name === "leaf.osaval03" ? ".gz" : ""}`,
         sha256: spec.sha256,
         size: bytes.length,
       },
@@ -236,7 +258,10 @@ export async function loadModelConfiguration(
 }
 
 const uiRoot = dirname(fileURLToPath(import.meta.url));
-export const aiRoot = resolve(uiRoot, "../OpenShogiAI");
+export const aiRoot =
+  process.env.OSUI_ISOLATED_MODELS === "1"
+    ? resolve(uiRoot, "local/model-assets")
+    : resolve(uiRoot, "../OpenShogiAI");
 const virtualId = "virtual:shogi-runtime";
 const resolvedId = "\0" + virtualId;
 export function runtimeModule(
@@ -247,6 +272,15 @@ export function runtimeModule(
     label: string;
     generation: number;
   }[] = [],
+  collection: {
+    enabled: boolean;
+    models: {
+      modelId: string;
+      modelSha256: string;
+      jsSha256: string;
+      wasmSha256: string;
+    }[];
+  } = { enabled: false, models: [] },
 ): Plugin {
   return {
     name: "shogi-runtime-identity",
@@ -255,7 +289,7 @@ export function runtimeModule(
     },
     load(id) {
       if (id === resolvedId)
-        return `export const assetPrefix = ${JSON.stringify(manifest ? "/model/" : "/__core-prototype/")}; export const releaseManifest = ${JSON.stringify(manifest)}; export const releaseControllerEnabled = ${JSON.stringify(controllerEnabled)}; export const releaseModels = ${JSON.stringify(models.map(({ manifest, label, generation }) => ({ manifest, label, generation })))};`;
+        return `export const assetPrefix = ${JSON.stringify(manifest ? "/model/" : "/__core-prototype/")}; export const releaseManifest = ${JSON.stringify(manifest)}; export const releaseControllerEnabled = ${JSON.stringify(controllerEnabled)}; export const releaseModels = ${JSON.stringify(models.map(({ manifest, label, generation }) => ({ manifest, label, generation })))}; export const collectionPolicy = ${JSON.stringify(collection)};`;
     },
   };
 }
@@ -395,7 +429,13 @@ export function emitRelease(
           );
           if (
             !(
-              local === "favicon.svg" ||
+              [
+                "favicon.svg",
+                "ogp.png",
+                "icon-16.png",
+                "icon-32.png",
+                "icon-180.png",
+              ].includes(local) ||
               local === "_headers" ||
               /^pieces\/[a-zA-Z0-9_/-]+\.(svg|png)$/.test(local) ||
               /^licenses\/[a-zA-Z0-9_.-]+\.md$/.test(local)
@@ -408,15 +448,20 @@ export function emitRelease(
       await check(resolve(uiRoot, "public"));
     },
     generateBundle() {
+      const emitted = new Set<string>();
       for (const selected of model.models) {
         for (const name of MODEL_NAMES) {
           const source = selected.buffers[name];
-          if (source)
+          const asset = selected.manifest.artifacts[name];
+          if (source && asset && !emitted.has(asset.url)) {
+            emitted.add(asset.url);
             this.emitFile({
               type: "asset",
-              fileName: `model/${selected.manifest.selection}/${name}`,
-              source,
+              fileName: asset.url.slice(1),
+              // Static gzip avoids relying on the CDN's binary MIME compression list.
+              source: name === "leaf.osaval03" ? gzipSync(source) : source,
             });
+          }
         }
       }
       this.emitFile({

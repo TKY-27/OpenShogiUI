@@ -9,4 +9,8 @@ declare module "virtual:shogi-runtime" {
   export const releaseManifest:
     | import("./core-prototype-protocol").PrototypeManifest
     | null;
+  export const collectionPolicy: {
+    enabled: boolean;
+    models: import("./collection-schema").CollectionIdentity[];
+  };
 }

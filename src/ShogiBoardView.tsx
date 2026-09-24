@@ -99,8 +99,12 @@ export type BoardSelection =
 
 /** Reads the stored piece set, falling back to the default for unknown values. */
 export function persistedPieceSet(): PieceSetId {
-  if (typeof localStorage === "undefined") return DEFAULT_PIECE_SET;
-  const value = localStorage.getItem(PIECE_SET_STORAGE_KEY);
+  let value: string | null;
+  try {
+    value = localStorage.getItem(PIECE_SET_STORAGE_KEY);
+  } catch {
+    return DEFAULT_PIECE_SET;
+  }
   return PIECE_ASSET_CATALOG.some(({ id }) => id === value)
     ? (value as PieceSetId)
     : DEFAULT_PIECE_SET;
@@ -146,6 +150,8 @@ export function resolveBoardClick(
   if (piece?.side !== snapshot.sideToMove) {
     return { kind: "selection", selection: null };
   }
+  if (selection?.kind === "board" && selection.index === index)
+    return { kind: "selection", selection: null };
   const next = { kind: "board", index } satisfies BoardSelection;
   return {
     kind: "selection",
@@ -223,37 +229,43 @@ export function HandStand({
   pieceSet: PieceSetId;
   onSelect: (piece: HandPieceKind) => void;
 }) {
-  const pieces = entries.filter(({ count }) => count > 0);
+  const pieces = (
+    ["rook", "bishop", "gold", "silver", "knight", "lance", "pawn"] as const
+  )
+    .map((piece) => ({
+      piece,
+      count: entries.find((entry) => entry.piece === piece)?.count ?? 0,
+    }))
+    .filter(({ count }) => count > 0);
   return (
     <section className={`hand-stand hand-stand--${side}`}>
       <h2>{messages.play.hand(side)}</h2>
       <div className="hand-stand__pieces">
-        {pieces.length === 0 ? (
-          <p>{messages.play.emptyHand}</p>
-        ) : (
-          pieces.map(({ piece, count }) => (
-            <button
-              aria-pressed={
-                selection?.kind === "hand" && selection.piece === piece
-              }
-              className="hand-piece"
-              disabled={disabled || !legalDrops.has(piece)}
-              key={piece}
-              onClick={() => onSelect(piece)}
-              type="button"
-            >
-              <PieceView
-                flipped={orientation === "gote-bottom"}
-                kind={piece}
-                setId={pieceSet}
-                side={side}
-              />
-              <span aria-label={`${messages.play.pieceName[piece]} ${count}`}>
-                ×{count}
-              </span>
-            </button>
-          ))
-        )}
+        {pieces.map(({ piece, count }) => (
+          <button
+            aria-pressed={
+              !disabled &&
+              selection?.kind === "hand" &&
+              selection.piece === piece
+            }
+            aria-label={`${messages.play.hand(side)} ${messages.play.pieceName[piece]} ${count}`}
+            className="hand-piece"
+            disabled={disabled || !legalDrops.has(piece)}
+            key={piece}
+            onClick={() => onSelect(piece)}
+            type="button"
+          >
+            <PieceView
+              flipped={orientation === "gote-bottom"}
+              kind={piece}
+              setId={pieceSet}
+              side={side}
+            />
+            <span aria-label={`${messages.play.pieceName[piece]} ${count}`}>
+              ×{count}
+            </span>
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -345,6 +357,9 @@ export function ShogiBoard({
                 "board-square",
                 isSelected && "board-square--selected",
                 isDestination && "board-square--destination",
+                isDestination &&
+                  piece !== null &&
+                  "board-square--capture-target",
                 index === lastFrom && "board-square--last-origin",
                 index === lastTo && "board-square--last-destination",
                 index === lastTo && lastMove?.drop && "board-square--last-drop",

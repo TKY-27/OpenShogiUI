@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { gunzipSync } from "node:zlib";
 import {
   digest,
   parseReleaseSelection,
@@ -34,7 +35,16 @@ it("allows only explicit representative generations and emits no private registr
     generation,
     label: id,
     provenance: { path: "local/rights.json", sha256: sha },
-    model: selection().model,
+    model: {
+      ...selection().model,
+      artifacts: {
+        ...selection().model.artifacts,
+        "leaf.osaval03": {
+          path: "local/model.osaval03",
+          sha256: String(generation).repeat(64),
+        },
+      },
+    },
   });
   const value = {
     schema: "open_shogi_release_allowlist/v1",
@@ -48,6 +58,15 @@ it("allows only explicit representative generations and emits no private registr
   expect(() => parseReleaseAllowlist({ ...value, models: [] })).toThrow(
     "undecided",
   );
+  expect(() =>
+    parseReleaseAllowlist({
+      ...value,
+      models: [
+        entry("defense", 2),
+        { ...entry("r4c4", 4), model: entry("defense", 2).model },
+      ],
+    }),
+  ).toThrow("Duplicate");
   expect(() =>
     parseReleaseAllowlist({
       ...value,
@@ -167,4 +186,49 @@ describe("single release configuration", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+});
+
+it("emits identical runtime bytes once at a content-addressed path across models", async () => {
+  const { emitRelease } = await import("../model-build");
+  const runtime = Buffer.from("shared runtime"),
+    a = Buffer.from("model A"),
+    b = Buffer.from("model B");
+  const model = (selection: string, leaf: Buffer) => ({
+    manifest: {
+      selection,
+      artifacts: Object.fromEntries(
+        [
+          ["engine.js", runtime],
+          ["engine.wasm", runtime],
+          ["leaf.osaval03", leaf],
+        ].map(([name, source]) => [
+          name,
+          {
+            url: `/model/${digest(source as Buffer)}/${name}${name === "leaf.osaval03" ? ".gz" : ""}`,
+          },
+        ]),
+      ),
+    },
+    buffers: {
+      "engine.js": runtime,
+      "engine.wasm": runtime,
+      "leaf.osaval03": leaf,
+    },
+    config: { runtimeProfile: "pure_learned-v3", controllerEnabled: false },
+  });
+  const models = [model("r4c3", a), model("defense", b)];
+  const plugin = emitRelease({ ...models[0], models } as never);
+  const files: { fileName: string; source: Buffer | string }[] = [];
+  (plugin.generateBundle as () => void).call({
+    emitFile: (file: (typeof files)[number]) => files.push(file),
+  });
+  expect(files.map((f) => f.fileName)).toEqual([
+    `model/${digest(runtime)}/engine.js`,
+    `model/${digest(runtime)}/engine.wasm`,
+    `model/${digest(a)}/leaf.osaval03.gz`,
+    `model/${digest(b)}/leaf.osaval03.gz`,
+    "model/manifest.json",
+  ]);
+  expect(gunzipSync(files[2].source as Buffer)).toEqual(a);
+  expect(gunzipSync(files[3].source as Buffer)).toEqual(b);
 });

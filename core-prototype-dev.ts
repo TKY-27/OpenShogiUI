@@ -185,7 +185,10 @@ export async function readPrototypeArtifact(
 /** Local development adapter only. No artifact is imported or emitted by Rollup. */
 export function corePrototypeDev(): Plugin {
   const uiRoot = dirname(fileURLToPath(import.meta.url));
-  const aiRoot = resolve(uiRoot, "../OpenShogiAI");
+  const aiRoot =
+    process.env.OSUI_ISOLATED_MODELS === "1"
+      ? resolve(uiRoot, "local/model-assets")
+      : resolve(uiRoot, "../OpenShogiAI");
   return {
     name: "local-core-prototype",
     apply: "serve",
@@ -255,7 +258,7 @@ export function corePrototypeDev(): Plugin {
                 return [
                   name,
                   {
-                    url: `${PROTOTYPE_PREFIX}${selection}/${name}?sha256=${artifact.sha256}`,
+                    url: `${PROTOTYPE_PREFIX}${name.startsWith("engine.") ? "baseline" : selection}/${name}?sha256=${artifact.sha256}`,
                     sha256: artifact.sha256,
                     size: artifact.bytes.length,
                   },
@@ -290,6 +293,10 @@ export function corePrototypeDev(): Plugin {
             throw new Error("Registered runtime configuration changed");
           if (artifact.sha256 !== url.searchParams.get("sha256"))
             throw new Error("Artifact changed; reload the prototype");
+          response.setHeader(
+            "Cache-Control",
+            "private, max-age=31536000, immutable",
+          );
           response.setHeader("Content-Type", artifact.mime);
           response.setHeader("Content-Length", artifact.bytes.length);
           response.end(request.method === "HEAD" ? undefined : artifact.bytes);

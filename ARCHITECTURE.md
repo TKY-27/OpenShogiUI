@@ -56,5 +56,8 @@ generated-interface response are untrusted inputs. They use closed schemas and e
 count, numeric, and enum bounds. Internal Worker traffic uses typed requests plus a validated
 response envelope; generated JSON is deeply validated once inside the Worker before it crosses to
 the UI. Cache hits must revalidate against the active request. The application has no account,
-analytics, telemetry, remote model fetch, game upload, payment, camera, microphone, or geolocation
-integration.
+analytics, telemetry, remote model fetch, payment, camera, microphone, or geolocation
+integration. The only outbound request is the optional, consent-gated game
+submission described in [docs/development.md](docs/development.md); it is a
+single same-origin POST of a closed schema, and every feature works when it
+is declined or unavailable.

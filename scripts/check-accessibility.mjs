@@ -8,6 +8,7 @@ const boardView = readFileSync(join(root, "src/ShogiBoardView.tsx"), "utf8");
 const matchPlay = readFileSync(join(root, "src/MatchPlay.tsx"), "utf8");
 const clockPanel = readFileSync(join(root, "src/MatchClockPanel.tsx"), "utf8");
 const app = readFileSync(join(root, "src/App.tsx"), "utf8");
+const noticeDialog = readFileSync(join(root, "src/NoticeDialog.tsx"), "utf8");
 const styles = readFileSync(join(root, "src/index.css"), "utf8");
 const failures = [];
 
@@ -84,7 +85,10 @@ for (const marker of [
   "Model License",
   'aria-modal="true"',
 ]) {
-  if (!app.includes(marker)) failures.push(`App notices are missing ${marker}`);
+  const source =
+    marker === 'aria-modal="true"' ? noticeDialog : app + noticeDialog;
+  if (!source.includes(marker))
+    failures.push(`App notices are missing ${marker}`);
 }
 
 for (const selector of [

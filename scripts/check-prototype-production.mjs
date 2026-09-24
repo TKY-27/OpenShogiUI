@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { join, relative } from "node:path";
 
@@ -28,6 +29,7 @@ for (const model of manifest.models) {
       "r4c1",
       "r4c2",
       "r4c3",
+      "r4c4",
     ].includes(model.selection) ||
     model.schema !== "open_shogi_core_prototype_assets/v2" ||
     model.runtimeProfile !== "pure_learned-v3"
@@ -45,13 +47,17 @@ for (const model of manifest.models) {
       ].includes(name)
     )
       throw new Error("Unexpected model component");
-    const path = `model/${model.selection}/${name}`;
-    if (asset.url !== `/${path}?sha256=${asset.sha256}`)
-      throw new Error("Unbound release URL");
+    const path = `model/${asset.sha256}/${name}${name === "leaf.osaval03" ? ".gz" : ""}`;
+    if (asset.url !== `/${path}`) throw new Error("Unbound release URL");
     expected.set(path, asset);
   }
   for (const name of ["engine.js", "engine.wasm", "leaf.osaval03"])
-    if (!expected.has(`model/${model.selection}/${name}`))
+    if (
+      !model.artifacts[name] ||
+      !expected.has(
+        `model/${model.artifacts[name].sha256}/${name}${name === "leaf.osaval03" ? ".gz" : ""}`,
+      )
+    )
       throw new Error("Incomplete release model");
 }
 const observed = [];
@@ -69,8 +75,11 @@ function inspect(directory) {
       throw new Error(`Private or source-map artifact emitted: ${local}`);
     if (expected.has(local)) {
       const asset = expected.get(local);
-      const sha = createHash("sha256").update(bytes).digest("hex");
-      if (sha !== asset.sha256 || bytes.length !== asset.size)
+      const decoded = local.endsWith("/leaf.osaval03.gz")
+        ? gunzipSync(bytes, { maxOutputLength: asset.size })
+        : bytes;
+      const sha = createHash("sha256").update(decoded).digest("hex");
+      if (sha !== asset.sha256 || decoded.length !== asset.size)
         throw new Error(`Release bytes mismatch: ${local}`);
       observed.push(local);
     } else if (

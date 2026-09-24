@@ -18,6 +18,7 @@ import {
   promotedKind,
   resolveBoardClick,
   ShogiBoard,
+  HandStand,
   toggleHandSelection,
 } from "./ShogiBoardView";
 import { getMessages } from "./localization";
@@ -132,6 +133,9 @@ describe("browser shogi board", () => {
         destination,
       ),
     ).toMatchObject({ kind: "move", candidates: [{ usi: "7g7f" }] });
+    expect(
+      resolveBoardClick(position, { kind: "board", index: origin }, origin),
+    ).toEqual({ kind: "selection", selection: null });
     expect(toggleHandSelection(null, "pawn")).toEqual({
       kind: "hand",
       piece: "pawn",
@@ -139,6 +143,75 @@ describe("browser shogi board", () => {
     expect(toggleHandSelection({ kind: "hand", piece: "pawn" }, "pawn")).toBe(
       null,
     );
+  });
+
+  it("shows only held pieces in fixed order and separates occupied targets from piece orientation", () => {
+    const position = startPosition();
+    position.legalMoves = [
+      {
+        usi: "5d5c",
+        from: { file: 5, rank: 4 },
+        to: { file: 5, rank: 3 },
+        drop: null,
+        promote: false,
+      },
+    ];
+    position.board[boardIndex(5, 4)] = piece(boardIndex(5, 4), "black", "rook");
+    for (const orientation of ["sente-bottom", "gote-bottom"] as const) {
+      const markup = renderToStaticMarkup(
+        <ShogiBoard
+          snapshot={position}
+          selection={{ kind: "board", index: boardIndex(5, 4) }}
+          disabled={false}
+          messages={getMessages("ja")}
+          orientation={orientation}
+          onSquare={() => {}}
+        />,
+      );
+      expect(markup).toContain("board-square--capture-target");
+      expect(markup).toMatch(
+        /<\/span><span aria-hidden="true" class="destination-mark"/,
+      );
+      for (const count of [0, 1, 18]) {
+        const hand = renderToStaticMarkup(
+          <HandStand
+            side="black"
+            entries={[{ piece: "pawn", count }]}
+            selection={null}
+            legalDrops={new Set(["pawn"])}
+            disabled={false}
+            messages={getMessages("ja")}
+            orientation={orientation}
+            pieceSet="kanji_brown"
+            onSelect={() => {}}
+          />,
+        );
+        expect(hand.match(/class="hand-piece"/g) ?? []).toHaveLength(
+          count > 0 ? 1 : 0,
+        );
+        expect(hand).not.toContain("×0");
+        if (count > 0) expect(hand).toContain(`歩 ${count}`);
+      }
+    }
+    const hand = renderToStaticMarkup(
+      <HandStand
+        side="black"
+        entries={[
+          { piece: "pawn", count: 18 },
+          { piece: "rook", count: 2 },
+          { piece: "gold", count: 4 },
+        ]}
+        selection={null}
+        legalDrops={new Set()}
+        disabled={true}
+        messages={getMessages("ja")}
+        orientation="sente-bottom"
+        pieceSet="kanji_brown"
+        onSelect={() => {}}
+      />,
+    );
+    expect(hand.indexOf("飛 2")).toBeLessThan(hand.indexOf("金 4"));
+    expect(hand.indexOf("金 4")).toBeLessThan(hand.indexOf("歩 18"));
   });
 
   it("renders all coordinates and the canonical 40-piece start geometry", () => {

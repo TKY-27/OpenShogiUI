@@ -12,7 +12,7 @@ import {
 describe("site localization", () => {
   it("defaults deterministically to Japanese", () => {
     expect(DEFAULT_LOCALE).toBe("ja");
-    expect(getMessages(DEFAULT_LOCALE).header.workspace).toBe("ワークスペース");
+    expect(getMessages(DEFAULT_LOCALE).header.workspace).toBe("ホーム");
   });
 
   it("switches to English through the locale reducer", () => {
