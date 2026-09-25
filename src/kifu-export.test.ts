@@ -15,7 +15,7 @@ function record(overrides: Partial<KifuRecord> = {}): KifuRecord {
     timeLimit: "3分切れ負け",
     startedAt,
     moveTimesMs: [3_000, 8_000, 2_000, 61_000, 1_500, 4_000],
-    termination: "resignation",
+    termination: { reason: "resignation", winner: "white" },
     ...overrides,
   };
 }
@@ -102,28 +102,40 @@ describe("KIF files", () => {
   it("maps realized endings and leaves unknown ones unmapped", async () => {
     expect(
       await decode(
-        await buildKifuFile(record({ termination: "timeout" }), "kif"),
+        await buildKifuFile(
+          record({ termination: { reason: "timeout" } }),
+          "kif",
+        ),
       ),
     ).toContain("切れ負け");
     expect(
       await decode(
-        await buildKifuFile(record({ termination: "checkmate" }), "kif"),
+        await buildKifuFile(
+          record({ termination: { reason: "checkmate" } }),
+          "kif",
+        ),
       ),
     ).toContain("詰み");
     expect(
       await decode(
-        await buildKifuFile(record({ termination: "repetition" }), "kif"),
+        await buildKifuFile(
+          record({ termination: { reason: "repetition" } }),
+          "kif",
+        ),
       ),
     ).toContain("千日手");
     const unknown = await decode(
-      await buildKifuFile(record({ termination: "warp" }), "kif"),
+      await buildKifuFile(record({ termination: { reason: "warp" } }), "kif"),
     );
     expect(unknown).not.toContain("投了");
     expect(unknown).not.toContain("詰み");
     // Perpetual check and failed declarations are fouls by the mover.
     expect(
       await decode(
-        await buildKifuFile(record({ termination: "perpetual-check" }), "kif"),
+        await buildKifuFile(
+          record({ termination: { reason: "perpetual-check" } }),
+          "kif",
+        ),
       ),
     ).toContain("反則負け");
   });
@@ -151,11 +163,81 @@ describe("KIF files", () => {
   it("falls back to UTF-8 with the .kifu extension for unencodable names", async () => {
     const file = await buildKifuFile(record({ blackName: "あなた🐻" }), "kif");
     expect(file.encoding).toBe("utf-8");
-    expect(file.note).toBe("utf8-fallback");
+    expect(file.notes).toEqual(["utf8-fallback"]);
     expect(file.fileName.endsWith(".kifu")).toBe(true);
     const text = await decode(file);
     expect(text).toContain("#KIF version=2.0 encoding=UTF-8");
     expect(text).toContain("先手：あなた🐻");
+  });
+
+  it("keeps an out-of-turn resignation from inverting the result", async () => {
+    // The black player resigned while white (the engine) was thinking, so
+    // white won even though the record ends on white's turn. 投了 would
+    // credit the resignation — and the win — to white, so the ending line
+    // stays 中断 and the parties go into a comment.
+    const scenario = {
+      moves: ["7g7f"],
+      termination: { reason: "resignation", winner: "white" } as const,
+    };
+    const kif = await decode(await buildKifuFile(record(scenario), "kif"));
+    expect(kif).toContain("   2 中断");
+    expect(kif).not.toContain("   2 投了");
+    expect(kif).toContain("*投了：先手（勝者：後手）");
+    expect(kif).toContain("７六歩(77)");
+    const ki2 = await decode(await buildKifuFile(record(scenario), "ki2"));
+    expect(ki2).toContain("まで1手で中断");
+    expect(ki2).not.toContain("後手の勝ち");
+    expect(ki2).toContain("*投了：先手（勝者：後手）");
+    const csa = await decode(await buildKifuFile(record(scenario), "csa"));
+    expect(csa).toContain("%CHUDAN");
+    expect(csa).not.toContain("%TORYO");
+    expect(csa).toContain("'*投了：先手（勝者：後手）");
+    expect((await buildKifuFile(record(scenario), "kif")).notes).toEqual([
+      "out-of-turn-ending",
+    ]);
+  });
+
+  it("keeps the standard 投了 when the resigner is the side to move", async () => {
+    // White resigned on its own turn after black's first move.
+    const scenario = {
+      moves: ["7g7f"],
+      termination: { reason: "resignation", winner: "black" } as const,
+    };
+    const kif = await decode(await buildKifuFile(record(scenario), "kif"));
+    expect(kif).toContain("   2 投了");
+    expect(kif).not.toContain("中断");
+    expect(
+      (await buildKifuFile(record(scenario), "kif")).notes,
+    ).toBeUndefined();
+    const ki2 = await decode(await buildKifuFile(record(scenario), "ki2"));
+    expect(ki2).toContain("まで1手で先手の勝ち");
+    // The engine resigning on its own turn renders the same way.
+    const engine = await decode(
+      await buildKifuFile(
+        record({
+          moves: ["7g7f"],
+          termination: { reason: "engine-resignation", winner: "black" },
+        }),
+        "kif",
+      ),
+    );
+    expect(engine).toContain("   2 投了");
+  });
+
+  it("records a resignation before any move without inventing a mover", async () => {
+    // White resigns before black has played anything.
+    const file = await buildKifuFile(
+      record({
+        moves: [],
+        termination: { reason: "resignation", winner: "black" },
+      }),
+      "kif",
+    );
+    const text = await decode(file);
+    expect(text).toContain("   1 中断");
+    expect(text).not.toContain("   1 投了");
+    expect(text).toContain("*投了：後手（勝者：先手）");
+    expect(file.notes).toEqual(["out-of-turn-ending"]);
   });
 });
 
@@ -196,6 +278,46 @@ describe("KI2 files", () => {
       );
       expect(text).toContain(notation);
     }
+  });
+
+  it("marks drops when the writer fuses tokens without padding", async () => {
+    // ５三銀不成 is six columns wide, so the writer emits the next △ with no
+    // padding after it and whitespace cannot separate moves. The drop is the
+    // third ply (４四歩); the king move that follows must stay unmarked.
+    const fused = "4k4/9/9/4S4/9/9/9/9/4K4 b P 1";
+    const text = await decode(
+      await buildKifuFile(
+        record({
+          initialSfen: fused,
+          moves: ["5d5c", "5a4a", "P*4d", "4a3a"],
+          moveTimesMs: undefined,
+          termination: undefined,
+        }),
+        "ki2",
+      ),
+    );
+    expect(text).toContain("▲４四歩打");
+    expect(text).toContain("△３一玉");
+    expect(text).not.toContain("△３一玉打");
+    expect(text).toContain("▲５三銀不成");
+  });
+
+  it("marks every drop when two hand moves share a fused line", async () => {
+    const fused = "4k4/9/9/4S4/9/9/9/9/4K4 b PG 1";
+    const text = await decode(
+      await buildKifuFile(
+        record({
+          initialSfen: fused,
+          moves: ["5d5c", "5a4a", "P*4d", "G*4c", "4a3a"],
+          moveTimesMs: undefined,
+          termination: undefined,
+        }),
+        "ki2",
+      ),
+    );
+    expect(text).toContain("▲４四歩打");
+    expect(text).toContain("△４三金打");
+    expect(text).not.toContain("△３一玉打");
   });
 
   it("writes 不成 for a non-promoting move into the promotion zone", async () => {
@@ -292,7 +414,7 @@ describe("CSA files", () => {
     ] as const) {
       expect(
         await decode(
-          await buildKifuFile(record({ termination: reason }), "csa"),
+          await buildKifuFile(record({ termination: { reason } }), "csa"),
         ),
       ).toContain(code);
     }

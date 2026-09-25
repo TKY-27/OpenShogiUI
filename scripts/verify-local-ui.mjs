@@ -259,6 +259,8 @@ try {
     assert(box && box.width >= 210 && Math.abs(box.width - box.height) < 2);
     await page.screenshot({ path: resolve(output, `match-${width}.png`) });
   }
+  // Resign while the engine is thinking (out of turn): the record must not
+  // credit the resignation — and the win — to the engine.
   await page.getByRole("button", { name: "投了", exact: true }).click();
   await page
     .getByRole("dialog")

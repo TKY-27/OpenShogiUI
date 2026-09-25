@@ -37,9 +37,11 @@ export function KifuSaveMenu({
   const [format, setFormat] = useState<KifuFormat>(readKifuFormat);
   const [status, setStatus] = useState<string | null>(null);
   const busy = useRef(false);
-  // The format chunk loads from the same origin once; later saves reuse it.
   useEffect(() => {
-    void import("./kifu-export");
+    // Warm the format chunks so a save does not wait on a cold import; a
+    // failed prefetch must not surface as an unhandled rejection (the save
+    // path imports again and reports its own error).
+    import("./kifu-export").catch(() => {});
   }, []);
   const save = () => {
     if (busy.current) return;
@@ -51,14 +53,27 @@ export function KifuSaveMenu({
       .then(({ buildKifuFile }) => buildKifuFile(record, format, prefix))
       .then((file) => {
         downloadBytes(file.fileName, file.bytes);
-        setStatus(
-          file.note === "utf8-fallback"
-            ? t(
-                `Shift_JISで表現できない文字があるため、UTF-8（${file.fileName}）で保存しました。`,
-                `Some characters are not representable in Shift_JIS; saved as UTF-8 (${file.fileName}).`,
-              )
-            : t(`保存しました：${file.fileName}`, `Saved: ${file.fileName}`),
+        // The browser owns the final destination; the page only knows that the
+        // download was handed over, so say that and nothing more.
+        const remarks: string[] = [];
+        if (file.notes?.includes("out-of-turn-ending"))
+          remarks.push(
+            t(
+              "投了した側と勝者を棋譜のコメントに記録しました（終局行は「中断」）。",
+              "The resigner and winner are recorded in a kifu comment (ending line reads 中断).",
+            ),
+          );
+        if (file.notes?.includes("utf8-fallback"))
+          remarks.push(
+            t(
+              "Shift_JISで表現できない文字があるためUTF-8で保存します。",
+              "Some characters are not representable in Shift_JIS; saved as UTF-8.",
+            ),
+          );
+        remarks.push(
+          t("保存を開始しました：", "Download started: ") + file.fileName,
         );
+        setStatus(remarks.join(""));
       })
       .catch(() => {
         setStatus(t("保存できませんでした。", "Could not save the record."));

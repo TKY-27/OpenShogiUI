@@ -147,7 +147,13 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
           moves: [...position.moves],
           blackName: messages.match.sente,
           whiteName: messages.match.gote,
-          termination: position.terminal?.kind,
+          termination:
+            position.terminal === null
+              ? undefined
+              : {
+                  reason: position.terminal.kind,
+                  winner: position.terminal.winner,
+                },
         };
   const perspective = position?.sideToMove === "white" ? -1 : 1;
   return (

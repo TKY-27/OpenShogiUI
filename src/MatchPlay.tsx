@@ -506,7 +506,10 @@ export function MatchPlay({ locale }: { locale: Locale }) {
             whiteName: humanSide === "white" ? match.you : match.engine,
             timeLimit: match.preset[preset],
             moveTimesMs,
-            termination: outcome?.kind,
+            termination:
+              outcome === null
+                ? undefined
+                : { reason: outcome.kind, winner: outcome.winner },
             startedAt: matchStartedAt ?? undefined,
           },
           format,

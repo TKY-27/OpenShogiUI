@@ -166,7 +166,10 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
       timeLimit: messages.match.preset[state.preset],
       startedAt: startedAtRef.current ?? undefined,
       moveTimesMs: state.moveTimes.map(({ elapsedMs }) => elapsedMs),
-      termination: state.result?.reason,
+      termination:
+        state.result === null
+          ? undefined
+          : { reason: state.result.reason, winner: state.result.winner },
     };
   };
   function beginMatch() {
