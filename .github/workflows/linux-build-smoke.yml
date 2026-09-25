@@ -1,0 +1,43 @@
+# Linux x64 (glibc) install + build smoke for the Cloudflare deployment path.
+#
+# Guards against the 2026-09 Cloudflare build failure where the lockfile only
+# resolved macOS ARM64 optional bindings (rolldown/oxlint/lightningcss), so
+# Vite startup died with "Cannot find module
+# '@rolldown/binding-linux-x64-gnu'". A macOS install cannot notice that
+# missing platform bindings; this runner installs and builds on Linux, so any
+# future lockfile regeneration that drops them fails here first.
+name: linux-build-smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Clean install from the committed lockfile
+        run: npm ci
+
+      - name: Load the Linux native bindings
+        run: |
+          node --input-type=module -e "import('rolldown').then((m) => { if (typeof m.build !== 'function') throw new Error('rolldown build() missing'); console.log('rolldown: linux-x64-gnu binding loaded'); })"
+          node --input-type=module -e "import('lightningcss').then((m) => { if (typeof m.transform !== 'function') throw new Error('lightningcss transform() missing'); console.log('lightningcss: linux-x64-gnu binding loaded'); })"
+          ./node_modules/.bin/oxlint --version
+
+      - name: Cloudflare build (model fetch + production build)
+        run: npm run build:cloudflare
