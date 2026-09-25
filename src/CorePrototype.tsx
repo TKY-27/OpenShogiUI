@@ -12,7 +12,9 @@ import {
 import { getMessages, type Locale } from "./localization";
 import { MatchClockPanel } from "./MatchClockPanel";
 import { opposing } from "./match-clock";
-import { downloadText, toUsi } from "./kifu";
+import { downloadText } from "./kifu";
+import { KifuSaveMenu } from "./KifuSaveMenu";
+import type { KifuRecord } from "./kifu";
 import { lastMoveHighlight } from "./play-settings";
 import {
   HandStand,
@@ -51,6 +53,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
     null,
   );
   const confirmRef = useRef<HTMLDialogElement>(null);
+  const startedAtRef = useRef<Date | null>(null);
   const [selection, setSelection] = useState<BoardSelection>(null);
   const [promotion, setPromotion] = useState<MoveSummary[] | null>(null);
   const [pieceSet] = useState(persistedPieceSet);
@@ -150,12 +153,29 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
                 : "Sudden death; no opening book";
 
   useBoardFit(surfaceRef, !setup && position !== null);
+  /** Immutable snapshot of the record inputs at save time; no session calls. */
+  const describeRecord = (): KifuRecord | null => {
+    const position = state.snapshot;
+    if (position === null) return null;
+    const engineName = modelLabel.replace(/[(（].*?[)）]/, "");
+    return {
+      initialSfen: position.initialSfen,
+      moves: [...position.moves],
+      blackName: state.humanSide === "black" ? messages.match.you : engineName,
+      whiteName: state.humanSide === "white" ? messages.match.you : engineName,
+      timeLimit: messages.match.preset[state.preset],
+      startedAt: startedAtRef.current ?? undefined,
+      moveTimesMs: state.moveTimes.map(({ elapsedMs }) => elapsedMs),
+      termination: state.result?.reason,
+    };
+  };
   function beginMatch() {
     setConsentPrompt(false);
     const session = sessionRef.current;
     if (!session || session.state.phase !== "setup" || session.state.busy)
       return;
     collectorRef.current?.begin(session.state);
+    startedAtRef.current = new Date();
     setFlipped(false);
     void session.start(
       humanSide,
@@ -513,17 +533,11 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           <summary>{ja ? "棋譜保存・設定" : "Save and settings"}</summary>
           <div className="inline-actions">
             {position !== null && !setup ? (
-              <button
-                type="button"
-                onClick={() =>
-                  downloadText(
-                    "openshogi-game.usi",
-                    toUsi({ snapshots: [position] }),
-                  )
-                }
-              >
-                {ja ? "棋譜を保存 (USI)" : "Save game (USI)"}
-              </button>
+              <KifuSaveMenu
+                describe={describeRecord}
+                locale={locale}
+                prefix="shogi-match"
+              />
             ) : null}
             {position !== null && (active || state.phase === "stopped") ? (
               <button

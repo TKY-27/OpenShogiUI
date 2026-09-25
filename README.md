@@ -21,7 +21,7 @@ Project by [TKY-27](https://github.com/TKY-27).
 - **Browser play** against OSAI learned models: 3-minute / 10-minute
   sudden-death clocks, standard/high-quality search, either side, mobile and
   desktop layouts, move markers, promotion/drop UI, resignation and rematch,
-  local kifu and diagnostics download. Book-free: no opening books, fixed
+  local kifu download (KIF by default, KI2/CSA/USI selectable) and diagnostics download. Book-free: no opening books, fixed
   first moves or online engines.
 - **Learned analysis**: load a position (or continue from a game) and search
   with any released model; results are search scores of that model, with no

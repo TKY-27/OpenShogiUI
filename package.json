@@ -40,8 +40,10 @@
     "test:ui:local": "node scripts/verify-local-ui.mjs"
   },
   "dependencies": {
+    "encoding-japanese": "^2.4.0",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "tsshogi": "^2.3.4"
   },
   "devDependencies": {
     "@types/node": "24.13.2",

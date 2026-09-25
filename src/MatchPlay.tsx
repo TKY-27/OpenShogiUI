@@ -37,7 +37,7 @@ import {
   type MoveHighlight,
 } from "./play-settings";
 import { resolveShortcut } from "./keyboard";
-import { downloadText, kifuFileName, toKif, toUsi } from "./kifu";
+import { downloadBytes } from "./kifu";
 import {
   HandStand,
   persistedPieceSet,
@@ -493,21 +493,27 @@ export function MatchPlay({ locale }: { locale: Locale }) {
   });
 
   function exportRecord(format: "kif" | "usi") {
-    if (positions.length === 0) return;
-    const record = {
-      snapshots: positions,
-      blackName: humanSide === "black" ? match.you : match.engine,
-      whiteName: humanSide === "white" ? match.you : match.engine,
-      timeControl: match.preset[preset],
-      moveTimesMs,
-      terminationLabel:
-        outcome === null ? undefined : match.reason[outcome.kind],
-      startedAt: matchStartedAt ?? undefined,
-    };
-    downloadText(
-      kifuFileName("shogi-match", format),
-      format === "kif" ? toKif(record) : toUsi(record),
-    );
+    const first = positions[0];
+    const last = positions.at(-1);
+    if (first === undefined || last === undefined) return;
+    void import("./kifu-export")
+      .then(({ buildKifuFile }) =>
+        buildKifuFile(
+          {
+            initialSfen: first.initialSfen,
+            moves: [...last.moves],
+            blackName: humanSide === "black" ? match.you : match.engine,
+            whiteName: humanSide === "white" ? match.you : match.engine,
+            timeLimit: match.preset[preset],
+            moveTimesMs,
+            termination: outcome?.kind,
+            startedAt: matchStartedAt ?? undefined,
+          },
+          format,
+          "shogi-match",
+        ),
+      )
+      .then((file) => downloadBytes(file.fileName, file.bytes));
   }
 
   function resign() {

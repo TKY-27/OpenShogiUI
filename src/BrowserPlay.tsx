@@ -47,7 +47,7 @@ import {
   type GameTimeline,
 } from "./game-timeline";
 import { resolveShortcut } from "./keyboard";
-import { downloadText, kifuFileName, toKif, toUsi } from "./kifu";
+import { downloadBytes } from "./kifu";
 import { getMessages, type Locale } from "./localization";
 import {
   PIECE_ASSET_CATALOG,
@@ -1067,17 +1067,24 @@ export function BrowserPlay({ locale }: { locale: Locale }) {
   }, [analysisView.update, labels.mate]);
 
   function exportRecord(format: "kif" | "usi") {
-    if (history.length === 0) return;
-    const record = {
-      snapshots: history,
-      blackName: labels.sente,
-      whiteName: labels.gote,
-      timeControl: labels[timeSettings.mode],
-    };
-    downloadText(
-      kifuFileName("shogi-analysis", format),
-      format === "kif" ? toKif(record) : toUsi(record),
-    );
+    const first = history[0];
+    const last = history.at(-1);
+    if (first === undefined || last === undefined) return;
+    void import("./kifu-export")
+      .then(({ buildKifuFile }) =>
+        buildKifuFile(
+          {
+            initialSfen: first.initialSfen,
+            moves: [...last.moves],
+            blackName: labels.sente,
+            whiteName: labels.gote,
+            timeLimit: labels[timeSettings.mode],
+          },
+          format,
+          "shogi-analysis",
+        ),
+      )
+      .then((file) => downloadBytes(file.fileName, file.bytes));
   }
 
   function selectHistory(index: number) {

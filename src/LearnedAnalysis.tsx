@@ -23,14 +23,31 @@ import type {
   MoveSummary,
   SearchProfile,
 } from "./browser-engine";
-import { downloadText, toUsi } from "./kifu";
+import { KifuSaveMenu } from "./KifuSaveMenu";
+import { downloadText } from "./kifu";
+import { useBoardFit } from "./useBoardFit";
 import "./core-prototype.css";
+
+/** Keeps the setting folds open on wide screens where the column has room. */
+function useWideLayout(): boolean {
+  const [wide, setWide] = useState(
+    () => window.matchMedia("(min-width: 64rem)").matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 64rem)");
+    const update = () => setWide(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  return wide;
+}
 
 export default function LearnedAnalysis({ locale }: { locale: Locale }) {
   const t = (ja: string, en: string) => (locale === "ja" ? ja : en);
   const fileGeneration = useRef(0);
   const [state, setState] = useState(initialAnalysisState);
   const sessionRef = useRef<LearnedAnalysisSession | null>(null);
+  const boardRef = useRef<HTMLElement>(null);
   const [profile, setProfile] = useState<SearchProfile>("balanced");
   const [budget, setBudget] = useState(1000);
   const [multiPv, setMultiPv] = useState(3);
@@ -41,6 +58,7 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
   const [flipped, setFlipped] = useState(false);
   const [pieceSet] = useState(persistedPieceSet);
   const messages = getMessages(locale);
+  const wide = useWideLayout();
   useEffect(() => {
     const session = new LearnedAnalysisSession(setState);
     sessionRef.current = session;
@@ -69,6 +87,7 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
   const orientation = flipped ? "gote-bottom" : "sente-bottom";
   const locked = state.phase === "loading";
   const ready = position !== null && state.identity !== null && !locked;
+  useBoardFit(boardRef, position !== null);
   const move = (usi: string) => {
     setPromotion(null);
     setSelection(null);
@@ -119,6 +138,17 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
       );
     }
   }
+  /** The current line only: this view keeps one branch, and saves exactly it. */
+  const describeRecord = () =>
+    position === null
+      ? null
+      : {
+          initialSfen: position.initialSfen,
+          moves: [...position.moves],
+          blackName: messages.match.sente,
+          whiteName: messages.match.gote,
+          termination: position.terminal?.kind,
+        };
   const perspective = position?.sideToMove === "white" ? -1 : 1;
   return (
     <main className="learned-analysis" aria-labelledby="analysis-title">
@@ -131,89 +161,87 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
           )}
         </p>
       </header>
+      <p className="analysis-model-line" role="status">
+        {state.phase === "loading"
+          ? `${modelLabel(state.selection, locale)}${t("を読み込み、照合しています…", ": loading and verifying…")}`
+          : state.identity
+            ? `${modelLabel(state.selection, locale)} · ${state.identity.modelId} · ${state.identity.leafSha256.slice(0, 12)}`
+            : t("照合済みモデルはありません", "No verified model loaded")}
+      </p>
+      {state.error || inputError ? (
+        <div className="play-notice">
+          <p role="alert">{inputError ?? state.error}</p>
+          {state.phase === "error" ? (
+            <button type="button" onClick={() => prepare()}>
+              {t("同じモデルで再試行", "Retry this model")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div className="learned-analysis__layout">
         <section
           className="learned-analysis__settings"
           aria-label={t("解析設定", "Analysis settings")}
         >
-          <ModelPicker
-            selection={state.selection}
-            disabled={false}
-            locale={locale}
-            onSelect={(value) => prepare(value)}
-          />
-          <p role="status">
-            {state.phase === "loading"
-              ? `${modelLabel(state.selection, locale)}${t("を読み込み、照合しています…", ": loading and verifying…")}`
-              : state.identity
-                ? `${modelLabel(state.selection, locale)} · ${state.identity.modelId} · ${state.identity.leafSha256.slice(0, 12)}`
-                : t("照合済みモデルはありません", "No verified model loaded")}
-          </p>
-          <label>
-            {t("計算品質", "Search quality")}{" "}
-            <select
-              disabled={locked}
-              value={profile}
-              onChange={(event) =>
-                changeOptions(() =>
-                  setProfile(event.target.value as SearchProfile),
-                )
-              }
-            >
-              <option value="balanced">{t("標準", "Standard")}</option>
-              <option value="quality">{t("高品質", "High quality")}</option>
-            </select>
-          </label>
-          <label>
-            {t("解析予算", "Analysis time")}{" "}
-            <select
-              disabled={locked}
-              value={budget}
-              onChange={(event) =>
-                changeOptions(() => setBudget(Number(event.target.value)))
-              }
-            >
-              <option value={250}>{t("0.25秒", "0.25 seconds")}</option>
-              <option value={1000}>{t("1秒", "1 second")}</option>
-              <option value={3000}>{t("3秒", "3 seconds")}</option>
-            </select>
-          </label>
-          <label>
-            {t("候補手", "Candidate moves")}{" "}
-            <select
-              disabled={locked}
-              value={multiPv}
-              onChange={(event) =>
-                changeOptions(() => setMultiPv(Number(event.target.value)))
-              }
-            >
-              <option value={1}>{t("1手", "1 move")}</option>
-              <option value={3}>{t("最大3手", "Up to 3 moves")}</option>
-            </select>
-          </label>
-          <div className="inline-actions">
-            <button
-              type="button"
-              disabled={
-                !ready ||
-                state.phase === "searching" ||
-                position?.terminal !== null
-              }
-              onClick={() =>
-                void sessionRef.current?.analyze(profile, budget, multiPv)
-              }
-            >
-              {t("解析開始", "Start analysis")}
-            </button>
-            <button
-              type="button"
-              disabled={state.phase !== "searching"}
-              onClick={() => sessionRef.current?.stop()}
-            >
-              {t("解析停止", "Stop analysis")}
-            </button>
-          </div>
-          <details>
+          <details
+            className="analysis-fold"
+            key={`quality-${wide}`}
+            open={wide}
+          >
+            <summary>{t("解析設定", "Search settings")}</summary>
+            <label>
+              {t("計算品質", "Search quality")}{" "}
+              <select
+                disabled={locked}
+                value={profile}
+                onChange={(event) =>
+                  changeOptions(() =>
+                    setProfile(event.target.value as SearchProfile),
+                  )
+                }
+              >
+                <option value="balanced">{t("標準", "Standard")}</option>
+                <option value="quality">{t("高品質", "High quality")}</option>
+              </select>
+            </label>
+            <label>
+              {t("解析予算", "Analysis time")}{" "}
+              <select
+                disabled={locked}
+                value={budget}
+                onChange={(event) =>
+                  changeOptions(() => setBudget(Number(event.target.value)))
+                }
+              >
+                <option value={250}>{t("0.25秒", "0.25 seconds")}</option>
+                <option value={1000}>{t("1秒", "1 second")}</option>
+                <option value={3000}>{t("3秒", "3 seconds")}</option>
+              </select>
+            </label>
+            <label>
+              {t("候補手", "Candidate moves")}{" "}
+              <select
+                disabled={locked}
+                value={multiPv}
+                onChange={(event) =>
+                  changeOptions(() => setMultiPv(Number(event.target.value)))
+                }
+              >
+                <option value={1}>{t("1手", "1 move")}</option>
+                <option value={3}>{t("最大3手", "Up to 3 moves")}</option>
+              </select>
+            </label>
+          </details>
+          <details className="analysis-fold" key={`model-${wide}`} open={wide}>
+            <summary>{t("モデル選択", "Model")}</summary>
+            <ModelPicker
+              selection={state.selection}
+              disabled={false}
+              locale={locale}
+              onSelect={(value) => prepare(value)}
+            />
+          </details>
+          <details className="analysis-fold">
             <summary>
               {t("局面・棋譜を読み込む", "Load a position or game")}
             </summary>
@@ -275,18 +303,11 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
               )}
             </p>
           </details>
-          {state.error || inputError ? (
-            <p role="alert">{inputError ?? state.error}</p>
-          ) : null}
-          {state.phase === "error" ? (
-            <button type="button" onClick={() => prepare()}>
-              {t("同じモデルで再試行", "Retry this model")}
-            </button>
-          ) : null}
         </section>
         <section
           className="learned-analysis__board"
           aria-label={t("解析盤", "Analysis board")}
+          ref={boardRef}
         >
           {position ? (
             <>
@@ -325,7 +346,27 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
                   {hand("black")}
                 </div>
               </div>
-              <div className="inline-actions">
+              <div className="inline-actions analysis-actions">
+                <button
+                  type="button"
+                  disabled={
+                    !ready ||
+                    state.phase === "searching" ||
+                    position?.terminal !== null
+                  }
+                  onClick={() =>
+                    void sessionRef.current?.analyze(profile, budget, multiPv)
+                  }
+                >
+                  {t("解析開始", "Start analysis")}
+                </button>
+                <button
+                  type="button"
+                  disabled={state.phase !== "searching"}
+                  onClick={() => sessionRef.current?.stop()}
+                >
+                  {t("解析停止", "Stop analysis")}
+                </button>
                 <button
                   type="button"
                   onClick={() => setFlipped((value) => !value)}
@@ -344,18 +385,12 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
                 >
                   {t("一手戻す", "Take back")}
                 </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    downloadText(
-                      "openshogi-analysis.usi",
-                      toUsi({ snapshots: [position] }),
-                    )
-                  }
-                >
-                  {t("棋譜を保存 (USI)", "Save game (USI)")}
-                </button>
               </div>
+              <KifuSaveMenu
+                describe={describeRecord}
+                locale={locale}
+                prefix="shogi-analysis"
+              />
             </>
           ) : null}
         </section>
@@ -427,42 +462,47 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
               )}
             </p>
           )}
-          <p>
-            {t(
-              "＋は先手寄り、−は後手寄りの探索値です。勝率ではなく、モデル間の値の大小も棋力順位を表しません。静的評価と独立した詰み証明はこの画面では未対応です。",
-              "Positive scores favor Sente; negative scores favor Gote. These are search scores, not win probabilities or a strength ranking across models. Static evaluation and independent mate proof are not available here.",
-            )}
-          </p>
-          <p>
-            {t(
-              "現runtimeの深さ上限は標準7・高品質9。解析予算は対局時計とは別で、区切りまたは停止時に終了します。ponder・常時解析は行いません。",
-              "This runtime searches up to depth 7 on Standard and 9 on High quality. Analysis uses a separate time budget and stops at a search boundary or when stopped. Pondering and continuous analysis are off.",
-            )}
-          </p>
-          <button
-            type="button"
-            disabled={!state.identity}
-            onClick={() =>
-              downloadText(
-                "openshogi-analysis-diagnostics.json",
-                JSON.stringify(
-                  {
-                    identity: state.identity,
-                    position: position?.sfen,
-                    profile,
-                    budget,
-                    multiPv,
-                    update: state.update,
-                    progress: state.progress,
-                  },
-                  null,
-                  2,
-                ),
-              )
-            }
-          >
-            {t("診断ログを保存", "Save diagnostics")}
-          </button>
+          <details className="analysis-fold">
+            <summary>
+              {t("評価の見方と診断", "Score notes and diagnostics")}
+            </summary>
+            <p>
+              {t(
+                "＋は先手寄り、−は後手寄りの探索値です。勝率ではなく、モデル間の値の大小も棋力順位を表しません。静的評価と独立した詰み証明はこの画面では未対応です。",
+                "Positive scores favor Sente; negative scores favor Gote. These are search scores, not win probabilities or a strength ranking across models. Static evaluation and independent mate proof are not available here.",
+              )}
+            </p>
+            <p>
+              {t(
+                "現runtimeの深さ上限は標準7・高品質9。解析予算は対局時計とは別で、区切りまたは停止時に終了します。ponder・常時解析は行いません。",
+                "This runtime searches up to depth 7 on Standard and 9 on High quality. Analysis uses a separate time budget and stops at a search boundary or when stopped. Pondering and continuous analysis are off.",
+              )}
+            </p>
+            <button
+              type="button"
+              disabled={!state.identity}
+              onClick={() =>
+                downloadText(
+                  "openshogi-analysis-diagnostics.json",
+                  JSON.stringify(
+                    {
+                      identity: state.identity,
+                      position: position?.sfen,
+                      profile,
+                      budget,
+                      multiPv,
+                      update: state.update,
+                      progress: state.progress,
+                    },
+                    null,
+                    2,
+                  ),
+                )
+              }
+            >
+              {t("診断ログを保存", "Save diagnostics")}
+            </button>
+          </details>
         </section>
       </div>
     </main>

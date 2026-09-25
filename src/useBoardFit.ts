@@ -50,15 +50,22 @@ export function useBoardFit(
     const observer = new ResizeObserver(schedule);
     observer.observe(surface);
     for (const node of document.querySelectorAll(
-      ".app-bar,.match-clock,.hand-stand,.match-controls",
+      ".app-bar,.match-clock,.hand-stand,.match-controls,.learned-analysis__settings",
     ))
       observer.observe(node);
+    // The analysis pane scrolls inside its own column; re-fit as it moves so a
+    // stale measurement never leaves the board clipped.
+    const scroller = surface.closest<HTMLElement>(
+      ".learned-analysis,.app-main",
+    );
+    scroller?.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
     window.visualViewport?.addEventListener("resize", schedule);
     measure();
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
+      scroller?.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
       window.visualViewport?.removeEventListener("resize", schedule);
     };

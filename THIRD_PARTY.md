@@ -5,6 +5,8 @@ Exact resolved versions and transitive metadata are recorded in `package-lock.js
 | Component | Purpose | Upstream license family |
 | --- | --- | --- |
 | React and React DOM | UI runtime | MIT |
+| tsshogi | Shogi record serialization (KIF/KI2/CSA) for local saves | MIT |
+| encoding-japanese | Shift_JIS byte encoding for KIF/KI2 saves | MIT |
 | Vite and its React plugin | production/dev build | MIT |
 | TypeScript | static type checking | Apache-2.0 |
 | Vitest | unit and component tests | MIT |

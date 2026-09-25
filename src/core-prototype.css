@@ -217,10 +217,27 @@
 .learned-analysis h2 {
   font-size: 1rem;
 }
-.learned-analysis p {
+.learned-analysis p,
+.learned-analysis code {
   font-size: 0.8125rem;
   overflow-wrap: anywhere;
+}
+.learned-analysis p {
   line-height: 1.7;
+}
+.analysis-model-line {
+  margin: 0;
+  font-weight: 600;
+}
+.analysis-model-line code {
+  font-weight: 400;
+}
+.learned-analysis .play-notice {
+  width: min(100%, 36rem);
+  margin-block: 0.5rem;
+}
+.learned-analysis .play-notice button {
+  min-height: 2.75rem;
 }
 .learned-analysis__layout {
   display: grid;
@@ -232,6 +249,17 @@
   align-content: start;
   gap: 0.75rem;
   min-width: 0;
+}
+.analysis-fold {
+  min-width: 0;
+}
+.analysis-fold summary {
+  padding-block: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+.analysis-fold > :not(summary) {
+  margin-block: 0.5rem;
 }
 .learned-analysis__settings label {
   display: grid;
@@ -252,13 +280,14 @@
 }
 .learned-analysis__board {
   min-width: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 .learned-analysis .board-fit {
   container-type: inline-size;
 }
 .learned-analysis .board-stage {
   width: 100%;
-  --board-size: min(100cqw, 32rem);
+  --board-size: min(100cqw, var(--fit-board-size, 32rem));
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas: "gote" "board" "sente";
 }
@@ -271,6 +300,35 @@
   grid-column: 1;
   grid-row: 2;
 }
+.analysis-actions {
+  flex-wrap: wrap;
+  margin-block: 0.5rem;
+}
+.analysis-actions button {
+  flex: 1 1 9rem;
+}
+.kifu-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-block: 0.25rem;
+}
+.kifu-save__format {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+}
+.kifu-save__format select {
+  width: auto;
+  min-height: 2.75rem;
+}
+.kifu-save__status {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+}
 .learned-analysis__result ol {
   padding-left: 1.25rem;
 }
@@ -278,11 +336,35 @@
   flex-wrap: wrap;
   margin-block: 0.5rem;
 }
+/*
+ * On one-column screens the board and the evaluation come before the collapsed
+ * settings folds. DOM order keeps the settings first for keyboard and screen
+ * reader users; the explicit grid columns below pin every section on wide
+ * screens, where these order values no longer matter.
+ */
+.learned-analysis__layout > .learned-analysis__board {
+  order: -2;
+}
+.learned-analysis__layout > .learned-analysis__result {
+  order: -1;
+}
 @media (min-width: 64rem) {
   .learned-analysis__layout {
     grid-template-columns: minmax(14rem, 1fr) minmax(20rem, 2fr) minmax(
         14rem,
         1fr
       );
+  }
+  .learned-analysis__layout > .learned-analysis__board {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .learned-analysis__layout > .learned-analysis__settings {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .learned-analysis__layout > .learned-analysis__result {
+    grid-column: 3;
+    grid-row: 1;
   }
 }

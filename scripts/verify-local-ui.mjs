@@ -78,7 +78,7 @@ try {
     await page.locator('.app-nav [aria-current="page"]').getAttribute("href"),
     "#/analysis",
   );
-  await page.locator(".learned-analysis__settings details summary").click();
+  await page.getByText("局面・棋譜を読み込む", { exact: true }).click();
   await page.locator('input[type="file"]').setInputFiles({
     name: "delayed-fixture.usi",
     mimeType: "text/plain",
@@ -91,11 +91,48 @@ try {
     .click();
   await ready();
   await page.evaluate(() => window.releaseFixture());
-  const record = page.waitForEvent("download");
+  // Every save format downloads real bytes; a repeat save refetches no chunk.
+  const kifuChunks = async () =>
+    page.evaluate(
+      () =>
+        performance
+          .getEntriesByType("resource")
+          .map((entry) => entry.name)
+          .filter((name) =>
+            /kifu-export|assets\/esm-|encoding|tsshogi/.test(name),
+          ).length,
+    );
+  const usiDownload = page.waitForEvent("download");
   await page
-    .getByRole("button", { name: "棋譜を保存 (USI)", exact: true })
-    .click();
-  assert.match(await readFile(await (await record).path(), "utf8"), /7g7f/);
+    .getByRole("combobox", { name: "棋譜形式" })
+    .selectOption({ label: "USI" });
+  await page.getByRole("button", { name: "棋譜を保存", exact: true }).click();
+  assert.match(
+    await readFile(await (await usiDownload).path(), "utf8"),
+    /7g7f/,
+  );
+  const kifDownload = page.waitForEvent("download");
+  await page
+    .getByRole("combobox", { name: "棋譜形式" })
+    .selectOption({ label: "KIF" });
+  await page.getByRole("button", { name: "棋譜を保存", exact: true }).click();
+  const kifFile = await kifDownload;
+  assert.match(kifFile.suggestedFilename(), /\.kif$/);
+  const kifText = new TextDecoder("shift_jis").decode(
+    await readFile(await kifFile.path()),
+  );
+  assert.match(kifText, /７六歩\(77\)/);
+  assert.match(kifText, /手合割：平手/);
+  // The format chunks load once; saving again must not refetch any of them.
+  const chunksAfterKifSave = await kifuChunks();
+  const ki2Download = page.waitForEvent("download");
+  await page
+    .getByRole("combobox", { name: "棋譜形式" })
+    .selectOption({ label: "KI2" });
+  await page.getByRole("button", { name: "棋譜を保存", exact: true }).click();
+  const ki2File = await ki2Download;
+  assert.match(ki2File.suggestedFilename(), /\.ki2$/);
+  assert.equal(await kifuChunks(), chunksAfterKifSave);
   // Redundant model presses must not rebuild the Worker or refetch the manifest.
   const workers = page.workers();
   await page
@@ -110,6 +147,35 @@ try {
         ?.textContent !== "解析中…",
   );
   assert.equal(await page.locator('[role="alert"]').count(), 0);
+  // The analysis pane must stay usable at phone sizes: no horizontal overflow,
+  // a square board, and screenshots for the layout record.
+  for (const [width, height] of [
+    [320, 568],
+    [390, 844],
+    [844, 390],
+    [1280, 800],
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      `horizontal overflow at ${width}x${height}`,
+    );
+    const board = await page.getByRole("grid").boundingBox();
+    assert(
+      board && board.width >= 210 && Math.abs(board.width - board.height) < 2,
+      `board size at ${width}x${height}`,
+    );
+    await page.screenshot({ path: resolve(output, `analysis-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.getByRole("button", { name: "English", exact: true }).click();
   await page
     .getByRole("button", { name: "Start analysis", exact: true })
@@ -138,6 +204,37 @@ try {
     await page.getByRole("region", { name: "棋譜提供の設定" }).count(),
     0,
   );
+  // Play one move, then save the unfinished game mid-play in two formats.
+  await page.getByRole("gridcell", { name: /^7七、/ }).click();
+  await page.getByRole("gridcell", { name: /^7六(?:、|$)/ }).click();
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll(".match-move-number strong")].some(
+      (node) => Number.parseInt(node.textContent ?? "0", 10) >= 2,
+    ),
+  );
+  await page.getByText("棋譜保存・設定", { exact: true }).click();
+  const midGameKif = page.waitForEvent("download");
+  await page
+    .getByRole("combobox", { name: "棋譜形式" })
+    .selectOption({ label: "KIF" });
+  await page.getByRole("button", { name: "棋譜を保存", exact: true }).click();
+  const midGameText = new TextDecoder("shift_jis").decode(
+    await readFile(await (await midGameKif).path()),
+  );
+  assert.match(midGameText, /７六歩\(77\)/);
+  assert.match(midGameText, /\( 0:0\d\/00:00:0\d\)/);
+  assert.doesNotMatch(midGameText, /投了/);
+  const midGameCsa = page.waitForEvent("download");
+  await page
+    .getByRole("combobox", { name: "棋譜形式" })
+    .selectOption({ label: "CSA" });
+  await page.getByRole("button", { name: "棋譜を保存", exact: true }).click();
+  const midGameCsaText = await readFile(
+    await (await midGameCsa).path(),
+    "utf8",
+  );
+  assert.match(midGameCsaText, /\+7776FU/);
+  assert.doesNotMatch(midGameCsaText, /%TORYO/);
   await page.getByRole("button", { name: "停止", exact: true }).click();
   await page.getByRole("button", { name: "再開", exact: true }).waitFor();
   for (const [width, height] of [
