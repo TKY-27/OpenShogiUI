@@ -54,7 +54,10 @@ for (const local of files) {
   if (
     forbiddenRoots.has(local.split("/")[0]) ||
     /(^|\/)(?:\.env(?:\.|$)|\.dev\.vars|\.qa-)/.test(local) ||
-    forbiddenSuffixes.has(extname(local).toLowerCase()) ||
+    // The repo's own CI smoke workflow is the one reviewed .yml exception;
+    // every other YAML (training/engine configs) stays out of the UI repo.
+    (forbiddenSuffixes.has(extname(local).toLowerCase()) &&
+      !/^\.github\/workflows\/[a-z0-9-]+\.yml$/.test(local)) ||
     /\.(?:sqlite3?|db|osaval03|jsonl|pem|key)$/.test(local)
   )
     failures.push(`non-UI source or local artifact: ${local}`);
