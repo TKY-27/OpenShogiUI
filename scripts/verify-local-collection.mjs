@@ -124,11 +124,11 @@ try {
   const plans = await Promise.all(
     [
       "EXPLAIN QUERY PLAN SELECT payload_hash FROM unverified_games WHERE game_id = ?",
-      "EXPLAIN QUERY PLAN SELECT game_id FROM unverified_games WHERE expires_at <= ? ORDER BY expires_at LIMIT 64",
+      "EXPLAIN QUERY PLAN SELECT game_id FROM unverified_games WHERE expires_at <= ? ORDER BY expires_at LIMIT ?",
     ].map((sql, i) =>
       db
         .prepare(sql)
-        .bind(i ? row.expires_at : payload.gameId)
+        .bind(...(i ? [row.expires_at, 500] : [payload.gameId]))
         .all(),
     ),
   );

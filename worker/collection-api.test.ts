@@ -118,6 +118,81 @@ describe("local collection API trust boundary", () => {
       db.close();
     }
   });
+  it("drains an expired backlog in bounded batches, keeps unexpired rows, and continues on the next run", async () => {
+    const { db, env } = fixture();
+    try {
+      const insert = db.prepare(
+        "INSERT INTO unverified_games (game_id, payload_hash, record_hash, payload, received_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)",
+      );
+      for (let i = 0; i < 130; i++)
+        insert.run(
+          `expired-${i}`,
+          `hash-${i}`,
+          `record-${i}`,
+          "{}",
+          1000,
+          2000,
+        );
+      for (let i = 0; i < 2; i++)
+        insert.run(
+          `fresh-${i}`,
+          `fhash-${i}`,
+          `frecord-${i}`,
+          "{}",
+          1000,
+          9999,
+        );
+      const expiredCount = () =>
+        Number(
+          db
+            .prepare(
+              "SELECT COUNT(*) AS n FROM unverified_games WHERE expires_at <= ?",
+            )
+            .get(2500)?.n,
+        );
+      expect(expiredCount()).toBe(130);
+      // Budget: two batches of 50 → a backlog beyond one batch drains
+      // across runs instead of one unbounded DELETE.
+      await cleanup(env, 2500, { batchRows: 50, maxBatches: 2 });
+      expect(expiredCount()).toBe(30);
+      await cleanup(env, 2500, { batchRows: 50, maxBatches: 2 });
+      expect(expiredCount()).toBe(0);
+      expect(
+        db.prepare("SELECT COUNT(*) AS n FROM unverified_games").get()?.n,
+      ).toBe(2);
+      expect(
+        db
+          .prepare(
+            "SELECT COUNT(*) AS n FROM unverified_games WHERE game_id LIKE 'fresh-%'",
+          )
+          .get()?.n,
+      ).toBe(2);
+      await cleanup(env, 9999, { batchRows: 50, maxBatches: 2 });
+      expect(
+        db.prepare("SELECT COUNT(*) AS n FROM unverified_games").get()?.n,
+      ).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+  it("keeps cleaning expired rows while collection acceptance is disabled", async () => {
+    const { db, env } = fixture();
+    try {
+      db.prepare(
+        "INSERT INTO unverified_games (game_id, payload_hash, record_hash, payload, received_at, expires_at) VALUES ('old', 'h', 'r', '{}', 1, 2)",
+      ).run();
+      const disabledEnv = { ...env, COLLECTION_ENABLED: "false" as const };
+      expect(
+        (await createHandler()(request(payload()), disabledEnv)).status,
+      ).toBe(503);
+      await cleanup(disabledEnv, 2);
+      expect(
+        db.prepare("SELECT COUNT(*) AS n FROM unverified_games").get()?.n,
+      ).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
   it.each([
     "name",
     "email",

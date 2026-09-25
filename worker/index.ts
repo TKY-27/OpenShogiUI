@@ -155,16 +155,49 @@ export function createHandler(now = () => Date.now()) {
     }
   };
 }
+// Retention cleanup runs even while COLLECTION_ENABLED=false: accepted rows
+// must still expire on schedule whenever the D1 binding exists. Bounded
+// batches with a per-run budget keep each daily cron invocation small; a
+// backlog beyond the budget drains on the following scheduled runs instead of
+// growing an unbounded single DELETE. "30 days" therefore means deleted on a
+// later cron run at the latest, not a guaranteed instant purge at expiry.
+const CLEANUP_BATCH_ROWS = 500;
+const CLEANUP_MAX_BATCHES = 20;
+/** D1 returns { meta: { changes } }; node:sqlite returns { changes }. Unknown shapes assume a full batch so draining continues. */
+function deletedRows(result: unknown, fallback: number): number {
+  const shape = result as {
+    changes?: unknown;
+    meta?: { changes?: unknown };
+  } | null;
+  const changes = shape?.meta?.changes ?? shape?.changes;
+  return typeof changes === "bigint"
+    ? Number(changes)
+    : typeof changes === "number"
+      ? changes
+      : fallback;
+}
 export async function cleanup(
   env: CollectionEnv,
   nowSeconds: number,
+  budget: { batchRows?: number; maxBatches?: number } = {},
 ): Promise<void> {
-  if (env.DB)
-    await env.DB.prepare(
-      "DELETE FROM unverified_games WHERE game_id IN (SELECT game_id FROM unverified_games WHERE expires_at <= ? ORDER BY expires_at LIMIT 64)",
-    )
-      .bind(nowSeconds)
-      .run();
+  if (!env.DB) return;
+  const batchRows = Math.min(
+    Math.max(budget.batchRows ?? CLEANUP_BATCH_ROWS, 1),
+    1000,
+  );
+  const maxBatches = Math.max(budget.maxBatches ?? CLEANUP_MAX_BATCHES, 1);
+  for (let batch = 0; batch < maxBatches; batch++) {
+    const deleted = deletedRows(
+      await env.DB.prepare(
+        "DELETE FROM unverified_games WHERE game_id IN (SELECT game_id FROM unverified_games WHERE expires_at <= ? ORDER BY expires_at LIMIT ?)",
+      )
+        .bind(nowSeconds, batchRows)
+        .run(),
+      batchRows,
+    );
+    if (deleted < batchRows) break;
+  }
 }
 export default {
   fetch: createHandler(),
