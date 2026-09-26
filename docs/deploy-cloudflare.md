@@ -89,6 +89,21 @@ Build variables and secrets（種類はどちらもPlaintextで構いません�
 | `PUBLIC_SITE_URL` | `https://openshogiai.<サブドメイン>.workers.dev` | 手順1のサブドメイン |
 | `OSAI_COLLECTION_MODE` | （省略可）`auto`（既定）/ `on` / `off` | 下の「収集の一時停止」参照 |
 
+補足（ビルド内蔵の挙動。変数の追加は不要）:
+
+- `PUBLIC_SITE_URL` が設定された公開ビルドのみ canonical/OGP のURLが入って
+  インデックス可になります。未設定やローカルQAビルドではHTMLに `noindex` が
+  入り、ビルド後チェックがそれを検証します（`OSUI_ISOLATED_MODELS` はモデル
+  資産の取得元を隔離するだけの変数で、検索可否には関係しません）。
+- Cloudflare Web Analyticsのビーコン（公式スニペット、Cookieなし）は公開
+  ビルドのHTMLへ1回だけ自動注入されます（`OSUI_WEB_ANALYTICS`）。ローカルや
+  通常の `npm run build` では注入されません。CSPは `_headers` 側に許可済み。
+- Search Console確認ファイル `google1d3d66820bd4068b.html` はpublic資産の
+  許可リストに入っており、deploy後に
+  `https://openshogiai.<サブドメイン>.workers.dev/google1d3d66820bd4068b.html`
+  が元ファイルと同じ内容で直接200を返します（リダイレクトやindex fallbackは
+  ありません）。内容は書き換えないでください。
+
 4. **Save and Deploy** を押す前に、上の値が揃っていることを確認します。
    `OSAI_D1_DATABASE_ID` が無いと（`OSAI_COLLECTION_MODE` が `off` 以外のとき）
    ビルドは完了しますが収集OFFの設定が生成され、deployコマンドが
@@ -184,6 +199,11 @@ Build variables and secrets（種類はどちらもPlaintextで構いません�
       して1行確認（試験データは game_id で区別して後で削除）。
 - [ ] 対象外（他モデル・解析・途中離脱・時間切れ）ではPOSTされない。
 - [ ] 同意取消し後は未送信分が破棄され送信されない。
+- [ ] Search Console（URLプレフィックス）で公開URLを登録し、「確認」を押す。
+      確認ファイルURLが直接200で、所有権確認が成功すること。
+      必要ならURL検査から「インデックス登録をリクエスト」する。
+- [ ] Cloudflareダッシュボード → Analytics & Logs → Web Analytics で
+      当該hostnameのデータ受信を確認する。
 - [ ] 公開前: X @ANAg2bGOD のDM受信設定で、フォロワー以外からのDMを受け取れる
       ことを確認する（削除相談の受け皿）。受信できない場合はX側で設定する。
 - [ ] 収集OFF時（`OSAI_COLLECTION_MODE=off` で再deploy後）でも対局・解析・保存が

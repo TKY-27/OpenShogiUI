@@ -10,7 +10,7 @@ applyDocumentLanguage(DEFAULT_LOCALE);
 const container = document.getElementById("root");
 
 if (container === null) {
-  throw new Error("OpenShogiUI root element is missing");
+  throw new Error("OpenShogiAI root element is missing");
 }
 
 createRoot(container).render(

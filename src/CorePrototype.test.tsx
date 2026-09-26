@@ -70,10 +70,11 @@ describe("learned-model match setup", () => {
     view.state = loadedState();
   });
 
-  it("lists C3 and explains C2's canonical defense alias", () => {
+  it("lists the newest model and explains C2's canonical defense alias", () => {
     const html = render();
-    expect(modelFieldset(html)).toContain("R4-C4");
-    expect(modelFieldset(html)).toContain("R4-C3");
+    expect(modelFieldset(html)).toContain("OSAI R4");
+    expect(modelFieldset(html)).toContain("C3（開発世代）");
+    expect(modelFieldset(html)).toContain("防御強化 best1536");
     expect(modelFieldset(html)).not.toContain("R4-C2");
     expect(html).toContain("C2は同一重み・同一探索の防御候補へ統合");
   });
@@ -91,9 +92,9 @@ describe("learned-model match setup", () => {
     expect(html).toContain(manifest.runId);
     expect(html).toContain(sha256);
     expect(html).toContain("読み込んだ評価器 SHA-256");
-    expect(html).toContain("防御学習候補");
-    expect(html).toContain("r3候補");
-    expect(html).toContain("旧基準 (W256)");
+    expect(html).toContain("防御強化 best1536");
+    expect(html).toContain("r3（開発世代）");
+    expect(html).toContain("初期 W256");
     expect(html).toContain("持ち時間");
     expect(html).toContain("計算品質");
     expect(html).toContain("思考制御 (開発用)");

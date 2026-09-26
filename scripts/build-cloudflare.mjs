@@ -4,7 +4,12 @@
 //   1. Fetch the fixed release-model artifacts (GitHub release or local
 //      mirror via OPENSHOGI_ASSET_MIRROR) with sha256 verification.
 //   2. Run the normal production build with the isolated model mirror and
-//      the opt-in collection profile enabled.
+//      the opt-in collection profile enabled. The isolated mirror
+//      (OSUI_ISOLATED_MODELS) is only about asset sourcing; search
+//      visibility is decided by PUBLIC_SITE_URL/OSUI_SITE_ORIGIN alone, so
+//      the public build is indexable while loopback QA stays noindex. The
+//      operator-approved Cloudflare Web Analytics beacon (OSUI_WEB_ANALYTICS)
+//      is injected in this build only.
 //   3. Generate wrangler.deploy.jsonc (account-specific, gitignored) from
 //      build variables:
 //        OSAI_D1_DATABASE_ID  D1 database ID of "openshogiai-games"
@@ -72,6 +77,9 @@ const buildEnv = {
   ...process.env,
   NODE_ENV: "production",
   OSUI_ISOLATED_MODELS: "1",
+  // The operator-approved Cloudflare Web Analytics beacon ships with the
+  // public build only; plain/local/CI builds never inject it.
+  OSUI_WEB_ANALYTICS: "1",
   ...(collectionEnabled ? { OSUI_COLLECTION_PROFILE: "on" } : {}),
   ...(publicSiteUrl ? { OSUI_SITE_ORIGIN: publicSiteUrl } : {}),
 };
@@ -80,6 +88,41 @@ execFileSync("npm", ["run", "build"], {
   cwd: root,
   env: buildEnv,
 });
+
+// Verify what the deploy would actually serve: the first-HTTP HTML must be
+// search-indexable exactly when a public origin is set, carry the analytics
+// beacon exactly once, and ship the Search Console verification file byte for
+// byte. JavaScript never removes robots directives after the fact.
+{
+  const html = readFileSync(resolve(root, "dist/index.html"), "utf8");
+  if (publicSiteUrl) {
+    const canonical = new RegExp(
+      `<link rel="canonical" href="${publicSiteUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/">`,
+    );
+    if (!canonical.test(html))
+      throw new Error("dist/index.html is missing the public canonical URL");
+    if (html.includes("noindex"))
+      throw new Error(
+        "dist/index.html claims noindex despite a public origin (check OSUI_LOCAL_SITE/OSUI_SITE_ORIGIN)",
+      );
+  } else if (!html.includes("noindex")) {
+    throw new Error("dist/index.html without a public origin must be noindex");
+  }
+  const beacons = html.split("cloudflareinsights.com/beacon.min.js").length - 1;
+  if (beacons !== 1)
+    throw new Error(
+      `dist/index.html must contain the analytics beacon exactly once (found ${beacons})`,
+    );
+  const verification = readFileSync(
+    resolve(root, "dist/google1d3d66820bd4068b.html"),
+  );
+  if (
+    !verification.equals(
+      readFileSync(resolve(root, "public/google1d3d66820bd4068b.html")),
+    )
+  )
+    throw new Error("dist verification file differs from public source");
+}
 
 // The Worker refuses to accept submissions unless the deployed notice version
 // matches the client consent version; read it from the schema source of truth.
@@ -123,7 +166,11 @@ const deployConfig = {
   assets: {
     directory: "./dist",
     run_worker_first: ["/api/*"],
-    not_found_handling: "none",
+    // Serve stored .html paths (the Search Console verification file) with a
+    // direct 200 instead of the default extension-less redirect, while "/"
+    // and unknown paths fall back to the SPA document.
+    html_handling: "none",
+    not_found_handling: "single-page-application",
   },
   observability: { enabled: false },
   vars: {

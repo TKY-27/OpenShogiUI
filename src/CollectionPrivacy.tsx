@@ -48,13 +48,20 @@ export default function CollectionPrivacy({
       <h2>{t("保存と通信", "Storage and network processing")}</h2>
       <p>
         {t(
-          "アプリの棋譜DBやアプリログへIP・User-Agent・Referrer・request\n        header/bodyを記録しません。追跡用IDや解析タグは導入しません。配信・通信のためCloudflareがIP等を処理する場合があります。これはアプリが棋譜として保存する内容とは別です。",
-          "The app does not log IP addresses, User-Agent, Referrer or request headers and bodies in game storage or app logs. We do not add tracking IDs or analytics tags. Cloudflare may process IP addresses and other information to deliver the site. This is separate from the game data the app stores.",
+          "アプリの棋譜DBやアプリログへIP・User-Agent・Referrer・request\n        header/bodyを記録しません。アクセス数と画面表示速度の集計には、Cookieを使わないCloudflare Web Analytics（提供者はCloudflare）を使用します。棋譜・盤面・入力内容はこの集計に含まれず、サイトのサーバーにも保存されません。これはアプリが棋譜として保存する内容とは別です。",
+          "The app does not log IP addresses, User-Agent, Referrer or request headers and bodies in game storage or app logs. For visit counts and page performance we use Cloudflare Web Analytics (provided by Cloudflare), which does not use cookies. Game records, boards and input text are not part of that aggregate and are not stored by the site. This is separate from the game data the app stores.",
         )}
         <a href="https://www.cloudflare.com/privacypolicy/" rel="noreferrer">
           {t("Cloudflareのプライバシーポリシー", "Cloudflare privacy policy")}
         </a>
-        {t("をご覧ください。", "")}
+        {t("と", " and ")}
+        <a
+          href="https://developers.cloudflare.com/web-analytics/"
+          rel="noreferrer"
+        >
+          {t("Web Analyticsの説明", "the Web Analytics description")}
+        </a>
+        {t("をご覧ください。", " are available.")}
       </p>
       <p>
         {t(

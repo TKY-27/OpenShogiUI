@@ -400,137 +400,142 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           </button>
         </div>
       )}
-      <section
-        className="play-surface"
-        ref={surfaceRef}
-        aria-label={ja ? "対局盤と操作" : "Game board and controls"}
-      >
-        {position === null || setup ? null : (
-          <div className="match-board">
-            {clock(topSide)}
-            <div className="board-fit">
-              <div className={`board-stage board-stage--${orientation}`}>
-                <HandStand
-                  disabled={!canMove || position.sideToMove !== "white"}
-                  entries={position.hands.white}
-                  legalDrops={legalDrops}
-                  messages={messages}
-                  onSelect={(piece) =>
-                    setSelection(toggleHandSelection(selection, piece))
-                  }
-                  orientation={orientation}
-                  pieceSet={pieceSet}
-                  selection={selection}
-                  side="white"
-                />
-                <ShogiBoard
-                  snapshot={position}
-                  selection={selection}
-                  disabled={!canMove}
-                  messages={messages}
-                  orientation={orientation}
-                  pieceSet={pieceSet}
-                  lastMove={
-                    state.previous === null
-                      ? null
-                      : lastMoveHighlight([state.previous, position], 1)
-                  }
-                  promotion={
-                    promotion === null || !canMove
-                      ? null
-                      : {
-                          moves: promotion,
-                          onChoose: move,
-                          onCancel: () => setPromotion(null),
-                        }
-                  }
-                  onSquare={(index) => {
-                    if (!canMove) return;
-                    const result = resolveBoardClick(
-                      position,
-                      selection,
-                      index,
-                    );
-                    if (result.kind === "move") choose(result.candidates);
-                    else setSelection(result.selection);
-                  }}
-                />
-                <HandStand
-                  disabled={!canMove || position.sideToMove !== "black"}
-                  entries={position.hands.black}
-                  legalDrops={legalDrops}
-                  messages={messages}
-                  onSelect={(piece) =>
-                    setSelection(toggleHandSelection(selection, piece))
-                  }
-                  orientation={orientation}
-                  pieceSet={pieceSet}
-                  selection={selection}
-                  side="black"
-                />
+      {setup ? null : (
+        <section
+          className="play-surface"
+          ref={surfaceRef}
+          aria-label={ja ? "対局盤と操作" : "Game board and controls"}
+        >
+          {position === null ? null : (
+            <div className="match-board">
+              {clock(topSide)}
+              <div className="board-fit">
+                <div className={`board-stage board-stage--${orientation}`}>
+                  <HandStand
+                    disabled={!canMove || position.sideToMove !== "white"}
+                    entries={position.hands.white}
+                    legalDrops={legalDrops}
+                    messages={messages}
+                    onSelect={(piece) =>
+                      setSelection(toggleHandSelection(selection, piece))
+                    }
+                    orientation={orientation}
+                    pieceSet={pieceSet}
+                    selection={selection}
+                    side="white"
+                  />
+                  <ShogiBoard
+                    snapshot={position}
+                    selection={selection}
+                    disabled={!canMove}
+                    messages={messages}
+                    orientation={orientation}
+                    pieceSet={pieceSet}
+                    lastMove={
+                      state.previous === null
+                        ? null
+                        : lastMoveHighlight([state.previous, position], 1)
+                    }
+                    promotion={
+                      promotion === null || !canMove
+                        ? null
+                        : {
+                            moves: promotion,
+                            onChoose: move,
+                            onCancel: () => setPromotion(null),
+                          }
+                    }
+                    onSquare={(index) => {
+                      if (!canMove) return;
+                      const result = resolveBoardClick(
+                        position,
+                        selection,
+                        index,
+                      );
+                      if (result.kind === "move") choose(result.candidates);
+                      else setSelection(result.selection);
+                    }}
+                  />
+                  <HandStand
+                    disabled={!canMove || position.sideToMove !== "black"}
+                    entries={position.hands.black}
+                    legalDrops={legalDrops}
+                    messages={messages}
+                    onSelect={(piece) =>
+                      setSelection(toggleHandSelection(selection, piece))
+                    }
+                    orientation={orientation}
+                    pieceSet={pieceSet}
+                    selection={selection}
+                    side="black"
+                  />
+                </div>
               </div>
+              {clock(opposing(topSide))}
             </div>
-            {clock(opposing(topSide))}
-          </div>
-        )}
-        <div className="match-controls">
-          <p role="status" aria-live="polite" className="match-status">
-            {status}
-          </p>
-          <p className="match-move-number">
-            {import.meta.env.DEV ? (
-              <span>
-                {ja ? "思考制御" : "Control"}{" "}
-                {(setup ? enabled : state.enabled) ? "ON" : "OFF"}
-              </span>
-            ) : null}
-            <strong>
-              {position?.moveNumber ?? 1}
-              {ja ? "手目" : " ply"}
-            </strong>
-          </p>
-          <div className="inline-actions">
-            {active ? (
-              <button
-                type="button"
-                disabled={state.phase === "stopping"}
-                onClick={() => sessionRef.current?.stop()}
-              >
-                {ja ? "停止" : "Stop"}
-              </button>
-            ) : null}
-            {state.phase === "stopped" ? (
-              <button
-                type="button"
-                onClick={() => void sessionRef.current?.resume()}
-              >
-                {ja ? "再開" : "Resume"}
-              </button>
-            ) : null}
-            {state.phase === "playing" || state.phase === "stopped" ? (
-              <button type="button" onClick={() => setConfirmAction("resign")}>
-                {messages.match.resign}
-              </button>
-            ) : null}
-            {state.phase === "finished" ? (
-              <button
-                type="button"
-                onClick={() => void sessionRef.current?.configure()}
-              >
-                {messages.match.rematch}
-              </button>
-            ) : null}
-            {!setup ? (
+          )}
+          {/* Before the match starts the surface renders only the board: the
+            status line, move counter and match actions belong to a game. */}
+          <div className="match-controls">
+            <p role="status" aria-live="polite" className="match-status">
+              {status}
+            </p>
+            <p className="match-move-number">
+              {import.meta.env.DEV ? (
+                <span>
+                  {ja ? "思考制御" : "Control"}{" "}
+                  {(setup ? enabled : state.enabled) ? "ON" : "OFF"}
+                </span>
+              ) : null}
+              <strong>
+                {position?.moveNumber ?? 1}
+                {ja ? "手目" : " ply"}
+              </strong>
+            </p>
+            <div className="inline-actions">
+              {active ? (
+                <button
+                  type="button"
+                  disabled={state.phase === "stopping"}
+                  onClick={() => sessionRef.current?.stop()}
+                >
+                  {ja ? "停止" : "Stop"}
+                </button>
+              ) : null}
+              {state.phase === "stopped" ? (
+                <button
+                  type="button"
+                  onClick={() => void sessionRef.current?.resume()}
+                >
+                  {ja ? "再開" : "Resume"}
+                </button>
+              ) : null}
+              {state.phase === "playing" || state.phase === "stopped" ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmAction("resign")}
+                >
+                  {messages.match.resign}
+                </button>
+              ) : null}
+              {state.phase === "finished" ? (
+                <button
+                  type="button"
+                  onClick={() => void sessionRef.current?.configure()}
+                >
+                  {messages.match.rematch}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => setFlipped((value) => !value)}
               >
                 {ja ? "盤面反転" : "Flip board"}
               </button>
-            ) : null}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
       {!setup ? (
         <details className="match-more">
           <summary>{ja ? "棋譜保存・設定" : "Save and settings"}</summary>

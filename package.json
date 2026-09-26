@@ -28,7 +28,7 @@
     "provenance:check": "node scripts/check-provenance.mjs",
     "test": "vitest run",
     "typecheck": "tsc -b",
-    "dev:isolated": "OSUI_ISOLATED_MODELS=1 vite --host 127.0.0.1 --port 5186 --strictPort",
+    "dev:isolated": "OSUI_ISOLATED_MODELS=1 OSUI_LOCAL_SITE=1 vite --host 127.0.0.1 --port 5186 --strictPort",
     "collection:local": "WRANGLER_SEND_METRICS=false wrangler dev --local --ip 127.0.0.1 --port 5187 --persist-to local/collection-db --log-level error",
     "collection:migrate:local": "WRANGLER_SEND_METRICS=false wrangler d1 migrations apply DB --local --persist-to local/collection-db",
     "collection:migrate:deploy-local": "WRANGLER_SEND_METRICS=false wrangler d1 migrations apply DB --local -c wrangler.deploy.jsonc --persist-to local/collection-deploy-db",

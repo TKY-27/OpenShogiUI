@@ -23,18 +23,49 @@
 }
 .model-picker {
   min-width: 0;
+  container-type: inline-size;
 }
-.model-picker > div {
+/*
+ * Six candidates in an even grid sized by the pane they sit in, never by the
+ * viewport: 2 columns in a narrow drawer, 3 on a mid-width setup column, 6 in
+ * one row when there is room. Every cell keeps a full border (the grid gap
+ * shows the rule colour), so no wrapped last row loses its edge.
+ */
+.model-picker__options {
   display: grid;
+  border: 1px solid var(--field);
+  background: var(--field);
+  gap: 1px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.model-picker button {
+.model-picker__options button {
   min-height: 2.75rem;
+  padding: 0.25rem 0.375rem;
+  border: 0;
+  background: var(--surface);
+  color: var(--muted);
   overflow-wrap: anywhere;
+  font: 0.75rem/1.2 var(--ui-font);
 }
-.model-picker .match-setup__note {
+.model-picker__options button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fffaf4;
+  font-weight: 600;
+}
+@container (min-width: 24rem) {
+  .model-picker__options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@container (min-width: 44rem) {
+  .model-picker__options {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+.model-picker__note {
   margin-top: 0.5rem;
   font-size: 0.75rem;
+  color: var(--muted);
 }
 .prototype-error {
   width: min(100%, 36rem);
@@ -206,107 +237,552 @@
     max-width: 36rem;
   }
 }
+/* Analysis workspace -------------------------------------------------------
+   A narrow action rail, a large flanked board with the kifu navigator above
+   and a local comment box below, and a wide results panel with modes. Below
+   64rem everything stacks; the board stays width-bound. At 80rem the shell is
+   height-constrained, so the board fits both axes and the rail and panel
+   scroll on their own. */
 .learned-analysis {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  padding: 1rem;
-  overflow-y: auto;
-}
-.learned-analysis h1 {
-  font-size: 1.25rem;
-}
-.learned-analysis h2 {
-  font-size: 1rem;
+  min-height: 0;
+  padding: 0.5rem;
+  gap: 0.5rem;
 }
 .learned-analysis p,
 .learned-analysis code {
-  font-size: 0.8125rem;
   overflow-wrap: anywhere;
 }
-.learned-analysis p {
-  line-height: 1.7;
+.learned-analysis .play-notice {
+  margin-block: 0;
+}
+.analysis-frame {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  /* The single region row must fill the flex height on the fixed shell, so
+     the center column gets a definite height and the board can size to it. */
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+/* Left rail: compact actions. A wrapping toolbar on small screens. */
+.analysis-rail {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 0.375rem;
+  align-content: start;
+}
+.analysis-rail > button {
+  min-height: var(--control-height);
+  padding: 0 0.75rem;
+  border: 1px solid var(--field);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: 0.75rem/1.2 var(--ui-font);
+}
+.analysis-rail > button:hover {
+  border-color: var(--ink);
+}
+.analysis-rail__save {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+.analysis-rail__note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+}
+
+/* Center column: navigator, board, local comment. */
+.analysis-center {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  /* Rows are fixed by explicit placement so the optional branch note cannot
+     shift the board into an auto row: navigator, branch note, board (fills
+     the remaining height), comment. */
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.375rem;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.analysis-center > .kifu-nav {
+  grid-row: 1;
+}
+.analysis-center > .analysis-branch-note {
+  grid-row: 2;
+}
+.analysis-center > .analysis-board-zone {
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0.375rem;
+}
+.analysis-board-zone > .board-fit {
+  flex: 1;
+  min-height: 0;
+}
+.analysis-center > .analysis-board-status {
+  grid-row: 3;
+}
+.kifu-nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+}
+.kifu-nav button {
+  min-height: var(--control-height);
+  min-width: 2.5rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--field);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+.kifu-nav button:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+.kifu-nav__label {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kifu-nav__count {
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 400;
+}
+.analysis-branch-note {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--accent);
+  font-size: 0.6875rem;
+}
+.analysis-branch-note button {
+  min-height: 1.625rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--field);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.6875rem;
+}
+.analysis-board-status {
+  margin: 0;
+  align-self: center;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.analysis-comment {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+.analysis-comment textarea {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--field);
+  background: var(--surface);
+  color: var(--ink);
+  font: 0.8125rem/1.5 var(--ui-font);
+  resize: vertical;
+}
+.analysis-comment textarea:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* Board sizing: width-bound below the fixed shell, both axes on desktop. */
+.learned-analysis .board-fit {
+  container-type: inline-size;
+}
+/* The fixed shell gives board-fit a definite height; full size containment
+   makes 100cqh available so the board stops growing past the comment box. */
+@media (min-width: 80rem) {
+  .learned-analysis .board-fit {
+    container-type: size;
+  }
+}
+.learned-analysis .board-stage {
+  --board-size: min(100cqw, var(--board-max));
+}
+@media (min-width: 48rem) {
+  .learned-analysis .board-stage {
+    --board-size: min(
+      calc(100cqw - 2 * var(--hand-width) - 2 * var(--space-2)),
+      var(--board-max)
+    );
+  }
+}
+@media (min-width: 80rem) {
+  .learned-analysis .board-stage {
+    --board-size: min(
+      calc(100cqw - 2 * var(--hand-width) - 2 * var(--space-2)),
+      calc(100cqh - 0.25rem),
+      var(--board-max)
+    );
+  }
+}
+
+/* Right panel: head, tabs, scrolling content, pinned modes. */
+.analysis-side {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-content: start;
+}
+.analysis-side__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.125rem 0.75rem;
 }
 .analysis-model-line {
   margin: 0;
   font-weight: 600;
+  font-size: 0.8125rem;
 }
 .analysis-model-line code {
   font-weight: 400;
 }
-.learned-analysis .play-notice {
-  width: min(100%, 36rem);
-  margin-block: 0.5rem;
+.analysis-metrics-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
 }
-.learned-analysis .play-notice button {
-  min-height: 2.75rem;
-}
-.learned-analysis__layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1rem;
-}
-.learned-analysis__settings {
-  display: grid;
-  align-content: start;
-  gap: 0.75rem;
+.analysis-tabs {
+  display: flex;
   min-width: 0;
+}
+.analysis-tabs button {
+  min-height: 2rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--field);
+  border-right: 0;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  font: 0.75rem/1.2 var(--ui-font);
+  white-space: nowrap;
+}
+.analysis-tabs button:last-child {
+  border-right: 1px solid var(--field);
+}
+.analysis-tabs button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fffaf4;
+  font-weight: 600;
+}
+
+/* Scores tab: compact candidate rows; the PV list opens on demand. */
+.learned-analysis__result {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: 0.5rem;
+  overflow-y: auto;
+  font-size: 0.8125rem;
 }
 .analysis-fold {
   min-width: 0;
+  font-size: 0.8125rem;
 }
 .analysis-fold summary {
-  padding-block: 0.5rem;
+  padding-block: 0.375rem;
   cursor: pointer;
   font-weight: 600;
+  font-size: 0.75rem;
 }
 .analysis-fold > :not(summary) {
-  margin-block: 0.5rem;
+  margin-block: 0.375rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.7;
 }
-.learned-analysis__settings label {
+.learned-analysis__result > p {
+  margin: 0;
+  line-height: 1.7;
+}
+.candidate-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  gap: 0.5rem;
+}
+.candidate {
+  border: 1px solid var(--rule);
+  background: var(--surface);
+}
+.candidate__row {
+  display: flex;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 0;
+  background: transparent;
+  align-items: baseline;
+  cursor: pointer;
+  gap: 0.5rem;
+  text-align: left;
+}
+.candidate__rank {
+  color: var(--muted);
+  font-size: 0.6875rem;
+}
+.candidate__score {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.candidate__move {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.candidate__summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.candidate__toggle {
+  color: var(--muted);
+}
+.candidate__pv {
+  display: grid;
+  margin: 0;
+  padding: 0.25rem 0.75rem 0.625rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  list-style: none;
+  font-size: 0.75rem;
+  line-height: 1.9;
+}
+.candidate__mate-note {
+  margin: 0;
+  padding: 0 0.75rem 0.5rem;
+  color: var(--accent);
+  font-size: 0.6875rem;
+}
+
+/* Graph tab. */
+.analysis-graph {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: 0.5rem;
+  overflow-y: auto;
+}
+.eval-graph {
+  display: grid;
+  margin: 0;
+  gap: 0.375rem;
+}
+.eval-graph svg {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  background: var(--surface);
+}
+.eval-graph__axis {
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
+.eval-graph__line {
+  fill: none;
+  stroke: var(--analysis);
+  stroke-width: 1.5;
+}
+.eval-graph__point {
+  fill: var(--analysis);
+}
+.eval-graph__mate {
+  fill: var(--accent);
+}
+.eval-graph__cursor {
+  stroke: var(--accent);
+  stroke-dasharray: 3 3;
+  stroke-width: 1;
+}
+.eval-graph__hit {
+  fill: transparent;
+  cursor: pointer;
+}
+.eval-graph figcaption {
+  color: var(--muted);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+}
+.analysis-graph__slider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-inline-end: 0.25rem;
+  font-size: 0.75rem;
+}
+.analysis-graph__slider span {
+  min-width: 1.75rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.analysis-graph__slider input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Kifu tab. */
+.analysis-kifu {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: 0.375rem;
+  overflow-y: auto;
+}
+.analysis-kifu__names,
+.analysis-kifu__ending {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.kifu-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.kifu-list button {
+  display: flex;
+  width: 100%;
+  padding: 0.3125rem 0.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  align-items: baseline;
+  cursor: pointer;
+  gap: 0.5rem;
+  text-align: left;
+  font-size: 0.8125rem;
+}
+.kifu-list button:hover {
+  background: var(--analysis-pale);
+}
+.kifu-list button[aria-current="step"] {
+  background: var(--accent-pale);
+  box-shadow: inset 2px 0 0 var(--accent);
+  font-weight: 600;
+}
+.kifu-list__ply {
+  min-width: 1.75rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.kifu-list__eval {
+  margin-left: auto;
+  color: var(--analysis);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Modes and start/stop, pinned to the panel bottom. */
+.analysis-modes {
+  display: grid;
+  border-top: 1px solid var(--rule);
+  padding-top: 0.5rem;
+  gap: 0.375rem;
+}
+.analysis-modes__picker button {
+  min-height: 2rem;
+  flex: 1 1 0;
+  padding: 0 0.375rem;
+}
+.analysis-mode-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+}
+.analysis-sweep {
+  display: flex;
+  margin: 0;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+.analysis-sweep progress {
+  flex: 1;
+  min-width: 0;
+  height: 0.5rem;
+}
+
+/* Settings dialog. */
+.analysis-settings {
+  width: min(92vw, 42rem);
+  max-height: 90vh;
+}
+.analysis-settings article {
+  display: grid;
+  overflow-y: auto;
+  max-height: 82vh;
+  gap: 0.75rem;
+}
+.analysis-settings__group {
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  padding: 0.5rem 0.75rem 0.75rem;
+  gap: 0.5rem;
+}
+.analysis-settings__group legend {
+  padding-inline: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.analysis-settings__group label {
   display: grid;
   gap: 0.25rem;
+  font-size: 0.75rem;
 }
-.learned-analysis input,
-.learned-analysis select,
-.learned-analysis textarea {
-  min-width: 0;
-  width: 100%;
+.analysis-settings__group textarea {
+  min-height: 4.5rem;
 }
-.learned-analysis button:not(.board-square),
-.learned-analysis select {
-  min-height: 2.75rem;
+.analysis-settings__identity {
+  margin: 0;
+  font-size: 0.6875rem;
+  color: var(--muted);
 }
-.learned-analysis textarea {
-  min-height: 6rem;
-}
-.learned-analysis__board {
-  min-width: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-.learned-analysis .board-fit {
-  container-type: inline-size;
-}
-.learned-analysis .board-stage {
-  width: 100%;
-  --board-size: min(100cqw, var(--fit-board-size, 32rem));
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "gote" "board" "sente";
-}
-.learned-analysis .hand-stand {
-  height: auto;
-  grid-template-rows: auto auto;
-}
-.learned-analysis .hand-stand__pieces {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-column: 1;
-  grid-row: 2;
-}
-.analysis-actions {
-  flex-wrap: wrap;
-  margin-block: 0.5rem;
-}
-.analysis-actions button {
-  flex: 1 1 9rem;
-}
+
 .kifu-save {
   display: flex;
   flex-wrap: wrap;
@@ -329,42 +805,36 @@
   margin: 0;
   color: var(--muted);
 }
-.learned-analysis__result ol {
-  padding-left: 1.25rem;
-}
-.learned-analysis__board .inline-actions {
-  flex-wrap: wrap;
-  margin-block: 0.5rem;
-}
-/*
- * On one-column screens the board and the evaluation come before the collapsed
- * settings folds. DOM order keeps the settings first for keyboard and screen
- * reader users; the explicit grid columns below pin every section on wide
- * screens, where these order values no longer matter.
- */
-.learned-analysis__layout > .learned-analysis__board {
-  order: -2;
-}
-.learned-analysis__layout > .learned-analysis__result {
-  order: -1;
-}
+
+/* Three regions from the wide-tablet breakpoint, matching the reference
+   layout: thin rail, large board column, wide analysis panel. */
 @media (min-width: 64rem) {
-  .learned-analysis__layout {
-    grid-template-columns: minmax(14rem, 1fr) minmax(20rem, 2fr) minmax(
-        14rem,
-        1fr
+  .analysis-frame {
+    grid-template-columns: minmax(9.5rem, 12rem) minmax(24rem, 1fr) minmax(
+        20rem,
+        34rem
+      );
+    align-content: stretch;
+  }
+  .analysis-rail {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    overflow-y: auto;
+  }
+  .analysis-rail > button {
+    width: 100%;
+    text-align: left;
+  }
+}
+@media (min-width: 80rem) {
+  .analysis-frame {
+    grid-template-columns: minmax(10rem, 12rem) minmax(26rem, 1fr) minmax(
+        21rem,
+        36rem
       );
   }
-  .learned-analysis__layout > .learned-analysis__board {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .learned-analysis__layout > .learned-analysis__settings {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .learned-analysis__layout > .learned-analysis__result {
-    grid-column: 3;
-    grid-row: 1;
+  .analysis-rail,
+  .analysis-side {
+    min-height: 0;
   }
 }

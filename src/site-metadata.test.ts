@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { siteTags } from "../site-metadata";
+import { analyticsBeaconTag, siteTags } from "../site-metadata";
 it("keeps unknown origins unclaimed, validates public origins, and emits static card metadata once", () => {
   const unset = siteTags(null, "abcd");
   expect(
@@ -19,6 +19,12 @@ it("keeps unknown origins unclaimed, validates public origins, and emits static 
     expect(() => siteTags(origin, "abcd")).toThrow();
   const tags = siteTags("https://example.invalid", "abcd");
   expect(tags.filter((t) => t.tag === "title")).toHaveLength(1);
+  expect(tags.find((t) => t.tag === "title")?.children).toBe(
+    "OpenShogiAI — 将棋AIと対局・局面解析",
+  );
+  expect(
+    tags.find((t) => t.attrs?.property === "og:site_name")?.attrs?.content,
+  ).toBe("OpenShogiAI");
   expect(
     tags.find((t) => t.attrs?.property === "og:image")?.attrs?.content,
   ).toBe("https://example.invalid/ogp.png?v=abcd");
@@ -31,4 +37,17 @@ it("keeps unknown origins unclaimed, validates public origins, and emits static 
       (t) => t.attrs?.name === "robots",
     ),
   ).toBe(true);
+});
+it("injects the approved analytics beacon only for opted-in builds", () => {
+  expect(analyticsBeaconTag(false)).toBeNull();
+  const beacon = analyticsBeaconTag(true);
+  expect(beacon).not.toBeNull();
+  expect(beacon?.tag).toBe("script");
+  expect(beacon?.attrs?.src).toBe(
+    "https://static.cloudflareinsights.com/beacon.min.js",
+  );
+  expect(beacon?.attrs?.type).toBe("module");
+  expect(beacon?.attrs?.["data-cf-beacon"]).toBe(
+    JSON.stringify({ token: "8b7f684964cf4d0393346373e68e8497" }),
+  );
 });

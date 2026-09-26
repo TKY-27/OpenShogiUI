@@ -12,7 +12,7 @@ import {
   Locale,
   localeReducer,
 } from "./localization";
-import { repositoryUrl, routeForHash } from "./project";
+import { repositoryUrl, routeForHash, type WorkspaceRoute } from "./project";
 const NoticeDialog = lazy(() => import("./NoticeDialog"));
 const LearnedAnalysis = lazy(() => import("./LearnedAnalysis"));
 const CorePrototype = lazy(() => import("./CorePrototype"));
@@ -161,6 +161,22 @@ function App() {
     applyDocumentLanguage(locale);
   }, [locale]);
 
+  useEffect(() => {
+    const titles: Record<WorkspaceRoute, [string, string]> = {
+      workspace: ["", ""],
+      match: ["対局", "Match"],
+      analysis: ["局面解析", "Position analysis"],
+      privacy: ["棋譜提供とプライバシー", "Game collection and privacy"],
+      "browser-play": ["開発用盤面", "Development board"],
+      "core-prototype": ["対局", "Match"],
+      "evaluation-lab": ["評価ラボ", "Evaluation Lab"],
+    };
+    const [ja, en] = titles[route];
+    document.title = ja
+      ? `${locale === "ja" ? ja : en} — OpenShogiAI`
+      : "OpenShogiAI — 将棋AIと対局・局面解析";
+  }, [route, locale]);
+
   return (
     <div
       className={`app-shell ${isMatch || isPrototype ? "app-shell--match" : ""} ${isAppRoute ? "app-shell--fixed" : "app-shell--document"}`}
@@ -269,8 +285,8 @@ function App() {
         </nav>
         <span>
           {locale === "ja"
-            ? "AGPL-3.0-only · モデルの公開採用・権利審査は別途必要です"
-            : "AGPL-3.0-only · Model adoption and rights review are separate"}
+            ? "AGPL-3.0-only · モデルの権利条件は「モデルライセンス」に記載"
+            : "AGPL-3.0-only · Model terms are listed under Model License"}
         </span>
       </footer>
 

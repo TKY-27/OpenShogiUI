@@ -3,6 +3,34 @@ import { readFileSync } from "node:fs";
 import type { HtmlTagDescriptor, Plugin } from "vite";
 import configuration from "./project.config.json";
 
+const TITLE = "OpenShogiAI — 将棋AIと対局・局面解析";
+const DESCRIPTION =
+  "OpenShogiAIとブラウザーで対局し、学習モデルで局面を解析できます。対局・解析は端末内で行います。";
+const SITE_NAME = "OpenShogiAI";
+
+/**
+ * Operator-approved Cloudflare Web Analytics. The beacon is injected only when
+ * a build opts in (OSUI_WEB_ANALYTICS=1, set by build-cloudflare.mjs), so
+ * plain builds, local/dev servers and CI never contact the collector. The
+ * token is the public beacon token from the dashboard snippet; it identifies
+ * the site, not the visitor.
+ */
+const WEB_ANALYTICS_TOKEN = "8b7f684964cf4d0393346373e68e8497";
+const WEB_ANALYTICS_SRC = "https://static.cloudflareinsights.com/beacon.min.js";
+
+export function analyticsBeaconTag(enabled: boolean): HtmlTagDescriptor | null {
+  if (!enabled) return null;
+  return {
+    tag: "script",
+    attrs: {
+      type: "module",
+      src: WEB_ANALYTICS_SRC,
+      "data-cf-beacon": JSON.stringify({ token: WEB_ANALYTICS_TOKEN }),
+    },
+    injectTo: "head",
+  };
+}
+
 export function siteTags(
   origin: string | null,
   imageHash: string,
@@ -21,22 +49,19 @@ export function siteTags(
         "Set a single HTTPS public origin, or a loopback origin for isolated local QA",
       );
   }
-  const title = "OpenShogiUI — オープンな将棋のAI";
-  const description =
-    "OpenShogiAIとブラウザーで対局し、学習モデルで局面を解析できます。対局・解析は端末内で行います。";
   const tags: HtmlTagDescriptor[] = [
-    { tag: "title", children: title },
-    { tag: "meta", attrs: { name: "description", content: description } },
+    { tag: "title", children: TITLE },
+    { tag: "meta", attrs: { name: "description", content: DESCRIPTION } },
     ...Object.entries({
-      "og:title": title,
-      "og:description": description,
+      "og:title": TITLE,
+      "og:description": DESCRIPTION,
       "og:type": "website",
-      "og:site_name": "OpenShogiUI",
+      "og:site_name": SITE_NAME,
       "og:locale": "ja_JP",
       "og:image:width": "1200",
       "og:image:height": "630",
       "og:image:type": "image/png",
-      "og:image:alt": "OpenShogiUI — オープンな将棋のAI。OpenShogiAIを使用。",
+      "og:image:alt": `${SITE_NAME} — 将棋AIと対局・局面解析`,
     }).map(([property, content]) => ({
       tag: "meta",
       attrs: { property, content },
@@ -52,10 +77,7 @@ export function siteTags(
     { tag: "meta", attrs: { name: "twitter:image", content: image } },
     {
       tag: "meta",
-      attrs: {
-        name: "twitter:image:alt",
-        content: "OpenShogiUI — オープンな将棋のAI",
-      },
+      attrs: { name: "twitter:image:alt", content: TITLE },
     },
   );
   if (origin)
@@ -75,11 +97,19 @@ export function siteMetadata(): Plugin {
         .update(readFileSync(new URL("./public/ogp.png", import.meta.url)))
         .digest("hex")
         .slice(0, 16);
-      return siteTags(
-        process.env.OSUI_SITE_ORIGIN ?? configuration.publicOrigin,
-        hash,
-        process.env.OSUI_ISOLATED_MODELS === "1",
-      );
+      // Search visibility is independent of where model assets come from:
+      // OSUI_ISOLATED_MODELS only selects the build-time asset mirror, while
+      // OSUI_LOCAL_SITE marks loopback QA builds that must stay unindexed.
+      const local = process.env.OSUI_LOCAL_SITE === "1";
+      const beacon = analyticsBeaconTag(process.env.OSUI_WEB_ANALYTICS === "1");
+      return [
+        ...siteTags(
+          process.env.OSUI_SITE_ORIGIN ?? configuration.publicOrigin,
+          hash,
+          local,
+        ),
+        ...(beacon === null ? [] : [beacon]),
+      ];
     },
   };
 }

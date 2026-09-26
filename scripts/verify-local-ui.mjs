@@ -34,11 +34,12 @@ try {
     if (r.method() === "POST") posts.push(r.url());
   });
   await page.addInitScript(() => {
-    const original = File.prototype.text;
-    File.prototype.text = function () {
+    const original = File.prototype.arrayBuffer;
+    File.prototype.arrayBuffer = function () {
       if (this.name === "delayed-fixture.usi")
         return new Promise((resolve) => {
-          window.releaseFixture = () => resolve("position startpos");
+          window.releaseFixture = () =>
+            resolve(new TextEncoder().encode("position startpos").buffer);
         });
       return original.call(this);
     };
@@ -47,7 +48,8 @@ try {
   await page
     .getByRole("heading", { name: "オープンな将棋のAI", exact: true })
     .waitFor();
-  assert.match(await page.title(), /OpenShogiUI/);
+  assert.match(await page.title(), /OpenShogiAI/);
+  assert.doesNotMatch(await page.title(), /OpenShogiUI/);
   assert.equal(await page.locator("vite-error-overlay").count(), 0);
   const license = page.getByRole("button", {
     name: "AGPL-3.0-only",
@@ -78,19 +80,66 @@ try {
     await page.locator('.app-nav [aria-current="page"]').getAttribute("href"),
     "#/analysis",
   );
-  await page.getByText("局面・棋譜を読み込む", { exact: true }).click();
-  await page.locator('input[type="file"]').setInputFiles({
+  // Settings live in a dialog; the model picker and imports run through it.
+  await page.getByRole("button", { name: "解析設定", exact: true }).click();
+  const settings = page.getByRole("dialog", {
+    name: "解析設定",
+    exact: true,
+  });
+  await settings.waitFor();
+  // The model picker shows all six candidates as an even grid in its pane.
+  const pickerButtons = page.locator(".model-picker__options button");
+  assert.equal(await pickerButtons.count(), 6);
+  const pickerBox = await page.locator(".model-picker__options").boundingBox();
+  assert(pickerBox !== null && pickerBox.height > 0);
+  await settings.locator('input[type="file"]').setInputFiles({
     name: "delayed-fixture.usi",
     mimeType: "text/plain",
     buffer: Buffer.from("position startpos"),
   });
   await page.waitForFunction(() => !!window.releaseFixture);
-  await page.locator("textarea").fill("position startpos moves 7g7f");
-  await page
+  await settings.locator("textarea").fill("position startpos moves 7g7f");
+  await settings
     .getByRole("button", { name: "局面を読み込む", exact: true })
     .click();
+  await settings
+    .getByRole("combobox", { name: "解析予算" })
+    .selectOption("250");
   await ready();
   await page.evaluate(() => window.releaseFixture());
+  // Redundant model presses must not rebuild the Worker or refetch the manifest.
+  const workers = page.workers();
+  const defense = settings.getByRole("button", {
+    name: "防御強化 best1536",
+    exact: true,
+  });
+  await defense.dblclick();
+  assert.deepEqual(page.workers(), workers);
+  await page.keyboard.press("Escape");
+  await settings.waitFor({ state: "detached" });
+  await start.click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('.learned-analysis__result [role="status"]')
+        ?.textContent !== "解析中…",
+  );
+  assert.equal(await page.locator('[role="alert"]').count(), 0);
+  // Navigation across the record: back to the start, forward one ply.
+  const nav = page.locator(".kifu-nav");
+  await nav.getByRole("button", { name: "最初の局面へ", exact: true }).click();
+  await page.waitForFunction(() =>
+    document
+      .querySelector(".kifu-nav__label")
+      ?.textContent?.includes("開始局面"),
+  );
+  await nav.getByRole("button", { name: "最後の局面へ", exact: true }).click();
+  await page.waitForFunction(() =>
+    document.querySelector(".kifu-nav__label")?.textContent?.includes("1"),
+  );
+  // The kifu tab lists the recorded move in Japanese notation.
+  await page.getByRole("button", { name: "棋譜", exact: true }).click();
+  await page.locator(".kifu-list").getByText("☗７六歩").waitFor();
+  await page.getByRole("button", { name: "評価値", exact: true }).click();
   // Every save format downloads real bytes; a repeat save refetches no chunk.
   const kifuChunks = async () =>
     page.evaluate(
@@ -133,20 +182,6 @@ try {
   const ki2File = await ki2Download;
   assert.match(ki2File.suggestedFilename(), /\.ki2$/);
   assert.equal(await kifuChunks(), chunksAfterKifSave);
-  // Redundant model presses must not rebuild the Worker or refetch the manifest.
-  const workers = page.workers();
-  await page
-    .getByRole("button", { name: "防御学習候補", exact: true })
-    .dblclick();
-  assert.deepEqual(page.workers(), workers);
-  await page.getByRole("combobox", { name: "解析予算" }).selectOption("250");
-  await start.click();
-  await page.waitForFunction(
-    () =>
-      document.querySelector('.learned-analysis__result [role="status"]')
-        ?.textContent !== "解析中…",
-  );
-  assert.equal(await page.locator('[role="alert"]').count(), 0);
   // The analysis pane must stay usable at phone sizes: no horizontal overflow,
   // a square board, and screenshots for the layout record.
   for (const [width, height] of [

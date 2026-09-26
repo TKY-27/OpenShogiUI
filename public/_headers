@@ -1,5 +1,5 @@
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval' https://static.cloudflareinsights.com/beacon.min.js; worker-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
   X-Frame-Options: DENY
@@ -14,6 +14,9 @@
   Cache-Control: no-cache
 
 /index.html
+  Cache-Control: no-cache
+
+/google1d3d66820bd4068b.html
   Cache-Control: no-cache
 
 /model/:selection/*

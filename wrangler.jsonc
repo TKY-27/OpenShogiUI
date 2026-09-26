@@ -14,7 +14,10 @@
   "assets": {
     "directory": "./dist",
     "run_worker_first": ["/api/*"],
-    "not_found_handling": "none",
+    // Matches the generated deploy config: stored .html files (Search Console
+    // verification) serve directly; "/" and unknown paths serve the SPA.
+    "html_handling": "none",
+    "not_found_handling": "single-page-application",
   },
   "observability": { "enabled": false },
   "vars": {

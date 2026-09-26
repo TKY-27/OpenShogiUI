@@ -435,6 +435,9 @@ export function emitRelease(
                 "icon-16.png",
                 "icon-32.png",
                 "icon-180.png",
+                // Search Console ownership verification; exact file only, so
+                // no formatter or future edit can smuggle in other HTML.
+                "google1d3d66820bd4068b.html",
               ].includes(local) ||
               local === "_headers" ||
               /^pieces\/[a-zA-Z0-9_/-]+\.(svg|png)$/.test(local) ||

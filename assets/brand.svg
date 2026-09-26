@@ -9,7 +9,7 @@
   <rect width="1200" height="630" fill="#f8f6f1"/>
   <use href="#mark" x="548" y="134" width="104" height="104"/>
   <g fill="#24211f" text-anchor="middle" font-family="Arial, 'Hiragino Kaku Gothic ProN', sans-serif">
-    <text x="600" y="332" font-size="68" font-weight="700">OpenShogiUI</text>
-    <text x="600" y="402" font-size="30">オープンな将棋のAI</text>
+    <text x="600" y="332" font-size="68" font-weight="700">OpenShogiAI</text>
+    <text x="600" y="402" font-size="30">将棋AIと対局・局面解析</text>
   </g>
 </svg>
