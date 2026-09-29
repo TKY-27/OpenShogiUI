@@ -6,7 +6,9 @@ import {
   initialClockFor,
   matchTimeControl,
   opposing,
+  presetIsAdjudicated,
   presetIsClocked,
+  presetTurnAllowanceMs,
   type MatchPreset,
 } from "./match-clock";
 import type { MatchClock } from "./play-settings";
@@ -269,9 +271,10 @@ export class PrototypeMatchSession {
       turnStartedAt === null
     )
       return false;
-    // Per-move and untimed presets have no cumulative clock, so nothing can
-    // flag; the engine's own budget bounds each move instead.
-    if (!presetIsClocked(this.state.preset)) return false;
+    // Untimed play has no cumulative clock, so nothing can flag; the engine's
+    // own budget bounds each move instead. fixed10 is adjudicated like the
+    // sudden-death presets, but against its fresh per-turn allowance.
+    if (!presetIsAdjudicated(this.state.preset)) return false;
     if (!hasFlagFallen(clock, snapshot.sideToMove, turnStartedAt, this.now()))
       return false;
     this.finish("timeout", opposing(snapshot.sideToMove));
@@ -339,10 +342,13 @@ export class PrototypeMatchSession {
       this.now() - startedAt,
     );
     this.searching = true;
-    const response = await this.client!.search(
-      matchTimeControl(this.state.preset, remaining),
-      this.state.profile,
-    );
+    // fixed10's UI clock is a display-only per-turn allowance, never an engine
+    // handoff: the request stays zero base time plus the 10-second byoyomi
+    // period, and the engine keeps allocating its own search inside it.
+    const control = presetTurnAllowanceMs(this.state.preset)
+      ? matchTimeControl(this.state.preset)
+      : matchTimeControl(this.state.preset, remaining);
+    const response = await this.client!.search(control, this.state.profile);
     if (!this.current(generation)) return;
     this.searching = false;
     if (this.tick()) return;
@@ -431,6 +437,11 @@ export class PrototypeMatchSession {
           initialClockFor(this.state.preset))[clockKey] -
         this.state.clock[clockKey]
       : Math.max(0, Math.round(turnElapsedMs));
+    // fixed10 bills the elapsed turn to the move times only; the countdown
+    // resets to the full allowance for the next mover instead of accumulating.
+    const turnEndClock = presetTurnAllowanceMs(this.state.preset)
+      ? initialClockFor(this.state.preset)
+      : this.state.clock;
     this.publish({
       moveTimes: [
         ...this.state.moveTimes,
@@ -439,11 +450,12 @@ export class PrototypeMatchSession {
           movement,
           // Clock deltas include earlier cancelled searches, but exclude paused time.
           elapsedMs,
-          remaining: { ...this.state.clock },
+          remaining: { ...turnEndClock },
         },
       ],
       previous: before,
       snapshot: next,
+      clock: turnEndClock,
       busy: false,
       turnStartedAt: next.terminal === null ? this.now() : null,
     });

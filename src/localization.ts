@@ -415,7 +415,8 @@ const messages: Record<Locale, Messages> = {
       presetDetail: {
         blitz3: "秒読みなし・加算なし",
         rapid10: "秒読みなし・加算なし",
-        fixed10: "1手ごとに10秒まで探索。時計は表示しません",
+        fixed10:
+          "両者とも1手ごとに10秒。未使用時間は繰り越されず、過ぎれば負け",
         unlimited: "時計を表示しません",
       },
       yourSide: "あなたの手番",
@@ -426,7 +427,7 @@ const messages: Record<Locale, Messages> = {
         "1手ごとの使用時間はエンジンが残り時間から自分で決めます。",
       casualCap: "時間無制限では、エンジンは1手あたり最大20秒で指します。",
       fixedMoveNote:
-        "1手10秒では、エンジンは毎手10秒以内で考えます。持ち時間の消費も切れ負けもありません。",
+        "1手10秒では、あなたとAIの両方に毎手新たな10秒が与えられます。未使用時間は繰り越されず、10秒を過ぎた側は負けます。",
       start: "対局開始",
       resign: "投了",
       resignConfirm: "投了しますか？この操作は取り消せません。",
@@ -668,7 +669,8 @@ const messages: Record<Locale, Messages> = {
       presetDetail: {
         blitz3: "Sudden death: no byoyomi, no increment",
         rapid10: "Sudden death: no byoyomi, no increment",
-        fixed10: "Up to 10 seconds of search per move. No clock is shown.",
+        fixed10:
+          "Both sides get a fresh 10 seconds per move. Unused time never carries over.",
         unlimited: "No clock is shown",
       },
       yourSide: "Your side",
@@ -680,7 +682,7 @@ const messages: Record<Locale, Messages> = {
       casualCap:
         "When untimed, the engine plays with a 20 second cap per move.",
       fixedMoveNote:
-        "With 10 sec/move, the engine thinks for at most 10 seconds on every move. No clock is consumed and you cannot lose on time.",
+        "With 10 sec/move, both you and the AI get a fresh 10 seconds for every move. Unused time never carries over, and running past it loses the game.",
       start: "Start match",
       resign: "Resign",
       resignConfirm: "Resign this match? This cannot be undone.",

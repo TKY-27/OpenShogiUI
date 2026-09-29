@@ -850,15 +850,14 @@ describe("prototype game clock and cancellation", () => {
     await h.session.configure();
     expect(h.session.state.moveTimes).toEqual([]);
   });
-  it("plays fixed10 as a clockless per-move budget with wall-clock move times", async () => {
+  it("plays fixed10 as a fresh per-move allowance with wall-clock move times", async () => {
     const h = await harness();
     await h.session.start("black", false, "fixed10", "balanced");
-    // Half a "minute" of thinking cannot flag: there is no match clock, and
-    // tick() must not treat the zero base clock as a flag fall.
-    h.at(500_000);
+    // Thinking within the allowance is fine, and the engine still receives the
+    // pure per-move budget rather than a remaining clock.
+    h.at(4_900);
     const move = h.session.move("7g7f");
     await vi.waitFor(() => expect(h.clients[0].search).toHaveBeenCalledOnce());
-    // The engine receives the pure per-move budget, not a remaining clock.
     expect(h.clients[0].search.mock.calls[0]).toEqual([
       {
         schema: "open_shogi_time_control/v1",
@@ -875,26 +874,146 @@ describe("prototype game clock and cancellation", () => {
       ...searchResult(),
       computeControl: telemetry(false),
     });
-    h.at(501_000);
+    h.at(5_000);
     await move;
-    // Nothing accumulated and the phase is still playing.
-    expect(h.session.state.clock).toEqual({ blackTimeMs: 0, whiteTimeMs: 0 });
+    // The countdown reset for the engine's turn: the human's unused time did
+    // not carry over and nothing accumulated.
+    expect(h.session.state.clock).toEqual({
+      blackTimeMs: 10_000,
+      whiteTimeMs: 10_000,
+    });
     expect(h.session.state.phase).toBe("playing");
-    // Move times come from the wall clock on clockless presets.
+    // Move times come from the wall clock on per-move presets.
     expect(h.session.state.moveTimes).toEqual([
       {
         side: "black",
         movement: "7g7f",
-        elapsedMs: 499_900,
-        remaining: { blackTimeMs: 0, whiteTimeMs: 0 },
+        elapsedMs: 4_800,
+        remaining: { blackTimeMs: 10_000, whiteTimeMs: 10_000 },
       },
       {
         side: "white",
         movement: "3c3d",
-        elapsedMs: 1_000,
-        remaining: { blackTimeMs: 0, whiteTimeMs: 0 },
+        elapsedMs: 100,
+        remaining: { blackTimeMs: 10_000, whiteTimeMs: 10_000 },
       },
     ]);
+    h.session.dispose();
+  });
+  it("flags the human out of a spent fixed10 turn before reaching the Worker", async () => {
+    const h = await harness();
+    await h.session.start("black", false, "fixed10", "balanced");
+    h.at(10_100);
+    await h.session.move("7g7f");
+    expect(h.clients[0].move).not.toHaveBeenCalled();
+    expect(h.session.state.result).toEqual({
+      reason: "timeout",
+      winner: "white",
+    });
+    // The loser's countdown floors at zero for the final display.
+    expect(h.session.state.clock).toEqual({
+      blackTimeMs: 0,
+      whiteTimeMs: 10_000,
+    });
+    expect(h.clients[0].dispose).toHaveBeenCalledOnce();
+    h.session.dispose();
+  });
+  it("flags the AI out of a fixed10 turn when its search resolves late", async () => {
+    const h = await harness();
+    const started = h.session.start("white", false, "fixed10", "balanced");
+    await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
+    h.at(10_100);
+    expect(h.session.tick()).toBe(true);
+    h.clients[0].result.resolve(searchResult("black"));
+    await started;
+    expect(h.clients[0].move).not.toHaveBeenCalled();
+    expect(h.session.state.result).toEqual({
+      reason: "timeout",
+      winner: "white",
+    });
+    h.session.dispose();
+  });
+  it("does not commit a fixed10 AI move whose application completes after the allowance", async () => {
+    const h = await harness();
+    const started = h.session.start("white", false, "fixed10", "balanced");
+    await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
+    const moved = deferred<PrototypeSnapshot>();
+    h.clients[0].move.mockReturnValueOnce(moved.promise);
+    h.clients[0].result.resolve(searchResult("black"));
+    await vi.waitFor(() => expect(h.clients[0].move).toHaveBeenCalledOnce());
+    h.at(10_100);
+    moved.resolve(position(["7g7f"]));
+    await started;
+    expect(h.session.state.snapshot?.moves).toEqual([]);
+    expect(h.session.state.result?.reason).toBe("timeout");
+    h.session.dispose();
+  });
+  it("starts a fixed10 rematch from a fresh allowance and a fresh Worker", async () => {
+    const h = await harness();
+    await h.session.start("black", false, "fixed10", "balanced");
+    h.at(2_000);
+    const move = h.session.move("7g7f");
+    await vi.waitFor(() => expect(h.clients[0].search).toHaveBeenCalledOnce());
+    h.clients[0].result.resolve({
+      ...searchResult(),
+      computeControl: telemetry(false),
+    });
+    h.at(2_100);
+    await move;
+    expect(h.session.state.clock).toEqual({
+      blackTimeMs: 10_000,
+      whiteTimeMs: 10_000,
+    });
+    h.at(2_500);
+    await h.session.configure();
+    await h.session.start("black", false, "fixed10", "balanced");
+    expect(h.session.state.clock).toEqual({
+      blackTimeMs: 10_000,
+      whiteTimeMs: 10_000,
+    });
+    expect(h.session.state.moveTimes).toEqual([]);
+    expect(h.session.state.result).toBeNull();
+    // A new Worker is a new engine instance, so no cooldown or clock state can
+    // leak from the previous match — including across preset switches, which
+    // also go through configure().
+    expect(h.clients.length).toBe(2);
+    expect(h.clients[0].dispose).toHaveBeenCalledOnce();
+    h.session.dispose();
+  });
+  it("serves consecutive blitz3 AI turns from the same Worker so engine clock state persists", async () => {
+    const h = await harness();
+    await h.session.start("black", true, "blitz3", "balanced");
+    h.at(1_100);
+    const firstTurn = h.session.move("7g7f");
+    await vi.waitFor(() =>
+      expect(h.clients[0].search).toHaveBeenCalledTimes(1),
+    );
+    h.clients[0].result.resolve({
+      ...searchResult(),
+      computeControl: telemetry(false),
+    });
+    await firstTurn;
+    expect(h.session.state.snapshot?.moves).toEqual(["7g7f", "3c3d"]);
+    // The AI's next turn reuses the same Worker: the engine's persistent play
+    // clock (and its long-move cooldown) must survive between its moves.
+    h.at(2_200);
+    const secondTurn = h.session.move("7g7f");
+    await vi.waitFor(() =>
+      expect(h.clients[0].search).toHaveBeenCalledTimes(2),
+    );
+    h.clients[0].result.resolve({
+      ...searchResult(),
+      computeControl: telemetry(false),
+    });
+    await secondTurn;
+    expect(h.session.state.snapshot?.moves).toEqual([
+      "7g7f",
+      "3c3d",
+      "7g7f",
+      "3c3d",
+    ]);
+    expect(h.clients.length).toBe(1);
+    expect(h.clients[0].dispose).not.toHaveBeenCalled();
     h.session.dispose();
   });
   it("starts the AI as black when the human selects gote", async () => {

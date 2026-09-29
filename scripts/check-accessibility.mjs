@@ -46,11 +46,7 @@ const requiredMatchEvidence = [
   "showModal()",
   'type="button"',
 ];
-if (
-  !clockPanel.includes(
-    "aria-label={remainingLabel(formatMatchClock(remainingMs))}",
-  )
-) {
+if (!clockPanel.includes("aria-label={remainingLabel(shown)}")) {
   failures.push("MatchClockPanel is missing the accessible remaining time");
 }
 

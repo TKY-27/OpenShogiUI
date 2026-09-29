@@ -454,6 +454,18 @@ export class LearnedAnalysisSession {
     const position = this.state.snapshot;
     if (!position?.legalMoves.some((candidate) => candidate.usi === usi))
       return;
+    // The board can transiently show a position other than the one the cursor
+    // names: an uncached navigation sync is in flight, or a discarded branch
+    // whose committed replacement is still syncing. A click resolved against
+    // that display can be legal there yet illegal at the position the record
+    // would receive it at, so compare content, not cursor depth (a discarded
+    // branch end can share the committed cursor's depth). Drop it; the synced
+    // board re-enables moves the instant it lands.
+    const displayCurrent =
+      position.initialSfen === this.state.record.initialSfen &&
+      position.moves.join(" ") ===
+        this.state.line.slice(0, this.state.cursor).join(" ");
+    if (!displayCurrent) return;
     const cursor = this.state.cursor;
     if (!this.state.branching && cursor === this.state.line.length) {
       const record = {

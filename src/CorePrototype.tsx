@@ -11,7 +11,13 @@ import {
 } from "./core-prototype-session";
 import { getMessages, type Locale } from "./localization";
 import { MatchClockPanel } from "./MatchClockPanel";
-import { opposing, presetIsClocked, type MatchPreset } from "./match-clock";
+import {
+  opposing,
+  presetIsAdjudicated,
+  presetIsClocked,
+  presetTurnAllowanceMs,
+  type MatchPreset,
+} from "./match-clock";
 import { downloadText } from "./kifu";
 import { KifuSaveMenu } from "./KifuSaveMenu";
 import type { KifuRecord } from "./kifu";
@@ -140,10 +146,10 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           : "Cancelling search…"
         : state.phase === "stopped"
           ? ja
-            ? presetIsClocked(state.preset)
+            ? presetIsAdjudicated(state.preset)
               ? "停止中 · 残り時間を保持しています。"
               : "停止中。"
-            : presetIsClocked(state.preset)
+            : presetIsAdjudicated(state.preset)
               ? "Paused. Remaining time is preserved."
               : "Paused."
           : result !== null
@@ -212,9 +218,10 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
       }
       baseMs={state.clock[side === "black" ? "blackTimeMs" : "whiteTimeMs"]}
       runningSince={running(side)}
-      showClock={presetIsClocked(state.preset)}
+      showClock={presetIsAdjudicated(state.preset)}
       active={running(side) !== null}
       remainingLabel={messages.match.remainingTime}
+      turnClock={presetTurnAllowanceMs(state.preset) !== null}
     />
   );
 

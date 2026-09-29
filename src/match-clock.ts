@@ -9,17 +9,20 @@ import {
 } from "./play-settings";
 
 /**
- * Match mode offers four presets. The two clocked presets are sudden death
- * (kire-make): no byoyomi, no increment, so running out of main time loses.
+ * Match mode offers four presets. The two sudden-death presets (kire-make)
+ * have no byoyomi and no increment, so running out of main time loses.
  *
- * `fixed10` is a genuine per-move budget: zero base clock plus a 10-second
- * byoyomi period, which the engine treats as one bounded search per move —
- * unused time never carries, so nothing accumulates and no move can flag.
- * The engine's own plan keeps most of each period; the UI shows no clock.
+ * `fixed10` gives each side a fresh 10-second allowance for every move. The
+ * allowance never carries between turns, so nothing accumulates and the UI
+ * resets the countdown after each legal move. The wall-clock turn timeout is
+ * adjudicated by the UI for both players — the engine still receives the
+ * per-move request (zero base time plus a 10-second byoyomi period) through
+ * `open_shogi_time_control/v1` and keeps control of its own search inside
+ * that allowance.
  *
- * The UI never allocates thinking time for a clocked move. It forwards the
- * remaining clock in `open_shogi_time_control/v1` and the engine decides its
- * own budget.
+ * The UI never allocates thinking time for an adjudicated move. It forwards
+ * the remaining clock in `open_shogi_time_control/v1` and the engine decides
+ * its own budget.
  */
 export type MatchPreset = "blitz3" | "rapid10" | "fixed10" | "unlimited";
 
@@ -74,25 +77,51 @@ function suddenDeath(mainMinutes: number): TimeControlSettings {
   };
 }
 
+/** Sudden-death presets run one cumulative clock per side for the whole game. */
 export function presetIsClocked(preset: MatchPreset): boolean {
   return preset === "blitz3" || preset === "rapid10";
 }
 
+/** Fixed per-move allowance in milliseconds, or null when not per-move. */
+export function presetTurnAllowanceMs(preset: MatchPreset): number | null {
+  return preset === "fixed10" ? 10_000 : null;
+}
+
+/**
+ * Presets whose wall-clock turn timeout the UI adjudicates for both players.
+ * Sudden death flags a side out of main time; `fixed10` flags a side that
+ * exceeds its fresh per-move allowance. Unused time never carries for
+ * `fixed10`, so its clock is a per-turn budget, not a cumulative one.
+ */
+export function presetIsAdjudicated(preset: MatchPreset): boolean {
+  return presetIsClocked(preset) || presetTurnAllowanceMs(preset) !== null;
+}
+
 export function initialClockFor(preset: MatchPreset): MatchClock {
+  const allowance = presetTurnAllowanceMs(preset);
+  if (allowance !== null) {
+    return { blackTimeMs: allowance, whiteTimeMs: allowance };
+  }
   return initialMatchClock(presetSettings(preset));
 }
 
 /**
  * Serializes the preset for the engine. Clocked presets forward each side's
  * remaining main time; the engine allocates the move budget itself. `fixed10`
- * forwards zero base time plus the 10-second byoyomi period, which the engine
- * turns into a hard per-move budget that never carries between moves.
+ * always forwards zero base time plus the 10-second byoyomi period regardless
+ * of the UI's per-turn countdown, which the engine turns into a hard per-move
+ * budget that never carries between moves. Callers must therefore omit the
+ * remaining clock for `fixed10` (its UI clock is a display-only allowance,
+ * never an engine handoff).
  */
 export function matchTimeControl(
   preset: MatchPreset,
-  remaining: MatchClock,
+  remaining?: MatchClock,
 ): TimeControl {
-  return serializeTimeControl(presetSettings(preset), remaining);
+  return serializeTimeControl(
+    presetSettings(preset),
+    remaining ?? initialMatchClock(presetSettings(preset)),
+  );
 }
 
 function clockKey(side: Side): "blackTimeMs" | "whiteTimeMs" {
@@ -153,6 +182,18 @@ export function formatMatchClock(milliseconds: number): string {
     return `${seconds}.${Math.floor((total % 1_000) / 100)}`;
   }
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+/**
+ * Seconds.tenths readout for per-move allowances (10.0 → 0.0). A fixed
+ * allowance spends its whole life under the mm:ss floor, so both the running
+ * and the idle panel must use the same scale or the pair reads as two
+ * different clocks.
+ */
+export function formatTurnClock(milliseconds: number): string {
+  const total = Math.max(0, Math.round(milliseconds));
+  const whole = Math.floor(total / 1_000);
+  return `${whole}.${Math.floor((total % 1_000) / 100)}`;
 }
 
 export const CLOCK_URGENT_MS = 10_000;

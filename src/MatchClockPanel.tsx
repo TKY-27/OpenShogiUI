@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import { clockIsUrgent, formatMatchClock } from "./match-clock";
+import {
+  clockIsUrgent,
+  formatMatchClock,
+  formatTurnClock,
+} from "./match-clock";
 
 const CLOCK_TICK_MS = 100;
 
@@ -19,6 +23,7 @@ export function MatchClockPanel({
   showClock,
   active,
   remainingLabel,
+  turnClock = false,
 }: {
   label: string;
   name: string;
@@ -27,6 +32,8 @@ export function MatchClockPanel({
   showClock: boolean;
   active: boolean;
   remainingLabel: (clock: string) => string;
+  /** Per-move allowance readout: one seconds.tenths scale for both panels. */
+  turnClock?: boolean;
 }) {
   const [, forceTick] = useState(0);
   useEffect(() => {
@@ -42,6 +49,9 @@ export function MatchClockPanel({
     runningSince === null
       ? baseMs
       : Math.max(0, baseMs - Math.max(0, Date.now() - runningSince));
+  const shown = turnClock
+    ? formatTurnClock(remainingMs)
+    : formatMatchClock(remainingMs);
   const urgent = showClock && clockIsUrgent(remainingMs);
   return (
     <div
@@ -57,10 +67,10 @@ export function MatchClockPanel({
       <span className="match-clock__name">{name}</span>
       {showClock ? (
         <strong
-          aria-label={remainingLabel(formatMatchClock(remainingMs))}
+          aria-label={remainingLabel(shown)}
           className="match-clock__time"
         >
-          {formatMatchClock(remainingMs)}
+          {shown}
         </strong>
       ) : (
         <strong aria-hidden="true" className="match-clock__time">

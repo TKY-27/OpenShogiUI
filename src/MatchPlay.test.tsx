@@ -96,11 +96,17 @@ describe("match mode clock and dialog contracts", () => {
     // tab and let a player survive a flag fall by switching away.
     expect(source).toContain("Date.now()");
     expect(source).toContain("hasFlagFallen");
-    expect(source).toContain("const spent = clocked ? Date.now() - startedAt");
+    expect(source).toContain("const spent = Date.now() - startedAt;");
   });
 
   it("forwards the preset to the engine without choosing a move budget", () => {
-    expect(source).toContain("matchTimeControl(preset, clockAtTurn)");
+    // Sudden death forwards the remaining clock; fixed10 must not forward its
+    // display-only per-turn allowance, so the engine request omits it and the
+    // preset module (match-clock.ts) supplies the authoritative per-move
+    // budget instead.
+    expect(source).toContain(
+      "turnAllowanceMs === null ? clockAtTurn : undefined",
+    );
     // The route never hard-codes a budget; the fixed per-move limit lives in
     // the preset module (match-clock.ts), not in this component.
     expect(source).not.toContain("movetimeMs");

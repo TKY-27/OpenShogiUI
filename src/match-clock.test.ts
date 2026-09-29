@@ -4,12 +4,15 @@ import {
   chargeTurn,
   clockIsUrgent,
   formatMatchClock,
+  formatTurnClock,
   hasFlagFallen,
   initialClockFor,
   matchTimeControl,
   opposing,
+  presetIsAdjudicated,
   presetIsClocked,
   presetSettings,
+  presetTurnAllowanceMs,
   remainingAt,
 } from "./match-clock";
 
@@ -32,11 +35,12 @@ describe("match presets", () => {
   it("gives the unlimited preset no clock at all", () => {
     expect(presetSettings("unlimited").mode).toBe("casual");
     expect(presetIsClocked("unlimited")).toBe(false);
+    expect(presetIsAdjudicated("unlimited")).toBe(false);
     expect(presetIsClocked("blitz3")).toBe(true);
     expect(presetIsClocked("rapid10")).toBe(true);
   });
 
-  it("makes fixed10 a per-move budget with no clock", () => {
+  it("makes fixed10 a fresh per-move allowance for both sides", () => {
     const settings = presetSettings("fixed10");
     // Zero base clock plus a byoyomi period: the engine recognizes this as a
     // pure per-move budget where unused time never carries.
@@ -44,11 +48,15 @@ describe("match presets", () => {
     expect(settings.mainMinutes).toBe(0);
     expect(settings.byoyomiSeconds).toBe(10);
     expect(settings.incrementSeconds).toBe(0);
+    // The engine handoff stays budget-per-move, but the UI adjudicates the
+    // same 10 seconds against both players.
     expect(presetIsClocked("fixed10")).toBe(false);
-    // Nothing accumulates: a fresh match starts at zero and stays there.
+    expect(presetTurnAllowanceMs("fixed10")).toBe(10_000);
+    expect(presetIsAdjudicated("fixed10")).toBe(true);
+    // The countdown restarts from the full allowance every turn.
     expect(initialClockFor("fixed10")).toEqual({
-      blackTimeMs: 0,
-      whiteTimeMs: 0,
+      blackTimeMs: 10_000,
+      whiteTimeMs: 10_000,
     });
   });
 
@@ -102,10 +110,9 @@ describe("engine time control handoff", () => {
   });
 
   it("hands fixed10 to the engine as a pure per-move byoyomi budget", () => {
-    const control = matchTimeControl("fixed10", {
-      blackTimeMs: 0,
-      whiteTimeMs: 0,
-    });
+    // Called without a remaining clock — fixed10's UI countdown is a
+    // display-only allowance and must never become an engine handoff.
+    const control = matchTimeControl("fixed10");
 
     expect(control.schema).toBe("open_shogi_time_control/v1");
     // The zero base clock plus the byoyomi period is the engine's authoritative
@@ -118,6 +125,17 @@ describe("engine time control handoff", () => {
     expect(control.whiteIncrementMs).toBe(0);
     expect(control.movetimeMs).toBeUndefined();
     expect(control.nodes).toBeUndefined();
+  });
+
+  it("per-move allowances flag both sides through the shared wall-clock check", () => {
+    const allowance = initialClockFor("fixed10");
+    // A fresh turn has its full 10 seconds.
+    expect(hasFlagFallen(allowance, "white", 0, 9_999)).toBe(false);
+    expect(hasFlagFallen(allowance, "white", 0, 10_000)).toBe(true);
+    // The idle side is never charged while the other thinks: its own turn has
+    // not started, so its allowance is still full when it becomes its turn.
+    expect(hasFlagFallen(allowance, "black", 10_000, 10_000)).toBe(false);
+    expect(remainingAt(allowance, "white", 0, 4_000)).toBe(6_000);
   });
 });
 
@@ -185,6 +203,16 @@ describe("presentation helpers", () => {
     expect(formatMatchClock(9_900)).toBe("9.9");
     expect(formatMatchClock(0)).toBe("0.0");
     expect(formatMatchClock(-500)).toBe("0.0");
+  });
+
+  it("reads a per-move allowance on one seconds.tenths scale throughout", () => {
+    // The idle panel sits at exactly the allowance while the other side
+    // counts down; both must use the same format.
+    expect(formatTurnClock(10_000)).toBe("10.0");
+    expect(formatTurnClock(9_800)).toBe("9.8");
+    expect(formatTurnClock(1_000)).toBe("1.0");
+    expect(formatTurnClock(0)).toBe("0.0");
+    expect(formatTurnClock(-400)).toBe("0.0");
   });
 
   it("marks the final ten seconds as urgent", () => {

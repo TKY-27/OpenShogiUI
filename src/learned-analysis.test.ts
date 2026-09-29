@@ -622,6 +622,186 @@ describe("position-analysis auto-follow", () => {
     session.dispose();
   });
 
+  it("drops a move resolved against a board that trails the cursor mid-sync", async () => {
+    const record: FakeSearch = { requests: [], settle: () => {}, created: [] };
+    // Hold the first navigation sync so the display trails the cursor the way
+    // an uncached reposition does in the real runtime.
+    let release: (() => void) | null = null;
+    let heldOnce = false;
+    const base = parkingClient(record);
+    const session = new LearnedAnalysisSession(
+      () => {},
+      () => {
+        const client = base();
+        const inner = client.move;
+        client.move = ((movement: string) => {
+          if (heldOnce) return inner(movement);
+          heldOnce = true;
+          return new Promise<PrototypeSnapshot>((resolve) => {
+            release = () =>
+              resolve(inner(movement) as Promise<PrototypeSnapshot>);
+          });
+        }) as typeof client.move;
+        return client;
+      },
+      async (selection) => manifest(selection!),
+    );
+    await session.prepare("r4c3");
+    const first = session.move("7g7f");
+    await vi.waitFor(() => expect(session.state.cursor).toBe(1));
+    // The board still shows the start position while the sync is in flight, so
+    // a click there resolves "3c3d". It must not extend the record at cursor 1.
+    await session.move("3c3d");
+    expect(session.state.record.moves).toEqual(["7g7f"]);
+    expect(session.state.line).toEqual(["7g7f"]);
+    expect(session.state.cursor).toBe(1);
+    // Once the synced board lands, the same move is accepted normally.
+    release!();
+    await first;
+    await vi.waitFor(() =>
+      expect(session.state.snapshot?.moves).toEqual(["7g7f"]),
+    );
+    await session.move("3c3d");
+    expect(session.state.record.moves).toEqual(["7g7f", "3c3d"]);
+    await vi.waitFor(() =>
+      expect(session.state.snapshot?.moves).toEqual(["7g7f", "3c3d"]),
+    );
+    session.dispose();
+  });
+
+  it("drops a click on a discarded branch board whose depth matches the cursor", async () => {
+    // discardBranch keeps the discarded board on display while the committed
+    // replacement syncs. When the branch end depth equals the restored cursor,
+    // depth alone cannot tell the two apart — the guard must compare position
+    // content, or a branch-legal move lands on the committed line and
+    // adoptBranch would commit a move the engine would reject.
+    const modelHash = "a".repeat(64);
+    const asset = { url: "/test", sha256: modelHash, size: 1 };
+    const branchManifest: PrototypeManifest = {
+      schema: "open_shogi_core_prototype_assets/v2",
+      selection: "r4c3",
+      runId: "test-r4c3",
+      artifacts: {
+        "engine.js": asset,
+        "engine.wasm": asset,
+        "leaf.osaval03": asset,
+        "controller.json": null,
+      },
+    };
+    const identity = {
+      modelId: branchManifest.runId,
+      modelFormat: "OSAVAL03",
+      leafSha256: modelHash,
+      controllerSha256: null,
+      jsSha256: modelHash,
+      wasmSha256: modelHash,
+      expectedHashVerified: true,
+      buildClass: "pure-only",
+      evaluationMode: "pure-value",
+    } as const;
+    const record = ["7g7f", "3c3d", "7g7f", "3c3d", "9i9h", "3c3d"];
+    const isRecordPrefix = (moves: string[]) =>
+      moves.length <= record.length &&
+      record.slice(0, moves.length).join(" ") === moves.join(" ");
+    const snapFor = (moves: string[]): PrototypeSnapshot =>
+      ({
+        initialSfen: START_SFEN,
+        sfen:
+          moves.length === 0 ? START_SFEN : `${START_SFEN}|${moves.join(",")}`,
+        sideToMove: moves.length % 2 === 0 ? "black" : "white",
+        moveNumber: moves.length + 1,
+        board: Array(81).fill(null),
+        hands: { black: [], white: [] },
+        moves,
+        terminal: null,
+        leafSha256: modelHash,
+        // A branch position accepts a move the committed line never would.
+        legalMoves: (isRecordPrefix(moves)
+          ? ["7g7f", "3c3d", "9i9h"]
+          : ["2b8h+"]
+        ).map((usi) => ({
+          usi,
+          from: null,
+          to: { file: 7, rank: 7 },
+          drop: null,
+          promote: usi.endsWith("+"),
+        })),
+      }) as PrototypeSnapshot;
+    const replays: string[][] = [];
+    let holdFrom = Number.POSITIVE_INFINITY;
+    let made = 0;
+    const session = new LearnedAnalysisSession(
+      () => {},
+      () => {
+        made += 1;
+        let workerMoves: string[] = [];
+        const client = {
+          dispose: vi.fn(),
+          initialize: vi.fn(
+            async (
+              _m: PrototypeManifest,
+              _enabled: boolean,
+              position: { moves: string[] } | null,
+            ) => {
+              workerMoves = [...(position?.moves ?? [])];
+              replays.push([...workerMoves]);
+              // The real Worker replays and validates: a phantom extension of
+              // the committed line is rejected.
+              if (!isRecordPrefix(workerMoves))
+                throw new Error("illegal position replayed");
+              if (holdFrom === made) await new Promise(() => {});
+              return {
+                snapshot: snapFor(workerMoves),
+                identity,
+                preparation: {
+                  fetchMs: 0,
+                  moduleMs: 0,
+                  compileMs: 0,
+                  modelMs: 0,
+                  totalMs: 0,
+                },
+              };
+            },
+          ),
+          move: vi.fn(async (movement: string) => {
+            workerMoves = [...workerMoves, movement];
+            return snapFor(workerMoves);
+          }),
+        };
+        return client as unknown as PrototypeWorkerClient;
+      },
+      async () => branchManifest,
+    );
+    await session.prepare("r4c3", {
+      initialSfen: START_SFEN,
+      moves: record,
+    });
+    await session.goto(4);
+    // Branch from cursor 4 with a move that differs from record[4].
+    await session.move("7g7f");
+    expect(session.state.branching).toBe(true);
+    expect(session.state.cursor).toBe(5);
+    // Discard. The committed cursor-5 position is uncached, so the discarded
+    // branch board stays on display while the re-sync is held in flight.
+    holdFrom = made + 1;
+    session.discardBranch();
+    expect(session.state.snapshot?.moves).toEqual([
+      ...record.slice(0, 4),
+      "7g7f",
+    ]);
+    // A click legal on the discarded branch board must be dropped...
+    await session.move("2b8h+");
+    expect(session.state.line).toEqual(record);
+    expect(session.state.record.moves).toEqual(record);
+    expect(session.state.branching).toBe(false);
+    // ...and once the committed position lands, normal moves work again.
+    await session.goto(5);
+    await vi.waitFor(() =>
+      expect(session.state.snapshot?.moves).toEqual(record.slice(0, 5)),
+    );
+    session.dispose();
+  });
+
   it("accepts only the newest position during rapid navigation", async () => {
     const record: FakeSearch = { requests: [], settle: () => {}, created: [] };
     const session = new LearnedAnalysisSession(

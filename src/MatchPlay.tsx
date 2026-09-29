@@ -25,7 +25,9 @@ import {
   matchTimeControl,
   MATCH_PRESETS,
   opposing,
+  presetIsAdjudicated,
   presetIsClocked,
+  presetTurnAllowanceMs,
   type MatchOutcome,
   type MatchPreset,
 } from "./match-clock";
@@ -90,6 +92,8 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     timeline?.entries.slice(1).map(({ moveTimeMs }) => moveTimeMs) ?? [];
   const undone = timeline?.undone ?? [];
   const clocked = presetIsClocked(preset);
+  const adjudicated = presetIsAdjudicated(preset);
+  const turnAllowanceMs = presetTurnAllowanceMs(preset);
   const sideToMove = snapshot?.sideToMove ?? "black";
   const humanToMove = phase === "playing" && sideToMove === humanSide;
 
@@ -135,13 +139,15 @@ export function MatchPlay({ locale }: { locale: Locale }) {
 
   /*
    * Flag fall while a side is still thinking, symmetric for both players.
+   * Sudden death flags a side out of main time; fixed10 flags a side that
+   * exceeds its fresh per-move allowance.
    *
    * This polls rather than deriving from render state so it costs nothing until
    * a flag actually falls. Date.now() is read on each check, so a throttled
    * background tab cannot buy time.
    */
   useEffect(() => {
-    if (phase !== "playing" || !clocked) return;
+    if (phase !== "playing" || !adjudicated) return;
     const check = () => {
       if (!hasFlagFallen(clock, sideToMove, turnStartedAt, Date.now())) return;
       setClock(chargeTurn(clock, sideToMove, Date.now() - turnStartedAt));
@@ -154,7 +160,7 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     check();
     const timer = window.setInterval(check, CLOCK_TICK_MS);
     return () => window.clearInterval(timer);
-  }, [phase, clocked, clock, sideToMove, turnStartedAt, finish]);
+  }, [phase, adjudicated, clock, sideToMove, turnStartedAt, finish]);
 
   function terminalOutcome(next: BrowserSnapshot): MatchOutcome | null {
     if (next.terminal === null) return null;
@@ -178,7 +184,12 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       // only choice that can be satisfied without a user-supplied artifact.
       "overall-champion",
       1,
-      matchTimeControl(preset, clockAtTurn),
+      // fixed10's countdown is display-only: the engine request stays the
+      // preset's authoritative zero base time plus 10-second byoyomi period.
+      matchTimeControl(
+        preset,
+        turnAllowanceMs === null ? clockAtTurn : undefined,
+      ),
     );
     if (operationRef.current !== operation) return;
     if (response.bestMove === null) {
@@ -190,23 +201,22 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       return;
     }
     /*
-     * Charge wall-clock time, not the engine's reported search time.
+     * Adjudicate wall-clock time, not the engine's reported search time.
      *
      * The flag-fall check that runs while a side is thinking can only use wall
      * clock. If the charge used response.elapsedNs instead, the two would
      * disagree: a search could be flagged mid-think for exceeding the clock and
      * yet be billed less than the budget once it returned. A real clock runs on
-     * wall time for both players, so both use it here.
+     * wall time for both players, so both use it here. Only sudden death
+     * accumulates; the charge in the timeout branch just floors the loser's
+     * display at zero.
      */
-    const spent = clocked ? Date.now() - startedAt : 0;
-    let afterEngine = clocked
-      ? chargeTurn(clockAtTurn, engineSide, spent)
-      : clockAtTurn;
+    const spent = Date.now() - startedAt;
     if (
-      clocked &&
-      afterEngine[engineSide === "black" ? "blackTimeMs" : "whiteTimeMs"] <= 0
+      adjudicated &&
+      hasFlagFallen(clockAtTurn, engineSide, startedAt, Date.now())
     ) {
-      setClock(afterEngine);
+      setClock(chargeTurn(clockAtTurn, engineSide, spent));
       finish({
         kind: "timeout",
         winner: opposing(engineSide),
@@ -221,14 +231,15 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       throw new Error("Engine returned an invalid move");
     const replied = await adapter.playMove(response.bestMove);
     if (operationRef.current !== operation) return;
-    afterEngine = clocked
-      ? chargeTurn(clockAtTurn, engineSide, Date.now() - startedAt)
+    const turnSpent = Date.now() - startedAt;
+    const afterEngine = clocked
+      ? chargeTurn(clockAtTurn, engineSide, turnSpent)
       : clockAtTurn;
     if (
-      clocked &&
+      adjudicated &&
       hasFlagFallen(clockAtTurn, engineSide, startedAt, Date.now())
     ) {
-      setClock(afterEngine);
+      setClock(chargeTurn(clockAtTurn, engineSide, turnSpent));
       finish({
         kind: "timeout",
         winner: opposing(engineSide),
@@ -268,7 +279,10 @@ export function MatchPlay({ locale }: { locale: Locale }) {
     try {
       const movedAt = Date.now();
       // Reject an expired move before the worker position changes.
-      if (clocked && hasFlagFallen(clock, humanSide, turnStartedAt, movedAt)) {
+      if (
+        adjudicated &&
+        hasFlagFallen(clock, humanSide, turnStartedAt, movedAt)
+      ) {
         finish({
           kind: "timeout",
           winner: opposing(humanSide),
@@ -283,10 +297,10 @@ export function MatchPlay({ locale }: { locale: Locale }) {
         ? chargeTurn(clock, humanSide, confirmedAt - turnStartedAt)
         : clock;
       if (
-        clocked &&
+        adjudicated &&
         hasFlagFallen(clock, humanSide, turnStartedAt, confirmedAt)
       ) {
-        setClock(afterHuman);
+        setClock(chargeTurn(clock, humanSide, confirmedAt - turnStartedAt));
         finish({
           kind: "timeout",
           winner: opposing(humanSide),
@@ -540,10 +554,10 @@ export function MatchPlay({ locale }: { locale: Locale }) {
       : lastMoveHighlight([previous, snapshot], 1);
 
   const baseFor = (side: Side) =>
-    clocked ? clock[side === "black" ? "blackTimeMs" : "whiteTimeMs"] : 0;
+    adjudicated ? clock[side === "black" ? "blackTimeMs" : "whiteTimeMs"] : 0;
   /** Non-null only for the side whose clock is actually running. */
   const runningSinceFor = (side: Side) =>
-    clocked && phase === "playing" && side === sideToMove
+    adjudicated && phase === "playing" && side === sideToMove
       ? turnStartedAt
       : null;
 
@@ -690,7 +704,8 @@ export function MatchPlay({ locale }: { locale: Locale }) {
           baseMs={baseFor(topSide)}
           remainingLabel={match.remainingTime}
           runningSince={runningSinceFor(topSide)}
-          showClock={clocked}
+          showClock={adjudicated}
+          turnClock={turnAllowanceMs !== null}
         />
 
         <div className="board-fit">
@@ -750,7 +765,8 @@ export function MatchPlay({ locale }: { locale: Locale }) {
           baseMs={baseFor(bottomSide)}
           remainingLabel={match.remainingTime}
           runningSince={runningSinceFor(bottomSide)}
-          showClock={clocked}
+          showClock={adjudicated}
+          turnClock={turnAllowanceMs !== null}
         />
       </div>
 
