@@ -62,8 +62,7 @@ over the same engine (Linux topology discovery, self-load-aware AutoThreads,
 continuous emergency clock ramp, a browser play clock that persists across
 match moves, and an exactness fix in the parallel root merge). It was
 regenerated in OpenShogiAI commit
-`4ed666f5481499ff91c6c00af0044f68e4bf02cd`; OpenShogiAI main at that commit
-contains no later binding change. The three text bindings are unchanged, so
+`bf4d6d5`; OpenShogiAI main at that commit contains no later binding change. The three text bindings are unchanged, so
 `searchWithTimeControl` keeping the match clock state across calls is invisible
 to the TypeScript surface. All four files match `bindings/wasm/` and
 `npm run integration:ai` completes the
@@ -75,5 +74,5 @@ parallel search is a native-USI capability only.
 | ------------------------------ | ------------------------------------------------------------------ |
 | `open_shogi_wasm.d.ts`         | `8b899de7246585f5c7ccafe0b5b2dde012eec0af12a8032d5d4e5741be9cf063` |
 | `open_shogi_wasm.js`           | `8d36745850bb91e90f93436a9c40d833686cca6c1232ab2c7c9346a59e109023` |
-| `open_shogi_wasm_bg.wasm`      | `255fda86ffe265cc31318a40f7490295a015bf61d48eec21e35439e7ea32b681` |
+| `open_shogi_wasm_bg.wasm`      | `7563ff800475362357297ecd00c351870c304be8f49d1db465f61e167924a731` |
 | `open_shogi_wasm_bg.wasm.d.ts` | `efb20b72f02808e77a8baed92fc80fa2f3e1c9b8ce0709f2cd49ed7259933068` |
