@@ -33,7 +33,7 @@ const expectedBindings = new Map([
   ],
   [
     "open_shogi_wasm_bg.wasm",
-    "2f1a67dbf8bdbc3fc92e66eefa310046618ded155daa2d01b037bc0bf12ad7cd",
+    "255fda86ffe265cc31318a40f7490295a015bf61d48eec21e35439e7ea32b681",
   ],
   [
     "open_shogi_wasm_bg.wasm.d.ts",
