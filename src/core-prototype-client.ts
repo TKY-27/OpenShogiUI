@@ -89,6 +89,15 @@ export class PrototypeWorkerClient implements PrototypeEngineClient {
             : ["id", "kind", "ok", "error"],
         );
         const id = numeric(response.id);
+        // An id-less rejection is the Worker's protocol-error signal; surface
+        // its real cause instead of a generic id mismatch.
+        if (id === 0 && !success) {
+          throw new Error(
+            typeof response.error === "string"
+              ? `Prototype request rejected: ${response.error.slice(0, 480)}`
+              : "Prototype request rejected",
+          );
+        }
         const pending = this.pending;
         if (pending === null || pending.id !== id)
           throw new Error("Prototype response id mismatch");
@@ -215,17 +224,20 @@ export class PrototypeWorkerClient implements PrototypeEngineClient {
       profile,
       cancelBuffer: this.cancellation.buffer as SharedArrayBuffer,
     }) as Promise<PrototypeSearch>;
-    // This outer guard already exists before the Worker publishes its own hard budget.
-    const remaining = Math.max(
-      1,
+    // This outer guard already exists before the Worker publishes its own hard
+    // budget. A per-move movetime is its own budget; otherwise the side's
+    // remaining clock (plus byoyomi) is the budget. Casual play has none, so
+    // only the Worker's own hard limit applies there.
+    const clockRemaining =
       this.sideToMove === "black"
         ? (timeControl.blackTimeMs ?? 0)
-        : (timeControl.whiteTimeMs ?? 0),
-    );
-    this.deadlineTimer = setTimeout(
-      () => this.cancelWithWatchdog("host-clock-limit"),
-      remaining,
-    );
+        : (timeControl.whiteTimeMs ?? 0);
+    const budget =
+      timeControl.movetimeMs ?? clockRemaining + (timeControl.byoyomiMs ?? 0);
+    this.deadlineTimer =
+      budget > 0
+        ? setTimeout(() => this.cancelWithWatchdog("host-clock-limit"), budget)
+        : null;
     return promise;
   }
   analysisStart(

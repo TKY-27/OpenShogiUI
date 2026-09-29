@@ -3,9 +3,9 @@ import { readFileSync } from "node:fs";
 import type { HtmlTagDescriptor, Plugin } from "vite";
 import configuration from "./project.config.json";
 
-const TITLE = "OpenShogiAI — 将棋AIと対局・局面解析";
+const TITLE = "OpenShogiAI — オープンな将棋のAI";
 const DESCRIPTION =
-  "OpenShogiAIとブラウザーで対局し、学習モデルで局面を解析できます。対局・解析は端末内で行います。";
+  "オープンな将棋のAI「OpenShogiAI」とブラウザーだけで対局し、学習モデルで局面を解析できます。対局・解析は端末内で行います。";
 const SITE_NAME = "OpenShogiAI";
 
 /**
@@ -61,7 +61,7 @@ export function siteTags(
       "og:image:width": "1200",
       "og:image:height": "630",
       "og:image:type": "image/png",
-      "og:image:alt": `${SITE_NAME} — 将棋AIと対局・局面解析`,
+      "og:image:alt": `${SITE_NAME} — オープンな将棋のAI`,
     }).map(([property, content]) => ({
       tag: "meta",
       attrs: { property, content },

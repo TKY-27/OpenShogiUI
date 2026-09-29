@@ -175,9 +175,25 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
       }
     />
   );
-  const changeOptions = (action: () => void) => {
-    sessionRef.current?.stop(true);
-    action();
+  /** Applies a settings change; an armed auto-follow restarts under it. */
+  const changeOptions = (
+    patch: Partial<{
+      profile: SearchProfile;
+      budget: number;
+      multiPv: number;
+    }>,
+  ) => {
+    const nextProfile = patch.profile ?? profile;
+    const nextBudget = patch.budget ?? budget;
+    const nextMultiPv = patch.multiPv ?? multiPv;
+    if (patch.profile !== undefined) setProfile(patch.profile);
+    if (patch.budget !== undefined) setBudget(patch.budget);
+    if (patch.multiPv !== undefined) setMultiPv(patch.multiPv);
+    sessionRef.current?.applyAnalysisOptions(
+      nextProfile,
+      nextBudget,
+      nextMultiPv,
+    );
   };
   async function loadKifuFile(file: File): Promise<void> {
     const generation = ++fileGeneration.current;
@@ -563,12 +579,17 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
                     ? t("解析中…", "Analyzing…")
                     : state.phase === "stopped"
                       ? t("解析を停止しました。", "Analysis stopped.")
-                      : state.update
-                        ? t("解析を終了しました。", "Analysis complete.")
-                        : t(
-                            "解析は手動で開始します。",
-                            "Start analysis when ready.",
-                          )}
+                      : state.autoFollow
+                        ? t(
+                            "自動解析が有効です。駒を動かすと新しい局面を解析します。",
+                            "Auto-analysis is on: moving to a new position analyzes it.",
+                          )
+                        : state.update
+                          ? t("解析を終了しました。", "Analysis complete.")
+                          : t(
+                              "解析は手動で開始します。",
+                              "Start analysis when ready.",
+                            )}
               </p>
               {position?.terminal ? (
                 <p>
@@ -657,8 +678,8 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
                 </p>
                 <p>
                   {t(
-                    "現runtimeの深さ上限は標準7・高品質9。解析予算は対局時計とは別で、区切りまたは停止時に終了します。ponder・常時解析は行いません。",
-                    "This runtime searches up to depth 7 on Standard and 9 on High quality. Analysis uses a separate time budget and stops at a search boundary or when stopped. Pondering and continuous analysis are off.",
+                    "現在のruntimeの深さ上限は標準7・高品質9。解析予算は対局時計とは別で、各局面の区切りまたは停止時に終了します。自動解析も1局面ごとに予算内で行い、ponderは行いません。",
+                    "This runtime searches up to depth 7 on Standard and 9 on High quality. Analysis uses a separate time budget and stops at a search boundary or when stopped. Auto-analysis stays within the per-position budget, and pondering is off.",
                   )}
                 </p>
               </details>
@@ -797,7 +818,7 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
               )}
               <button
                 type="button"
-                disabled={!searching}
+                disabled={!searching && !state.autoFollow}
                 onClick={() => sessionRef.current?.stop()}
               >
                 {t("解析停止", "Stop analysis")}
@@ -845,9 +866,9 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
                 disabled={state.phase === "loading"}
                 value={profile}
                 onChange={(event) =>
-                  changeOptions(() =>
-                    setProfile(event.target.value as SearchProfile),
-                  )
+                  changeOptions({
+                    profile: event.target.value as SearchProfile,
+                  })
                 }
               >
                 <option value="balanced">{t("標準", "Standard")}</option>
@@ -860,7 +881,7 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
                 disabled={state.phase === "loading"}
                 value={budget}
                 onChange={(event) =>
-                  changeOptions(() => setBudget(Number(event.target.value)))
+                  changeOptions({ budget: Number(event.target.value) })
                 }
               >
                 <option value={250}>{t("0.25秒", "0.25 seconds")}</option>
@@ -874,7 +895,7 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
                 disabled={state.phase === "loading"}
                 value={multiPv}
                 onChange={(event) =>
-                  changeOptions(() => setMultiPv(Number(event.target.value)))
+                  changeOptions({ multiPv: Number(event.target.value) })
                 }
               >
                 <option value={1}>{t("1手", "1 move")}</option>

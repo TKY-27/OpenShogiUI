@@ -850,6 +850,53 @@ describe("prototype game clock and cancellation", () => {
     await h.session.configure();
     expect(h.session.state.moveTimes).toEqual([]);
   });
+  it("plays fixed10 as a clockless per-move budget with wall-clock move times", async () => {
+    const h = await harness();
+    await h.session.start("black", false, "fixed10", "balanced");
+    // Half a "minute" of thinking cannot flag: there is no match clock, and
+    // tick() must not treat the zero base clock as a flag fall.
+    h.at(500_000);
+    const move = h.session.move("7g7f");
+    await vi.waitFor(() => expect(h.clients[0].search).toHaveBeenCalledOnce());
+    // The engine receives the pure per-move budget, not a remaining clock.
+    expect(h.clients[0].search.mock.calls[0]).toEqual([
+      {
+        schema: "open_shogi_time_control/v1",
+        blackTimeMs: 0,
+        whiteTimeMs: 0,
+        byoyomiMs: 10_000,
+        blackIncrementMs: 0,
+        whiteIncrementMs: 0,
+        safetyMarginMs: 50,
+      },
+      "balanced",
+    ]);
+    h.clients[0].result.resolve({
+      ...searchResult(),
+      computeControl: telemetry(false),
+    });
+    h.at(501_000);
+    await move;
+    // Nothing accumulated and the phase is still playing.
+    expect(h.session.state.clock).toEqual({ blackTimeMs: 0, whiteTimeMs: 0 });
+    expect(h.session.state.phase).toBe("playing");
+    // Move times come from the wall clock on clockless presets.
+    expect(h.session.state.moveTimes).toEqual([
+      {
+        side: "black",
+        movement: "7g7f",
+        elapsedMs: 499_900,
+        remaining: { blackTimeMs: 0, whiteTimeMs: 0 },
+      },
+      {
+        side: "white",
+        movement: "3c3d",
+        elapsedMs: 1_000,
+        remaining: { blackTimeMs: 0, whiteTimeMs: 0 },
+      },
+    ]);
+    h.session.dispose();
+  });
   it("starts the AI as black when the human selects gote", async () => {
     const h = await harness();
     const started = h.session.start("white", false);

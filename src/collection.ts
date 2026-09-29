@@ -150,6 +150,9 @@ export class GameCollection {
       !state.result ||
       !state.snapshot ||
       !state.identity ||
+      // The closed submission schema covers the two clocked presets only;
+      // per-move and untimed games stay local.
+      (state.preset !== "blitz3" && state.preset !== "rapid10") ||
       state.selection !== "r4c4" ||
       state.enabled ||
       state.snapshot.initialSfen !== START_SFEN ||
@@ -165,6 +168,9 @@ export class GameCollection {
           state.snapshot.legalMoves.length !== 0 ||
           state.snapshot.terminal.winner !== state.result.winner))
     )
+      // The closed schema also admits only resignation and checkmate endings:
+      // a timeout cannot be proven from a move list, so such games fall
+      // through parseSubmission and silently stay local, as designed.
       return;
     let payload: GameSubmission;
     try {

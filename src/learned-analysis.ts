@@ -92,6 +92,8 @@ export interface LearnedAnalysisState {
   snapshot: PrototypeSnapshot | null;
   identity: RuntimeIdentity | null;
   phase: "loading" | "ready" | "searching" | "stopped" | "error";
+  /** True while the user's position-analysis intent persists across moves. */
+  autoFollow: boolean;
   update: AnalysisUpdate | null;
   progress: AnalysisProgress;
   error: string | null;
@@ -112,6 +114,7 @@ export const initialAnalysisState = (): LearnedAnalysisState => ({
   snapshot: null,
   identity: null,
   phase: "loading",
+  autoFollow: false,
   update: null,
   progress: emptyProgress(),
   error: null,
@@ -178,6 +181,10 @@ export class LearnedAnalysisSession {
   private searchClient: PrototypeWorkerClient | null = null;
   /** Plies of the current line the navigation worker is positioned after; -1 = unknown. */
   private navPosition = -1;
+  /** True while a navigation reposition is in flight; navPosition is stale then. */
+  private navSyncing = false;
+  /** Cursor of the snapshot actually on display during a sync. */
+  private displayedCursor = 0;
   private manifest: PrototypeManifest | null = null;
   private abort: AbortController | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -187,6 +194,20 @@ export class LearnedAnalysisSession {
   private readonly store: AnalysisSummaryStore;
   /** Identity of the most recent search; displayed results must match it. */
   private lastOptionsHash: string | null = null;
+  /**
+   * The armed position-analysis intent: while set, every newly displayed
+   * position starts its own bounded analysis with these options. Mate search
+   * and the full-record sweep are one-shot activities and clear it.
+   */
+  private autoFollowOptions: {
+    profile: SearchProfile;
+    budgetMs: number;
+    multiPv: number;
+  } | null = null;
+  /** Position the running search belongs to, for supersede decisions. */
+  private searchPositionSfen: string | null = null;
+  /** Which activity owns the search channel; null while idle. */
+  private searchKind: "position" | "sweep" | null = null;
 
   constructor(
     private readonly onChange: (state: LearnedAnalysisState) => void,
@@ -244,7 +265,11 @@ export class LearnedAnalysisSession {
         snapshot: ready.snapshot,
         identity: ready.identity,
       });
+      this.displayedCursor = this.state.cursor;
       this.publishGraph();
+      // A model switch (no explicit position) keeps the displayed position;
+      // an armed auto-follow restarts it with the new runtime.
+      if (position === null) this.autoAnalyzeCurrent();
     } catch (error) {
       if (this.current(generation)) {
         this.invalidate();
@@ -320,7 +345,11 @@ export class LearnedAnalysisSession {
       error: null,
     });
     this.publishGraph();
-    if (cursorAfter === "start" && this.state.cursor > 0) await this.goto(0);
+    if (cursorAfter === "start" && this.state.cursor > 0) {
+      await this.goto(0);
+    } else {
+      this.autoAnalyzeCurrent();
+    }
   }
 
   /** Moves the displayed position without touching record or line. */
@@ -329,24 +358,51 @@ export class LearnedAnalysisSession {
       0,
       Math.min(Math.round(cursor), this.state.line.length),
     );
-    if (target === this.state.cursor && this.state.snapshot !== null) return;
+    if (
+      target === this.state.cursor &&
+      this.state.snapshot !== null &&
+      // A stale navPosition (branch discard, failed sync) needs a re-sync
+      // even though the display already shows this cursor.
+      this.navPosition === target &&
+      !this.navSyncing
+    )
+      return;
     const prefix = this.state.line.slice(0, target);
     const cached = this.cachedSnapshot(prefix);
     this.state.cursor = target;
     this.publish({
       cursor: target,
-      snapshot: cached,
+      // Keep the previous board on display until the synced snapshot for the
+      // new cursor arrives; a blank board would flash on every jump.
+      snapshot: cached ?? this.state.snapshot,
       update: cached === null ? null : this.lookupUpdate(cached),
       progress: emptyProgress(),
     });
+    if (cached !== null) this.displayedCursor = target;
     // Re-position the navigation worker in the background; navigation to a
     // cached position stays instant, and a superseded sync is discarded.
     const generation = ++this.generation;
     if (!this.manifest || this.disposed) return;
     try {
-      if (this.navPosition === target && this.client !== null) return;
+      if (
+        this.navPosition === target &&
+        this.client !== null &&
+        !this.navSyncing
+      )
+        return;
+      // A superseded sync may still be replacing this.client; until it
+      // settles, navPosition does not describe any live worker, so the sync
+      // must not be skipped and must not reuse the single-step fast path.
+      const wasSyncing = this.navSyncing;
+      this.navSyncing = true;
+      // The armed analysis intent follows the displayed position. Only a
+      // display that already shows the target starts immediately; a stale
+      // display waits for the sync so its analysis is not spawned just to be
+      // superseded when the true position lands.
+      this.autoAnalyzeCurrent();
       let synced: PrototypeSnapshot | null = null;
       if (
+        !wasSyncing &&
         this.navPosition === target - 1 &&
         target >= 1 &&
         this.client !== null
@@ -366,19 +422,26 @@ export class LearnedAnalysisSession {
       }
       if (!this.current(generation)) return;
       this.navPosition = target;
+      this.navSyncing = false;
       if (synced !== null) {
         this.cacheSnapshot(synced);
-        if (this.state.cursor === target)
+        if (this.state.cursor === target) {
+          this.displayedCursor = target;
           this.publish({
             snapshot: synced,
             update: this.lookupUpdate(synced),
           });
+          this.autoAnalyzeCurrent();
+        }
       }
     } catch {
       // A superseded or failed sync surfaces on the next operation instead of
       // clobbering the view the user is looking at. The unknown position
-      // forces a fresh worker on the next sync.
-      this.navPosition = -1;
+      // forces a fresh worker on the next sync; a newer sync owns the flag.
+      if (this.current(generation)) {
+        this.navPosition = -1;
+        this.navSyncing = false;
+      }
     }
   }
 
@@ -420,9 +483,30 @@ export class LearnedAnalysisSession {
     if (!this.state.branching) return;
     this.state.line = [...this.state.record.moves];
     this.state.branching = false;
-    this.publish({ line: this.state.line, branching: false });
+    // The cursor may be numerically unchanged (branch end == record end), so
+    // the restored committed position is published here; goto would otherwise
+    // see the same cursor and keep the discarded branch on the board.
+    const cursor = Math.min(this.state.cursor, this.state.line.length);
+    this.state.cursor = cursor;
+    const cached = this.cachedSnapshot(this.state.line.slice(0, cursor));
+    this.publish({
+      line: this.state.line,
+      branching: false,
+      cursor,
+      // Keep the discarded board on display rather than blanking when the
+      // committed snapshot is not cached; the sync below replaces it.
+      snapshot: cached ?? this.state.snapshot,
+      update: cached === null ? null : this.lookupUpdate(cached),
+      progress: emptyProgress(),
+    });
+    if (cached !== null) this.displayedCursor = cursor;
     this.publishGraph();
-    void this.goto(Math.min(this.state.cursor, this.state.line.length));
+    // The navigation worker still sits at the branch end, and depth alone
+    // cannot distinguish that from the committed position of the same
+    // length. Force a fresh sync so the next step cannot extend a discarded
+    // branch in place.
+    this.navPosition = -1;
+    void this.goto(cursor);
   }
 
   /** Promotes the displayed branch to the committed record. */
@@ -452,21 +536,29 @@ export class LearnedAnalysisSession {
   ): Promise<void> {
     if (
       this.searchRunning ||
+      this.state.phase === "loading" ||
       !this.state.snapshot ||
       ![250, 1000, 3000].includes(budgetMs) ||
       ![1, 3].includes(multiPv)
     )
       return;
+    // Starting position analysis arms auto-follow: subsequent positions keep
+    // analyzing until the user stops. Mate search is a one-shot activity and
+    // disarms an armed intent instead of becoming continuous.
+    const armed = mode === "position";
+    this.autoFollowOptions = armed ? { profile, budgetMs, multiPv } : null;
     // The pinned Wasm clamps depth to the profile ceiling whatever the host
     // asks, so a mate search differs from a position search in budget only.
     const budget = mode === "mate" ? Math.max(budgetMs, 3000) : budgetMs;
     const generation = ++this.searchGeneration;
     this.searchRunning = true;
+    this.searchKind = "position";
     this.searchClient?.dispose();
     const client = this.makeClient();
     this.searchClient = client;
     this.publish({
       phase: "searching",
+      autoFollow: armed,
       update: null,
       progress: emptyProgress(),
       error: null,
@@ -476,6 +568,7 @@ export class LearnedAnalysisSession {
       if (!this.manifest || this.manifest.selection !== this.state.selection)
         throw new Error("モデルを再読込してください。");
       const position = this.state.snapshot;
+      this.searchPositionSfen = position.sfen;
       const request = await analysisRequest(
         position,
         this.manifest,
@@ -487,7 +580,7 @@ export class LearnedAnalysisSession {
       if (!this.searchCurrent(generation)) return;
       if (cached !== null) {
         this.storeResult(request, cached.update);
-        this.publish({ update: cached.update });
+        this.publishResultIfDisplayed(cached.update);
       }
       // Fresh Worker/TT for each bounded analysis; no match clock or automatic move.
       const ready = await client.initialize(this.manifest, false, position);
@@ -500,7 +593,7 @@ export class LearnedAnalysisSession {
       await client.analysisStart(request, profile);
       if (!this.searchCurrent(generation)) return;
       const started = performance.now();
-      this.timer = setTimeout(() => this.stop(), budget + 250);
+      this.timer = setTimeout(() => this.deadlineReached(), budget + 250);
       do {
         const response = await client.analysisStep({
           schema: ANALYSIS_SCHEMA,
@@ -520,7 +613,7 @@ export class LearnedAnalysisSession {
             throw new Error("解析応答の局面・モデルが一致しません。");
           if (update.depth > 0) {
             this.storeResult(request, update);
-            this.publish({ update, graph: this.deriveGraph() });
+            this.publishResultIfDisplayed(update);
           }
         }
         this.publish({
@@ -562,13 +655,18 @@ export class LearnedAnalysisSession {
     const line = [...this.state.line];
     const initialSfen = this.state.record.initialSfen;
     if (this.searchRunning || line.length === 0) return;
+    // The sweep is its own activity: navigation during it must not restart
+    // it, and an armed position-analysis intent does not survive it.
+    this.autoFollowOptions = null;
     const generation = ++this.searchGeneration;
     this.searchRunning = true;
+    this.searchKind = "sweep";
     this.searchClient?.dispose();
     const client = this.makeClient();
     this.searchClient = client;
     this.publish({
       phase: "searching",
+      autoFollow: false,
       sweep: { done: 0, total: line.length + 1 },
       progress: emptyProgress(),
       error: null,
@@ -662,24 +760,45 @@ export class LearnedAnalysisSession {
     }
   }
 
+  /**
+   * Explicit stop. It ends the running search if any and always disarms the
+   * auto-follow intent: after Stop, moving pieces, changing settings,
+   * switching models or loading records stays stopped until Start is pressed
+   * again.
+   */
   stop(clear = false): void {
+    this.autoFollowOptions = null;
     if (this.searchRunning) {
       // Invalidate the running search silently: the search loop observes the
       // generation bump and returns without publishing an error.
       this.searchGeneration++;
       this.endSearch();
-      this.publish({
-        phase: "stopped",
-        sweep: null,
-        ...(clear ? { update: null, progress: emptyProgress() } : {}),
-      });
-    } else if (clear) {
-      this.publish({
-        phase: "stopped",
-        update: null,
-        progress: emptyProgress(),
-      });
     }
+    this.publish({
+      phase: "stopped",
+      sweep: null,
+      autoFollow: false,
+      ...(clear ? { update: null, progress: emptyProgress() } : {}),
+    });
+  }
+
+  /**
+   * Applies changed analysis settings. With auto-follow armed, the displayed
+   * position restarts cleanly under the new options; otherwise this keeps the
+   * previous behavior of stopping the current analysis.
+   */
+  applyAnalysisOptions(
+    profile: SearchProfile,
+    budgetMs: number,
+    multiPv: number,
+  ): void {
+    if (this.autoFollowOptions === null) {
+      this.stop(true);
+      return;
+    }
+    this.autoFollowOptions = { profile, budgetMs, multiPv };
+    this.supersedeSearch();
+    void this.analyze(profile, budgetMs, multiPv, "position");
   }
 
   dispose(): void {
@@ -687,8 +806,70 @@ export class LearnedAnalysisSession {
     this.invalidate();
   }
 
+  /**
+   * Starts the armed bounded analysis for the currently displayed position,
+   * if one is due. Called after navigation and model switches; never plays a
+   * move. A running search for another position is superseded synchronously,
+   * so rapid navigation leaves exactly one live search client.
+   */
+  private autoAnalyzeCurrent(): void {
+    const options = this.autoFollowOptions;
+    const position = this.state.snapshot;
+    if (options === null || this.disposed || position === null) return;
+    if (position.terminal !== null) return;
+    if (this.searchRunning) {
+      // A sweep advances plies on its own; navigation must never kill it or
+      // race it with a position search.
+      if (this.searchKind === "sweep") return;
+      // The displayed position is already being analyzed.
+      if (this.searchPositionSfen === position.sfen) return;
+      this.supersedeSearch();
+    }
+    // While a sync is flying, the on-display snapshot may still be the
+    // previous cursor's position; analyzing it again would only be
+    // superseded. The sync completion re-runs this for the true target.
+    if (this.navSyncing && this.displayedCursor !== this.state.cursor) return;
+    // Start only from a display state a search can own: a loading model has
+    // its own completion trigger, and an error waits for the user to retry.
+    if (this.state.phase !== "ready" && this.state.phase !== "searching")
+      return;
+    void this.analyze(options.profile, options.budgetMs, options.multiPv);
+  }
+
+  /** Synchronously kills the running search so a newer one can start. */
+  private supersedeSearch(): void {
+    if (!this.searchRunning) return;
+    this.searchGeneration++;
+    this.endSearch();
+  }
+
+  /**
+   * Publishes a finished result only when it belongs to the currently
+   * displayed position. A result for a superseded position stays in the store
+   * (lookupUpdate shows it when that position returns) but can never appear
+   * as the displayed position's score.
+   */
+  private publishResultIfDisplayed(update: AnalysisUpdate): void {
+    if (update.canonicalPosition !== this.state.snapshot?.sfen) return;
+    this.publish({ update, graph: this.deriveGraph() });
+  }
+
+  /**
+   * Per-position budget watchdog. Ends only this position's search; the
+   * auto-follow intent stays armed for the next position, exactly like the
+   * normal bounded completion path.
+   */
+  private deadlineReached(): void {
+    if (!this.searchRunning) return;
+    this.searchGeneration++;
+    this.endSearch();
+    this.publish({ phase: "ready" });
+  }
+
   private endSearch(): void {
     this.searchRunning = false;
+    this.searchPositionSfen = null;
+    this.searchKind = null;
     this.searchClient?.dispose();
     this.searchClient = null;
     this.disarmTimer();
@@ -707,6 +888,7 @@ export class LearnedAnalysisSession {
     this.abort = null;
     this.client?.dispose();
     this.client = null;
+    this.navSyncing = false;
     this.endSearch();
     return this.generation;
   }

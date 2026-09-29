@@ -11,7 +11,7 @@ import {
 } from "./core-prototype-session";
 import { getMessages, type Locale } from "./localization";
 import { MatchClockPanel } from "./MatchClockPanel";
-import { opposing } from "./match-clock";
+import { opposing, presetIsClocked, type MatchPreset } from "./match-clock";
 import { downloadText } from "./kifu";
 import { KifuSaveMenu } from "./KifuSaveMenu";
 import type { KifuRecord } from "./kifu";
@@ -47,7 +47,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
   const [state, setState] = useState(initialPrototypeState);
   const [humanSide, setHumanSide] = useState<Side>("black");
   const [enabled, setEnabled] = useState(false);
-  const [preset, setPreset] = useState<"blitz3" | "rapid10">("blitz3");
+  const [preset, setPreset] = useState<MatchPreset>("blitz3");
   const [profile, setProfile] = useState<SearchProfile>("balanced");
   const [confirmAction, setConfirmAction] = useState<"resign" | "reset" | null>(
     null,
@@ -140,8 +140,12 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           : "Cancelling search…"
         : state.phase === "stopped"
           ? ja
-            ? "停止中 · 残り時間を保持しています。"
-            : "Paused. Remaining time is preserved."
+            ? presetIsClocked(state.preset)
+              ? "停止中 · 残り時間を保持しています。"
+              : "停止中。"
+            : presetIsClocked(state.preset)
+              ? "Paused. Remaining time is preserved."
+              : "Paused."
           : result !== null
             ? `${result.winner === null ? (ja ? "引き分け" : "Draw") : `${sideLabel(result.winner)}${ja ? "の勝ち" : " wins"}`} · ${result.reason === "timeout" ? (ja ? "時間切れ" : "Time expired") : result.reason.includes("resignation") ? (ja ? "投了" : "Resignation") : ja ? "終局" : "Game ended"}`
             : state.phase === "playing"
@@ -208,7 +212,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
       }
       baseMs={state.clock[side === "black" ? "blackTimeMs" : "whiteTimeMs"]}
       runningSince={running(side)}
-      showClock
+      showClock={presetIsClocked(state.preset)}
       active={running(side) !== null}
       remainingLabel={messages.match.remainingTime}
     />
@@ -283,8 +287,8 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
               ? "開発用の新旧モデル比較です。棋力は検証中です。"
               : "Compare development models. Playing strength is under evaluation."
             : ja
-              ? "3分・10分の切れ負け。定跡なし。"
-              : "3-minute or 10-minute sudden death. No opening book."}
+              ? "3分・10分の切れ負け、1手10秒。定跡なし。"
+              : "Sudden death or 10 seconds per move. No opening book."}
         </p>
       </header>
       {setup ? modelPanel : null}
@@ -296,7 +300,7 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
           >
             <legend>{messages.match.timeControl}</legend>
             <div>
-              {(["blitz3", "rapid10"] as const).map((value) => (
+              {(["blitz3", "rapid10", "fixed10"] as const).map((value) => (
                 <button
                   type="button"
                   key={value}
@@ -308,6 +312,9 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
               ))}
             </div>
           </fieldset>
+          <p className="match-setup__note" aria-live="polite">
+            {messages.match.presetDetail[preset]}
+          </p>
           <fieldset
             className="segmented-control"
             disabled={state.phase === "loading" || state.busy}
@@ -370,11 +377,20 @@ export default function CorePrototype({ locale }: { locale: Locale }) {
               </div>
             </fieldset>
           ) : null}
-          <p className="match-setup__note">
-            {ja
-              ? "標準・高品質は同じモデルを使い、残り時間から思考時間を配分します。モデルの読込と照合が終わると対局を開始できます。"
-              : "Standard and high quality use the same model and allocate thinking time from the remaining clock. Play is available after the model is loaded and verified."}
-          </p>
+          {presetIsClocked(preset) ? (
+            <p className="match-setup__note">
+              {ja
+                ? "標準・高品質は同じモデルを使い、残り時間から思考時間を配分します。モデルの読み込みと照合が終わると対局を開始できます。"
+                : "Standard and high quality use the same model and allocate thinking time from the remaining clock. Play is available after the model is loaded and verified."}
+            </p>
+          ) : (
+            <p className="match-setup__note">
+              {messages.match.fixedMoveNote}{" "}
+              {ja
+                ? "モデルの読み込みと照合が終わると対局を開始できます。"
+                : "Play is available after the model is loaded and verified."}
+            </p>
+          )}
           <button
             className="match-start"
             type="button"

@@ -145,6 +145,13 @@ export function browserProfileHashMegabytes(profile: SearchProfile): number {
   return profile === "eco" ? 2 : profile === "balanced" ? 4 : 8;
 }
 
+/**
+ * The browser Wasm runtime is single-threaded by design: parallel
+ * `Threads`/`AutoThreads` search exists only in the native USI engine, where
+ * the OS reports real load. The budget therefore keeps one play and one
+ * analysis thread and coordinates them with `analysisPauseDuringAiTurn`
+ * instead of pretending the browser has spare cores.
+ */
 export function resourceBudget(
   playHashMegabytes: number,
   analysisHashMegabytes: number,

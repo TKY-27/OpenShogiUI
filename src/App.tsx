@@ -12,7 +12,7 @@ import {
   Locale,
   localeReducer,
 } from "./localization";
-import { repositoryUrl, routeForHash, type WorkspaceRoute } from "./project";
+import { routeForHash, type WorkspaceRoute } from "./project";
 const NoticeDialog = lazy(() => import("./NoticeDialog"));
 const LearnedAnalysis = lazy(() => import("./LearnedAnalysis"));
 const CorePrototype = lazy(() => import("./CorePrototype"));
@@ -66,11 +66,7 @@ function WorkspaceHome({ locale }: { locale: Locale }) {
       >
         <a className="start-action start-action--primary" href="#/match">
           <strong>{workspace.startMatch}</strong>
-          <span>
-            {locale === "ja"
-              ? "3分切れ負け・10分切れ負け"
-              : "3-minute or 10-minute sudden death"}
-          </span>
+          <span>{workspace.startMatchDetail}</span>
         </a>
         <a className="start-action" href="#/analysis">
           <strong>{workspace.startAnalysis}</strong>
@@ -174,7 +170,7 @@ function App() {
     const [ja, en] = titles[route];
     document.title = ja
       ? `${locale === "ja" ? ja : en} — OpenShogiAI`
-      : "OpenShogiAI — 将棋AIと対局・局面解析";
+      : "OpenShogiAI — オープンな将棋のAI";
   }, [route, locale]);
 
   return (
@@ -267,9 +263,9 @@ function App() {
               ? "棋譜提供・利用について"
               : "Collection and privacy"}
           </a>
-          <a href={repositoryUrl} rel="source">
+          <button onClick={() => setNoticeView("source-code")} type="button">
             {locale === "ja" ? "ソースコード" : "Source Code"}
-          </a>
+          </button>
           <button onClick={() => setNoticeView("license")} type="button">
             AGPL-3.0-only
           </button>

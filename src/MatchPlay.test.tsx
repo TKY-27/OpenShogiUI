@@ -17,11 +17,12 @@ describe("match route", () => {
     expect(routeForHash("#/matchmaking")).toBe("workspace");
   });
 
-  it("offers exactly the three advertised time controls", () => {
+  it("offers exactly the four advertised time controls", () => {
     for (const locale of ["ja", "en"] as const) {
       const { preset } = getMessages(locale).match;
       expect(Object.keys(preset).sort()).toEqual([
         "blitz3",
+        "fixed10",
         "rapid10",
         "unlimited",
       ]);
@@ -31,6 +32,8 @@ describe("match route", () => {
     }
     expect(getMessages("ja").match.preset.blitz3).toContain("切れ負け");
     expect(getMessages("ja").match.preset.rapid10).toContain("切れ負け");
+    expect(getMessages("ja").match.preset.fixed10).toBe("1手10秒");
+    expect(getMessages("en").match.preset.fixed10).toBe("10 sec/move");
   });
 });
 
@@ -98,6 +101,8 @@ describe("match mode clock and dialog contracts", () => {
 
   it("forwards the preset to the engine without choosing a move budget", () => {
     expect(source).toContain("matchTimeControl(preset, clockAtTurn)");
+    // The route never hard-codes a budget; the fixed per-move limit lives in
+    // the preset module (match-clock.ts), not in this component.
     expect(source).not.toContain("movetimeMs");
   });
 

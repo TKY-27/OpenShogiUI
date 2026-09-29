@@ -130,22 +130,19 @@ function parseRequest(value: unknown): PrototypeRequest {
       throw new Error(
         "Cooperative cancellation requires cross-origin isolation",
       );
+    // parseTimeControl enforces the closed key set, schema, ranges and mode
+    // contradictions for both clocked and per-move requests.
     const timeControl = parseTimeControl(request.timeControl);
-    object(request.timeControl, [
-      "schema",
-      "blackTimeMs",
-      "whiteTimeMs",
-      "byoyomiMs",
-      "blackIncrementMs",
-      "whiteIncrementMs",
-      "safetyMarginMs",
-    ]);
+    // The session charge model supports sudden-death main clocks and the
+    // zero-clock byoyomi per-move budget; increments are never valid here and
+    // byoyomi alongside a real main clock is rejected.
     if (
-      timeControl.byoyomiMs !== 0 ||
-      timeControl.blackIncrementMs !== 0 ||
-      timeControl.whiteIncrementMs !== 0
+      (timeControl.blackIncrementMs ?? 0) !== 0 ||
+      (timeControl.whiteIncrementMs ?? 0) !== 0 ||
+      ((timeControl.blackTimeMs ?? 0) + (timeControl.whiteTimeMs ?? 0) > 0 &&
+        (timeControl.byoyomiMs ?? 0) !== 0)
     )
-      throw new Error("Prototype requires sudden death");
+      throw new Error("Prototype requires sudden death or a per-move byoyomi");
     return {
       id,
       kind,
@@ -333,12 +330,17 @@ self.addEventListener("message", (event: MessageEvent<unknown>) => {
   try {
     request = parseRequest(event.data);
     if (executing) throw new Error("Prototype Worker is busy");
-  } catch {
+  } catch (error) {
+    // The id-less failure is a protocol violation; name the real cause so a
+    // rejected request is diagnosable from the client's error surface.
     self.postMessage({
       id: 0,
       kind: "protocol",
       ok: false,
-      error: "Invalid or concurrent prototype request",
+      error:
+        error instanceof Error
+          ? error.message.slice(0, 512)
+          : "Invalid or concurrent prototype request",
     });
     return;
   }

@@ -81,14 +81,18 @@ export interface Messages {
     subtitle: string;
     setupHeading: string;
     timeControl: string;
-    preset: Record<"blitz3" | "rapid10" | "unlimited", string>;
-    presetDetail: Record<"blitz3" | "rapid10" | "unlimited", string>;
+    preset: Record<"blitz3" | "rapid10" | "fixed10" | "unlimited", string>;
+    presetDetail: Record<
+      "blitz3" | "rapid10" | "fixed10" | "unlimited",
+      string
+    >;
     yourSide: string;
     sente: string;
     gote: string;
     strength: string;
     engineAllocatesTime: string;
     casualCap: string;
+    fixedMoveNote: string;
     start: string;
     resign: string;
     resignConfirm: string;
@@ -391,7 +395,7 @@ const messages: Record<Locale, Messages> = {
       inProgress: "進行中",
       startHeading: "はじめる",
       startMatch: "AIと対局",
-      startMatchDetail: "3分切れ負け・10分切れ負け",
+      startMatchDetail: "3分切れ負け・10分切れ負け・1手10秒",
       startAnalysis: "局面を解析",
       startAnalysisDetail: "評価値・候補手・棋譜の確認",
       startLab: "評価ラボ",
@@ -405,11 +409,13 @@ const messages: Record<Locale, Messages> = {
       preset: {
         blitz3: "3分切れ負け",
         rapid10: "10分切れ負け",
+        fixed10: "1手10秒",
         unlimited: "時間無制限",
       },
       presetDetail: {
-        blitz3: "秒読み・加算なし",
-        rapid10: "秒読み・加算なし",
+        blitz3: "秒読みなし・加算なし",
+        rapid10: "秒読みなし・加算なし",
+        fixed10: "1手ごとに10秒まで探索。時計は表示しません",
         unlimited: "時計を表示しません",
       },
       yourSide: "あなたの手番",
@@ -419,6 +425,8 @@ const messages: Record<Locale, Messages> = {
       engineAllocatesTime:
         "1手ごとの使用時間はエンジンが残り時間から自分で決めます。",
       casualCap: "時間無制限では、エンジンは1手あたり最大20秒で指します。",
+      fixedMoveNote:
+        "1手10秒では、エンジンは毎手10秒以内で考えます。持ち時間の消費も切れ負けもありません。",
       start: "対局開始",
       resign: "投了",
       resignConfirm: "投了しますか？この操作は取り消せません。",
@@ -639,7 +647,8 @@ const messages: Record<Locale, Messages> = {
       inProgress: "In progress",
       startHeading: "Start",
       startMatch: "Play the AI",
-      startMatchDetail: "3-minute or 10-minute sudden death",
+      startMatchDetail:
+        "3-minute or 10-minute sudden death, or 10 seconds per move",
       startAnalysis: "Analyze a position",
       startAnalysisDetail: "Evaluation, candidate lines, and move history",
       startLab: "Evaluation Lab",
@@ -651,13 +660,15 @@ const messages: Record<Locale, Messages> = {
       setupHeading: "Match setup",
       timeControl: "Time control",
       preset: {
-        blitz3: "3 min sudden death",
-        rapid10: "10 min sudden death",
+        blitz3: "3 min",
+        rapid10: "10 min",
+        fixed10: "10 sec/move",
         unlimited: "Untimed",
       },
       presetDetail: {
-        blitz3: "No byoyomi, no increment",
-        rapid10: "No byoyomi, no increment",
+        blitz3: "Sudden death: no byoyomi, no increment",
+        rapid10: "Sudden death: no byoyomi, no increment",
+        fixed10: "Up to 10 seconds of search per move. No clock is shown.",
         unlimited: "No clock is shown",
       },
       yourSide: "Your side",
@@ -668,6 +679,8 @@ const messages: Record<Locale, Messages> = {
         "The engine decides how long to think for each move from its own remaining time.",
       casualCap:
         "When untimed, the engine plays with a 20 second cap per move.",
+      fixedMoveNote:
+        "With 10 sec/move, the engine thinks for at most 10 seconds on every move. No clock is consumed and you cannot lose on time.",
       start: "Start match",
       resign: "Resign",
       resignConfirm: "Resign this match? This cannot be undone.",

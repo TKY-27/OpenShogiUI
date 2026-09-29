@@ -6,6 +6,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const browserPlay = readFileSync(join(root, "src/BrowserPlay.tsx"), "utf8");
 const boardView = readFileSync(join(root, "src/ShogiBoardView.tsx"), "utf8");
 const matchPlay = readFileSync(join(root, "src/MatchPlay.tsx"), "utf8");
+const corePrototype = readFileSync(join(root, "src/CorePrototype.tsx"), "utf8");
 const clockPanel = readFileSync(join(root, "src/MatchClockPanel.tsx"), "utf8");
 const app = readFileSync(join(root, "src/App.tsx"), "utf8");
 const noticeDialog = readFileSync(join(root, "src/NoticeDialog.tsx"), "utf8");
@@ -68,6 +69,22 @@ for (const marker of [
 for (const marker of requiredMatchEvidence) {
   if (!matchPlay.includes(marker))
     failures.push(`MatchPlay is missing ${marker}`);
+}
+
+// The production match route is CorePrototype; it must carry the same live
+// status, dialog and button semantics the legacy screen is pinned for.
+const requiredCorePrototypeEvidence = [
+  'role="status"',
+  'aria-live="polite"',
+  'aria-modal="true"',
+  "showModal()",
+  "aria-pressed={preset === value}",
+  'aria-label={ja ? "対局盤と操作" : "Game board and controls"}',
+  'type="button"',
+];
+for (const marker of requiredCorePrototypeEvidence) {
+  if (!corePrototype.includes(marker))
+    failures.push(`CorePrototype is missing ${marker}`);
 }
 
 // The match route must not be able to render an analysis surface at all.

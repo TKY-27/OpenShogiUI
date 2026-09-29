@@ -6,6 +6,7 @@ import {
   initialClockFor,
   matchTimeControl,
   opposing,
+  presetIsClocked,
   type MatchPreset,
 } from "./match-clock";
 import type { MatchClock } from "./play-settings";
@@ -62,7 +63,7 @@ export interface PrototypeState {
   humanSide: Side;
   enabled: boolean;
   profile: SearchProfile;
-  preset: "blitz3" | "rapid10";
+  preset: MatchPreset;
   busy: boolean;
   result: { reason: string; winner: Side | null } | null;
   error: string | null;
@@ -166,7 +167,7 @@ export class PrototypeMatchSession {
   async start(
     humanSide: Side,
     enabled: boolean,
-    preset: "blitz3" | "rapid10" = "blitz3",
+    preset: MatchPreset = "blitz3",
     profile: SearchProfile = "balanced",
   ): Promise<void> {
     if (this.disposed) return;
@@ -268,6 +269,9 @@ export class PrototypeMatchSession {
       turnStartedAt === null
     )
       return false;
+    // Per-move and untimed presets have no cumulative clock, so nothing can
+    // flag; the engine's own budget bounds each move instead.
+    if (!presetIsClocked(this.state.preset)) return false;
     if (!hasFlagFallen(clock, snapshot.sideToMove, turnStartedAt, this.now()))
       return false;
     this.finish("timeout", opposing(snapshot.sideToMove));
@@ -290,8 +294,9 @@ export class PrototypeMatchSession {
       const next = await this.client!.move(movement);
       if (!this.current(generation) || this.tick()) return;
       // Include Worker validation and response delivery in the moving side's clock.
+      const turnElapsed = this.turnElapsedMs();
       this.chargeActiveTurn();
-      this.acceptMove(snapshot, next, movement);
+      this.acceptMove(snapshot, next, movement, turnElapsed);
       if (!this.finishTerminal()) await this.engineTurn(generation);
     } catch (error) {
       this.fail(generation, error);
@@ -368,7 +373,7 @@ export class PrototypeMatchSession {
     if (!this.current(generation) || this.tick()) return;
     this.record(response, position, remaining, startedAt);
     this.chargeActiveTurn();
-    this.acceptMove(position, next, response.bestMove);
+    this.acceptMove(position, next, response.bestMove, this.now() - startedAt);
     this.finishTerminal();
   }
   private record(
@@ -407,6 +412,7 @@ export class PrototypeMatchSession {
     before: PrototypeSnapshot,
     next: PrototypeSnapshot,
     movement: string,
+    turnElapsedMs: number,
   ): void {
     if (
       next.leafSha256 !== before.leafSha256 ||
@@ -418,9 +424,13 @@ export class PrototypeMatchSession {
       throw new Error("Move response does not extend the committed game");
     const clockKey =
       before.sideToMove === "black" ? "blackTimeMs" : "whiteTimeMs";
-    const previousClock =
-      this.state.moveTimes.at(-1)?.remaining ??
-      initialClockFor(this.state.preset);
+    // Clocked presets derive the spent time from the charged clock; per-move
+    // and untimed presets have no clock, so the wall-clock turn time is used.
+    const elapsedMs = presetIsClocked(this.state.preset)
+      ? (this.state.moveTimes.at(-1)?.remaining ??
+          initialClockFor(this.state.preset))[clockKey] -
+        this.state.clock[clockKey]
+      : Math.max(0, Math.round(turnElapsedMs));
     this.publish({
       moveTimes: [
         ...this.state.moveTimes,
@@ -428,7 +438,7 @@ export class PrototypeMatchSession {
           side: before.sideToMove,
           movement,
           // Clock deltas include earlier cancelled searches, but exclude paused time.
-          elapsedMs: previousClock[clockKey] - this.state.clock[clockKey],
+          elapsedMs,
           remaining: { ...this.state.clock },
         },
       ],
@@ -463,6 +473,12 @@ export class PrototypeMatchSession {
         turnStartedAt: now,
       });
     }
+  }
+  /** Wall-clock time spent on the current turn so far, for clockless presets. */
+  private turnElapsedMs(): number {
+    const { turnStartedAt } = this.state;
+    if (turnStartedAt === null) return 0;
+    return Math.max(0, this.now() - turnStartedAt);
   }
   private fail(generation: number, error: unknown): void {
     if (!this.current(generation)) return;

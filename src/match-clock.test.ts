@@ -36,6 +36,22 @@ describe("match presets", () => {
     expect(presetIsClocked("rapid10")).toBe(true);
   });
 
+  it("makes fixed10 a per-move budget with no clock", () => {
+    const settings = presetSettings("fixed10");
+    // Zero base clock plus a byoyomi period: the engine recognizes this as a
+    // pure per-move budget where unused time never carries.
+    expect(settings.mode).toBe("clock");
+    expect(settings.mainMinutes).toBe(0);
+    expect(settings.byoyomiSeconds).toBe(10);
+    expect(settings.incrementSeconds).toBe(0);
+    expect(presetIsClocked("fixed10")).toBe(false);
+    // Nothing accumulates: a fresh match starts at zero and stays there.
+    expect(initialClockFor("fixed10")).toEqual({
+      blackTimeMs: 0,
+      whiteTimeMs: 0,
+    });
+  });
+
   it("starts both sides on the same budget", () => {
     expect(initialClockFor("blitz3")).toEqual({
       blackTimeMs: 180_000,
@@ -83,6 +99,25 @@ describe("engine time control handoff", () => {
     expect(control.blackTimeMs).toBeUndefined();
     expect(control.whiteTimeMs).toBeUndefined();
     expect(control.movetimeMs).toBeUndefined();
+  });
+
+  it("hands fixed10 to the engine as a pure per-move byoyomi budget", () => {
+    const control = matchTimeControl("fixed10", {
+      blackTimeMs: 0,
+      whiteTimeMs: 0,
+    });
+
+    expect(control.schema).toBe("open_shogi_time_control/v1");
+    // The zero base clock plus the byoyomi period is the engine's authoritative
+    // per-move semantic: unused time never carries, so each move is bounded
+    // afresh and nothing can flag from earlier moves.
+    expect(control.blackTimeMs).toBe(0);
+    expect(control.whiteTimeMs).toBe(0);
+    expect(control.byoyomiMs).toBe(10_000);
+    expect(control.blackIncrementMs).toBe(0);
+    expect(control.whiteIncrementMs).toBe(0);
+    expect(control.movetimeMs).toBeUndefined();
+    expect(control.nodes).toBeUndefined();
   });
 });
 

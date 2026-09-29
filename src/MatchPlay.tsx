@@ -632,11 +632,17 @@ export function MatchPlay({ locale }: { locale: Locale }) {
             </div>
           </fieldset>
 
-          <p className="match-setup__note">{match.engineAllocatesTime}</p>
           {clocked ? (
-            // title alone is unreachable by keyboard and touch, so the caveat
-            // is stated here where there is room for it.
-            <p className="match-setup__note">{match.takebackClockNote}</p>
+            <>
+              <p className="match-setup__note">{match.engineAllocatesTime}</p>
+              {
+                // title alone is unreachable by keyboard and touch, so the caveat
+                // is stated here where there is room for it.
+                <p className="match-setup__note">{match.takebackClockNote}</p>
+              }
+            </>
+          ) : preset === "fixed10" ? (
+            <p className="match-setup__note">{match.fixedMoveNote}</p>
           ) : (
             <p className="match-setup__note">{match.casualCap}</p>
           )}

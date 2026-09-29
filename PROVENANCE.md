@@ -6,15 +6,15 @@ This candidate was extracted byte-for-byte from the private OpenShogiAI source c
 then adapted into a standalone UI repository. It does not inherit the private repository's Git
 history.
 
-| Field | Value |
-| --- | --- |
-| Private source commit | `5451e02d35abc3efc1fcc29260cdb89acad1d416` |
-| Private source tree | `21bf0c1fbe02250855b66a96f2fe37bd042650d4` |
-| Local recovery tag | `private-pre-split-source` |
-| Split manifest SHA-256 | `aa3eec7afc3bc9dff5a330eb6c3b3a1ee503baa703073281a906bb3753c01731` |
-| Recovery bundle | `OpenShogiAI-private-pre-split.bundle` |
+| Field                   | Value                                                              |
+| ----------------------- | ------------------------------------------------------------------ |
+| Private source commit   | `5451e02d35abc3efc1fcc29260cdb89acad1d416`                         |
+| Private source tree     | `21bf0c1fbe02250855b66a96f2fe37bd042650d4`                         |
+| Local recovery tag      | `private-pre-split-source`                                         |
+| Split manifest SHA-256  | `aa3eec7afc3bc9dff5a330eb6c3b3a1ee503baa703073281a906bb3753c01731` |
+| Recovery bundle         | `OpenShogiAI-private-pre-split.bundle`                             |
 | Recovery bundle SHA-256 | `60504e4fe09686f61f3184008c759a2c0ba43182f4538e67bf170b4717715730` |
-| Extraction date | 2026-08-21 JST |
+| Extraction date         | 2026-08-21 JST                                                     |
 
 Files were read from the tagged checkpoint with `git archive` and placed according to the
 versioned split manifest. Browser files were lifted from the former `web/` workspace to this
@@ -51,9 +51,20 @@ were unchanged. All four files match `bindings/wasm/` after `make check` and
 Wasm used for the defense/C1 Arena and development matches; those hashes and
 results are unchanged.
 
-| Generated file | SHA-256 |
-| --- | --- |
-| `open_shogi_wasm.d.ts` | `8b899de7246585f5c7ccafe0b5b2dde012eec0af12a8032d5d4e5741be9cf063` |
-| `open_shogi_wasm.js` | `8d36745850bb91e90f93436a9c40d833686cca6c1232ab2c7c9346a59e109023` |
-| `open_shogi_wasm_bg.wasm` | `4e68daf2b9fb2505b25755242b9c9fd2c82f26724cff156f4a61c06b7330ca8a` |
+On 2026-09-29 the snapshot's Wasm binary was synchronized with the parallel
+root-partitioned search and resource-aware time-management engine. The binding
+was regenerated in OpenShogiAI commit `fc978b3c969eb930b18e4402aa6d727e584cbb09`
+(tree `be1b3ee743ddd05a16defd7fdd94d58dae10f910`) and repinned by
+`67bb678c27456a681a36b68bb869580d24e219c8`; OpenShogiAI main at `9469df0c39a56cef8f10e854c53e0cf1f2306872`
+contains no later binding change. The three text bindings are unchanged. All
+four files match `bindings/wasm/` and `npm run integration:ai` completes the
+byte comparison plus the legal-move, time-control and analysis-lifecycle smoke
+tests. The browser runtime stays single-threaded; `Threads`/`AutoThreads`
+parallel search is a native-USI capability only.
+
+| Generated file                 | SHA-256                                                            |
+| ------------------------------ | ------------------------------------------------------------------ |
+| `open_shogi_wasm.d.ts`         | `8b899de7246585f5c7ccafe0b5b2dde012eec0af12a8032d5d4e5741be9cf063` |
+| `open_shogi_wasm.js`           | `8d36745850bb91e90f93436a9c40d833686cca6c1232ab2c7c9346a59e109023` |
+| `open_shogi_wasm_bg.wasm`      | `8f90452def45cdba75890ab3c40c45108fe75b3c6d5a61fc9952c8b2eb87c1a5` |
 | `open_shogi_wasm_bg.wasm.d.ts` | `efb20b72f02808e77a8baed92fc80fa2f3e1c9b8ce0709f2cd49ed7259933068` |
