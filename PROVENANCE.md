@@ -55,9 +55,19 @@ On 2026-09-29 the snapshot's Wasm binary was synchronized with the parallel
 root-partitioned search and resource-aware time-management engine. The binding
 was regenerated in OpenShogiAI commit `fc978b3c969eb930b18e4402aa6d727e584cbb09`
 (tree `be1b3ee743ddd05a16defd7fdd94d58dae10f910`) and repinned by
-`67bb678c27456a681a36b68bb869580d24e219c8`; OpenShogiAI main at `9469df0c39a56cef8f10e854c53e0cf1f2306872`
-contains no later binding change. The three text bindings are unchanged. All
-four files match `bindings/wasm/` and `npm run integration:ai` completes the
+`67bb678c27456a681a36b68bb869580d24e219c8`.
+
+On 2026-09-29 the Wasm binary was synchronized again with the correctness pass
+over the same engine (Linux topology discovery, self-load-aware AutoThreads,
+continuous emergency clock ramp, and a browser play clock that persists across
+match moves). It was regenerated in OpenShogiAI commit
+`96d707d3502f295889a1b53ac16f0fc8addd53bb` (tree
+`9c11fa16dd6dc726c0cc05714c142bfff1643dbf`); OpenShogiAI main at
+`96d707d3502f295889a1b53ac16f0fc8addd53bb`
+contains no later binding change. The three text bindings are unchanged, so
+`searchWithTimeControl` keeping the match clock state across calls is invisible
+to the TypeScript surface. All four files match `bindings/wasm/` and
+`npm run integration:ai` completes the
 byte comparison plus the legal-move, time-control and analysis-lifecycle smoke
 tests. The browser runtime stays single-threaded; `Threads`/`AutoThreads`
 parallel search is a native-USI capability only.
@@ -66,5 +76,5 @@ parallel search is a native-USI capability only.
 | ------------------------------ | ------------------------------------------------------------------ |
 | `open_shogi_wasm.d.ts`         | `8b899de7246585f5c7ccafe0b5b2dde012eec0af12a8032d5d4e5741be9cf063` |
 | `open_shogi_wasm.js`           | `8d36745850bb91e90f93436a9c40d833686cca6c1232ab2c7c9346a59e109023` |
-| `open_shogi_wasm_bg.wasm`      | `8f90452def45cdba75890ab3c40c45108fe75b3c6d5a61fc9952c8b2eb87c1a5` |
+| `open_shogi_wasm_bg.wasm`      | `2f1a67dbf8bdbc3fc92e66eefa310046618ded155daa2d01b037bc0bf12ad7cd` |
 | `open_shogi_wasm_bg.wasm.d.ts` | `efb20b72f02808e77a8baed92fc80fa2f3e1c9b8ce0709f2cd49ed7259933068` |
