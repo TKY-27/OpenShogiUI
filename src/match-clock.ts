@@ -1,4 +1,8 @@
-import type { Side, TimeControl } from "./browser-engine";
+import {
+  TIME_CONTROL_SCHEMA,
+  type Side,
+  type TimeControl,
+} from "./browser-engine";
 import {
   consumeMatchClock,
   elapsedTurnMs,
@@ -16,9 +20,10 @@ import {
  * allowance never carries between turns, so nothing accumulates and the UI
  * resets the countdown after each legal move. The wall-clock turn timeout is
  * adjudicated by the UI for both players — the engine still receives the
- * per-move request (zero base time plus a 10-second byoyomi period) through
- * `open_shogi_time_control/v1` and keeps control of its own search inside
- * that allowance.
+ * per-move request (zero base time plus the *remaining* allowance as the
+ * byoyomi period) through `open_shogi_time_control/v1` and keeps control of
+ * its own search inside that budget. A stop/resume inside one turn therefore
+ * hands the engine exactly the leftover time, never a fresh 10 seconds.
  *
  * The UI never allocates thinking time for an adjudicated move. It forwards
  * the remaining clock in `open_shogi_time_control/v1` and the engine decides
@@ -108,11 +113,10 @@ export function initialClockFor(preset: MatchPreset): MatchClock {
 /**
  * Serializes the preset for the engine. Clocked presets forward each side's
  * remaining main time; the engine allocates the move budget itself. `fixed10`
- * always forwards zero base time plus the 10-second byoyomi period regardless
- * of the UI's per-turn countdown, which the engine turns into a hard per-move
- * budget that never carries between moves. Callers must therefore omit the
- * remaining clock for `fixed10` (its UI clock is a display-only allowance,
- * never an engine handoff).
+ * must not go through here: its engine handoff is `fixedTurnTimeControl`,
+ * which forwards zero base time plus the *remaining* per-turn allowance as
+ * the byoyomi period so a stop/resume inside one turn keeps the same budget
+ * the UI clock still enforces.
  */
 export function matchTimeControl(
   preset: MatchPreset,
@@ -122,6 +126,27 @@ export function matchTimeControl(
     presetSettings(preset),
     remaining ?? initialMatchClock(presetSettings(preset)),
   );
+}
+
+/**
+ * Serializes the *remaining* part of a fixed10 turn: zero main time plus the
+ * leftover per-turn allowance as the byoyomi period. A stop/resume inside one
+ * turn must hand the engine the same budget the UI clock and the flag
+ * watchdog still enforce — a fresh 10 seconds would let the engine think
+ * longer than the adjudicated deadline, and a positive main clock would ask
+ * the engine to allocate a kire-make budget it does not have.
+ */
+export function fixedTurnTimeControl(remainingMs: number): TimeControl {
+  const byoyomi = Math.min(10_000, Math.max(1, Math.round(remainingMs)));
+  return {
+    schema: TIME_CONTROL_SCHEMA,
+    blackTimeMs: 0,
+    whiteTimeMs: 0,
+    byoyomiMs: byoyomi,
+    blackIncrementMs: 0,
+    whiteIncrementMs: 0,
+    safetyMarginMs: 50,
+  };
 }
 
 function clockKey(side: Side): "blackTimeMs" | "whiteTimeMs" {

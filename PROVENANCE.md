@@ -66,18 +66,47 @@ observation and reset/restore lifecycle in the bundled browser runtime as
 well, and keeps a rejected superseding search from cancelling the previous
 one. The binding was regenerated in OpenShogiAI commit
 `94a3d5138c8a389b623d4b4ecd01bf23e164804d` (tree
-`7491159bea7c155360aaf041477cace4a22b9b62`); OpenShogiAI main at that commit
-contains no later binding change. The three text bindings are unchanged, so
+`7491159bea7c155360aaf041477cace4a22b9b62`). The three text bindings are unchanged, so
 `searchWithTimeControl` keeping the match clock state across calls is invisible
-to the TypeScript surface. All four files match `bindings/wasm/` and
-`npm run integration:ai` completes the
-byte comparison plus the legal-move, time-control and analysis-lifecycle smoke
-tests. The browser runtime stays single-threaded; `Threads`/`AutoThreads`
-parallel search is a native-USI capability only.
+to the TypeScript surface.
+
+On 2026-10-01 the snapshot's Wasm binary was synchronized once more with the
+parallel-search repair round (one shared deadline and one shared node budget
+per `go`, helper fork accounting, fork TT reuse, chained accumulator parity
+verification) regenerated in OpenShogiAI commit
+`196055ffa4adf3d8a28a332080189dd92681fe83`. Only the binary changed; the three
+text bindings are unchanged.
+
+## Pure-only play runtime
+
+The production match worker does not execute the analysis snapshot above. It
+loads the pure-only runtime (`--no-default-features --features pure-only`)
+built by `make pure-build` in OpenShogiAI, hash-pinned by `release-model.json`
+and fetched into the build mirror by `scripts/fetch-release-models.mjs`. The
+regenerated post-repair runtime replaced the pre-repair Wasm
+(`ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a`) on
+2026-10-01, ahead of any models-v1 republish. Because the published models-v1
+release keeps serving the pre-repair bytes and must not be moved for this fix,
+the verified runtime bytes are additionally tracked in this repository under
+`assets/pure-runtime/` and `release-assets.json` marks those two entries as
+`tracked` sources; weights and rights records continue to come from models-v1.
+The rebuild from OpenShogiAI `196055ffa4adf3d8a28a332080189dd92681fe83`
+reproduces both hashes byte-for-byte (wasm-bindgen output is deterministic for
+the same source and flags).
+
+| Pure runtime file                          | SHA-256                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------ |
+| `assets/pure-runtime/open_shogi_wasm.js`   | `907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e` |
+| `assets/pure-runtime/open_shogi_wasm_bg.wasm` | `6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137` |
+
+The frozen R4 weights stay
+`9466a7e8cf11b7d165b325edd9a5a421bdbaa4bed550940afcf33c9faf3bfd0f`
+(`osai-r4.osaval03` in the models-v1 release); no weight, rights record or
+release tag moved.
 
 | Generated file                 | SHA-256                                                            |
 | ------------------------------ | ------------------------------------------------------------------ |
 | `open_shogi_wasm.d.ts`         | `8b899de7246585f5c7ccafe0b5b2dde012eec0af12a8032d5d4e5741be9cf063` |
 | `open_shogi_wasm.js`           | `8d36745850bb91e90f93436a9c40d833686cca6c1232ab2c7c9346a59e109023` |
-| `open_shogi_wasm_bg.wasm`      | `eb572a7183142394632aedd45f8ffb242e7b77143fe599097ba754169dc7cfd2` |
+| `open_shogi_wasm_bg.wasm`      | `3a268345ff60293eba6ec8e354f5f2d6f995e1e8e931f4ef664a46a747d8246c` |
 | `open_shogi_wasm_bg.wasm.d.ts` | `efb20b72f02808e77a8baed92fc80fa2f3e1c9b8ce0709f2cd49ed7259933068` |

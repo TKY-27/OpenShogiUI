@@ -129,6 +129,19 @@ export const initialAnalysisState = (): LearnedAnalysisState => ({
 const hashText = (text: string) =>
   sha256Hex(new TextEncoder().encode(text).buffer);
 
+/**
+ * Identity of a search context: the root SFEN alone cannot distinguish two
+ * histories that end in the same position, and the pure search is
+ * history-dependent (repetition and perpetual-check detection walk the move
+ * list). Cache keys, request memos and search ownership therefore bind the
+ * initial SFEN and the full move list, never the SFEN by itself.
+ */
+export function positionHistoryIdentity(
+  position: Pick<PrototypeSnapshot, "initialSfen" | "moves">,
+): string {
+  return `${position.initialSfen}#${position.moves.join(" ")}`;
+}
+
 /** Requests are deterministic per position/model/options; the hashing is not free. */
 const requestMemo = new Map<string, Promise<AnalysisStart>>();
 
@@ -140,7 +153,7 @@ export async function analysisRequest(
 ): Promise<AnalysisStart> {
   // UI cache namespaces bind the runtime bytes, not guessed engine feature-version numbers.
   const runtime = `${manifest.artifacts["engine.js"].sha256}:${manifest.artifacts["engine.wasm"].sha256}`;
-  const memoKey = `${snapshot.sfen}|${snapshot.leafSha256}|${profile}|${multiPv}|${runtime}`;
+  const memoKey = `${positionHistoryIdentity(snapshot)}|${snapshot.sfen}|${snapshot.leafSha256}|${profile}|${multiPv}|${runtime}`;
   const memo = requestMemo.get(memoKey);
   if (memo) return memo;
   const request = (async (): Promise<AnalysisStart> => ({
@@ -189,6 +202,14 @@ export class LearnedAnalysisSession {
   private abort: AbortController | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
+  /**
+   * Ownership token for record loads. Every load, model switch and dispose
+   * bumps it; only the operation that still owns the token may publish the
+   * record, roll back, navigate or re-arm analysis when it resumes.
+   */
+  private loadSequence = 0;
+  /** Selection plus artifact hashes of the last verified manifest. */
+  private loadedModelIdentity: string | null = null;
   private readonly snapshots = new Map<string, PrototypeSnapshot>();
   private readonly results = new Map<string, StoredResult[]>();
   private readonly store: AnalysisSummaryStore;
@@ -204,8 +225,8 @@ export class LearnedAnalysisSession {
     budgetMs: number;
     multiPv: number;
   } | null = null;
-  /** Position the running search belongs to, for supersede decisions. */
-  private searchPositionSfen: string | null = null;
+  /** History identity the running search belongs to, for supersede decisions. */
+  private searchPositionIdentity: string | null = null;
   /** Which activity owns the search channel; null while idle. */
   private searchKind: "position" | "sweep" | null = null;
 
@@ -218,26 +239,36 @@ export class LearnedAnalysisSession {
     this.store = store;
   }
 
+  /**
+   * Public entry for model loads and switches. It supersedes any in-flight
+   * record load: only the newest user operation may settle the record.
+   */
   async prepare(
+    selection = this.state.selection,
+    position: Pick<PrototypeSnapshot, "initialSfen" | "moves"> | null = null,
+  ): Promise<void> {
+    this.loadSequence++;
+    await this.prepareInternal(selection, position);
+  }
+
+  private async prepareInternal(
     selection = this.state.selection,
     position: Pick<PrototypeSnapshot, "initialSfen" | "moves"> | null = null,
   ): Promise<void> {
     const generation = this.invalidate();
     const abort = new AbortController();
     this.abort = abort;
-    if (position !== null) {
-      this.state.record = {
-        initialSfen: position.initialSfen,
-        moves: [...position.moves],
-        blackName: null,
-        whiteName: null,
-        comments: [],
-        endingNote: null,
-      };
-      this.state.line = [...position.moves];
-      this.state.cursor = position.moves.length;
-      this.state.branching = false;
-    }
+    // The pending record is published only with the verified ready state: a
+    // failed or superseded load never leaves half-imported state behind, and
+    // a concurrent newer operation still observes the previous consistent
+    // record as its own rollback target.
+    const pending =
+      position === null
+        ? null
+        : {
+            initialSfen: position.initialSfen,
+            moves: [...position.moves],
+          };
     this.publish({
       selection,
       identity: null,
@@ -253,18 +284,47 @@ export class LearnedAnalysisSession {
       const client = this.makeClient();
       this.client = client;
       const ready = await client.initialize(manifest, false, {
-        initialSfen: this.state.record.initialSfen,
-        moves: this.state.line.slice(0, this.state.cursor),
+        initialSfen: pending?.initialSfen ?? this.state.record.initialSfen,
+        moves: pending
+          ? pending.moves
+          : this.state.line.slice(0, this.state.cursor),
       });
       if (!this.current(generation)) return;
+      // Cached snapshots and results embed the previous model's leaf
+      // identity. They are dropped only once the new model has actually
+      // loaded, so a failed switch leaves the previous model's coherent
+      // caches in place while a successful switch can never show an old
+      // model's evaluation under the new one.
+      const modelIdentity = `${manifest.selection}:${manifest.artifacts["engine.js"].sha256}:${manifest.artifacts["engine.wasm"].sha256}:${manifest.artifacts["leaf.osaval03"].sha256}`;
+      if (modelIdentity !== this.loadedModelIdentity) {
+        this.snapshots.clear();
+        this.results.clear();
+        this.lastOptionsHash = null;
+        this.loadedModelIdentity = modelIdentity;
+      }
       this.manifest = manifest;
-      this.navPosition = this.state.cursor;
-      this.cacheSnapshot(ready.snapshot);
       this.publish({
         phase: "ready",
         snapshot: ready.snapshot,
         identity: ready.identity,
+        ...(pending !== null
+          ? {
+              record: {
+                initialSfen: pending.initialSfen,
+                moves: [...pending.moves],
+                blackName: null,
+                whiteName: null,
+                comments: [],
+                endingNote: null,
+              },
+              line: [...pending.moves],
+              cursor: pending.moves.length,
+              branching: false,
+            }
+          : {}),
       });
+      this.navPosition = this.state.cursor;
+      this.cacheSnapshot(ready.snapshot);
       this.displayedCursor = this.state.cursor;
       this.publishGraph();
       // A model switch (no explicit position) keeps the displayed position;
@@ -289,6 +349,10 @@ export class LearnedAnalysisSession {
    * runtime replays and validates the line first; on failure the previous
    * record stays in place. Imported games open at the first position, pasted
    * USI lines at the final one.
+   *
+   * Every await below re-checks operation ownership: a load that was
+   * superseded by another load, a reset, a model switch or dispose returns
+   * without publishing, rolling back or re-arming anything.
    */
   async loadPosition(
     source: {
@@ -301,38 +365,19 @@ export class LearnedAnalysisSession {
     },
     cursorAfter: "start" | "end" = "start",
   ): Promise<void> {
-    const previous = {
-      record: this.state.record,
-      line: this.state.line,
-      cursor: this.state.cursor,
-      branching: this.state.branching,
-      snapshot: this.state.snapshot,
-    };
-    await this.prepare(this.state.selection, {
+    const token = ++this.loadSequence;
+    await this.prepareInternal(this.state.selection, {
       initialSfen: source.initialSfen,
       moves: source.moves,
     });
-    if (
-      this.state.phase === "error" ||
-      this.state.phase === "loading" ||
-      this.disposed
-    ) {
-      if (!this.disposed && this.state.phase === "error") {
-        this.state.record = previous.record;
-        this.state.line = previous.line;
-        this.state.cursor = previous.cursor;
-        this.state.branching = previous.branching;
-        this.publish({
-          record: previous.record,
-          line: previous.line,
-          cursor: previous.cursor,
-          branching: previous.branching,
-          snapshot: previous.snapshot,
-        });
-        this.publishGraph();
-      }
+    if (token !== this.loadSequence || this.disposed) return;
+    if (this.state.phase === "error") {
+      // The failed load never mutated the committed record; re-derive the
+      // graph for the still-committed line and leave the error visible.
+      this.publishGraph();
       return;
     }
+    if (this.state.phase !== "ready") return;
     this.publish({
       record: {
         initialSfen: source.initialSfen,
@@ -354,6 +399,11 @@ export class LearnedAnalysisSession {
 
   /** Moves the displayed position without touching record or line. */
   async goto(cursor: number): Promise<void> {
+    // Navigation during a model load would supersede the load's generation
+    // and leave the session wedged in "loading": the load is the active
+    // operation and owns the display until it settles. Graph points and the
+    // ply slider stay clickable, so the guard lives here, not in the UI.
+    if (this.state.phase === "loading") return;
     const target = Math.max(
       0,
       Math.min(Math.round(cursor), this.state.line.length),
@@ -451,6 +501,10 @@ export class LearnedAnalysisSession {
    * overwrites the record silently.
    */
   async move(usi: string): Promise<void> {
+    // A move during a model load would extend the old record while the load
+    // owns the display; the board is disabled in the UI, and this guard
+    // keeps the session-level contract intact.
+    if (this.state.phase === "loading") return;
     const position = this.state.snapshot;
     if (!position?.legalMoves.some((candidate) => candidate.usi === usi))
       return;
@@ -580,19 +634,23 @@ export class LearnedAnalysisSession {
       if (!this.manifest || this.manifest.selection !== this.state.selection)
         throw new Error("モデルを再読込してください。");
       const position = this.state.snapshot;
-      this.searchPositionSfen = position.sfen;
+      const historyIdentity = positionHistoryIdentity(position);
+      this.searchPositionIdentity = historyIdentity;
       const request = await analysisRequest(
         position,
         this.manifest,
         profile,
         multiPv,
       );
+      // The hashing await can outlive a supersede; a dead search must not
+      // re-stamp the display's options identity over the newer search's.
+      if (!this.searchCurrent(generation)) return;
       this.lastOptionsHash = request.searchOptionsHash;
-      const cached = await this.store.get(request);
+      const cached = await this.store.get(request, historyIdentity);
       if (!this.searchCurrent(generation)) return;
       if (cached !== null) {
-        this.storeResult(request, cached.update);
-        this.publishResultIfDisplayed(cached.update);
+        this.storeResult(request, cached.update, historyIdentity);
+        this.publishResultIfDisplayed(cached.update, historyIdentity);
       }
       // Fresh Worker/TT for each bounded analysis; no match clock or automatic move.
       const ready = await client.initialize(this.manifest, false, position);
@@ -624,8 +682,8 @@ export class LearnedAnalysisSession {
           )
             throw new Error("解析応答の局面・モデルが一致しません。");
           if (update.depth > 0) {
-            this.storeResult(request, update);
-            this.publishResultIfDisplayed(update);
+            this.storeResult(request, update, historyIdentity);
+            this.publishResultIfDisplayed(update, historyIdentity);
           }
         }
         this.publish({
@@ -701,12 +759,13 @@ export class LearnedAnalysisSession {
           profile,
           multiPv,
         );
+        const historyIdentity = positionHistoryIdentity(position);
         if (!this.searchCurrent(generation)) return;
         this.lastOptionsHash = request.searchOptionsHash;
-        const cached = await this.store.get(request);
+        const cached = await this.store.get(request, historyIdentity);
         if (!this.searchCurrent(generation)) return;
         if (cached !== null) {
-          this.storeResult(request, cached.update);
+          this.storeResult(request, cached.update, historyIdentity);
         } else {
           await client.analysisStart(request, profile);
           if (!this.searchCurrent(generation)) return;
@@ -731,7 +790,8 @@ export class LearnedAnalysisSession {
                 )
               )
                 throw new Error("解析応答の局面・モデルが一致しません。");
-              if (update.depth > 0) this.storeResult(request, update);
+              if (update.depth > 0)
+                this.storeResult(request, update, historyIdentity);
             }
             if (response.slice?.termination === "completed") break;
             await new Promise((resolve) => setTimeout(resolve, 8));
@@ -745,7 +805,12 @@ export class LearnedAnalysisSession {
           if (!this.searchCurrent(generation)) return;
         }
         this.publish({ graph: this.deriveGraph() });
-        if (this.state.snapshot?.sfen === position.sfen)
+        // The displayed position may share the ply's SFEN through a different
+        // branch; only the same full history may take over the score panel.
+        if (
+          this.state.snapshot !== null &&
+          positionHistoryIdentity(this.state.snapshot) === historyIdentity
+        )
           this.publish({
             update: this.lookupUpdate(position),
             progress: emptyProgress(),
@@ -815,6 +880,9 @@ export class LearnedAnalysisSession {
 
   dispose(): void {
     this.disposed = true;
+    // A record load that resumes after this point must not publish into a
+    // disposed session, even one recreated for a fresh mount.
+    this.loadSequence++;
     this.invalidate();
   }
 
@@ -833,8 +901,11 @@ export class LearnedAnalysisSession {
       // A sweep advances plies on its own; navigation must never kill it or
       // race it with a position search.
       if (this.searchKind === "sweep") return;
-      // The displayed position is already being analyzed.
-      if (this.searchPositionSfen === position.sfen) return;
+      // The displayed position is already being analyzed. History counts:
+      // the same final SFEN reached through a different line is a different
+      // search context and supersedes.
+      if (this.searchPositionIdentity === positionHistoryIdentity(position))
+        return;
       this.supersedeSearch();
     }
     // While a sync is flying, the on-display snapshot may still be the
@@ -857,12 +928,19 @@ export class LearnedAnalysisSession {
 
   /**
    * Publishes a finished result only when it belongs to the currently
-   * displayed position. A result for a superseded position stays in the store
-   * (lookupUpdate shows it when that position returns) but can never appear
-   * as the displayed position's score.
+   * displayed position: same canonical SFEN *and* the same move history —
+   * two histories can share a final SFEN and must not trade results.
+   * A result for a superseded position stays in the store (lookupUpdate
+   * shows it when that exact position returns) but can never appear as the
+   * displayed position's score.
    */
-  private publishResultIfDisplayed(update: AnalysisUpdate): void {
+  private publishResultIfDisplayed(
+    update: AnalysisUpdate,
+    historyIdentity: string,
+  ): void {
     if (update.canonicalPosition !== this.state.snapshot?.sfen) return;
+    if (historyIdentity !== positionHistoryIdentity(this.state.snapshot!))
+      return;
     this.publish({ update, graph: this.deriveGraph() });
   }
 
@@ -880,7 +958,7 @@ export class LearnedAnalysisSession {
 
   private endSearch(): void {
     this.searchRunning = false;
-    this.searchPositionSfen = null;
+    this.searchPositionIdentity = null;
     this.searchKind = null;
     this.searchClient?.dispose();
     this.searchClient = null;
@@ -977,7 +1055,8 @@ export class LearnedAnalysisSession {
   /** The stored result for this position produced by the most recent search options. */
   private lookupUpdate(snapshot: PrototypeSnapshot): AnalysisUpdate | null {
     if (this.lastOptionsHash === null) return null;
-    for (const stored of this.results.get(snapshot.sfen) ?? []) {
+    for (const stored of this.results.get(positionHistoryIdentity(snapshot)) ??
+      []) {
       if (
         stored.request.modelHash === snapshot.leafSha256 &&
         stored.request.searchOptionsHash === this.lastOptionsHash
@@ -987,8 +1066,12 @@ export class LearnedAnalysisSession {
     return null;
   }
 
-  private storeResult(request: AnalysisStart, update: AnalysisUpdate): void {
-    const list = this.results.get(request.positionSfen) ?? [];
+  private storeResult(
+    request: AnalysisStart,
+    update: AnalysisUpdate,
+    historyIdentity: string,
+  ): void {
+    const list = this.results.get(historyIdentity) ?? [];
     const index = list.findIndex(
       (stored) =>
         stored.request.modelHash === request.modelHash &&
@@ -996,12 +1079,12 @@ export class LearnedAnalysisSession {
     );
     if (index >= 0) list[index] = { request, update };
     else list.push({ request, update });
-    this.results.set(request.positionSfen, list);
+    this.results.set(historyIdentity, list);
     if (this.results.size > 640) {
       const first = this.results.keys().next().value;
       if (first !== undefined) this.results.delete(first);
     }
-    void this.store.put(request, update);
+    void this.store.put(request, update, historyIdentity);
   }
 
   private publishGraph(): void {

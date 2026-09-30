@@ -74,7 +74,7 @@ describe("analysis cache identity", () => {
       request({ multiPv: 2 }),
     ];
 
-    expect(new Set(variants.map(analysisCacheIdentity)).size).toBe(
+    expect(new Set(variants.map((r) => analysisCacheIdentity(r))).size).toBe(
       variants.length,
     );
     expect(analysisCacheIdentity(original)).toBe(

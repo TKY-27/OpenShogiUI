@@ -154,6 +154,75 @@ if (failures.length > 0) {
     console.log(
       "AI Wasm completed time-control and continuous-analysis lifecycle smoke tests",
     );
+
+    // Repetition-history identity: the pure search is history-dependent, so
+    // two lines that end in the same SFEN are different search contexts even
+    // though the wire request (SFEN-keyed) cannot tell them apart. The UI
+    // namespaces its caches by initial SFEN plus move list; this pins the
+    // engine-level facts that make the namespace necessary.
+    const initialSfen = "8k/9/9/9/9/9/9/9/K8 b - 1";
+    const historyA = [
+      "9i9h",
+      "1a1b",
+      "9h9i",
+      "1b1a",
+      "9i9h",
+      "1a1b",
+      "9h9i",
+      "1b1a",
+    ];
+    const historyB = [
+      "9i8i",
+      "1a2a",
+      "8i8h",
+      "2a2b",
+      "8h9h",
+      "2b1b",
+      "9h9i",
+      "1b1a",
+    ];
+    const cycle = ["9i9h", "1a1b", "9h9i", "1b1a"];
+    engine.restore(initialSfen, JSON.stringify(historyA));
+    const a = JSON.parse(engine.snapshot());
+    engine.restore(initialSfen, JSON.stringify(historyB));
+    const b = JSON.parse(engine.snapshot());
+    if (
+      a.sfen !== b.sfen ||
+      a.moveNumber !== b.moveNumber ||
+      a.moveNumber !== 9 ||
+      a.moves.length !== 8 ||
+      b.moves.length !== 8
+    ) {
+      throw new Error(
+        "repetition pair must share the final SFEN and move number",
+      );
+    }
+    if (
+      !a.legalMoves.some((move) => move.usi === "9i9h") ||
+      !b.legalMoves.some((move) => move.usi === "9i9h")
+    ) {
+      throw new Error("both repetition endpoints must accept the same move");
+    }
+    engine.restore(initialSfen, JSON.stringify([...historyA, ...cycle]));
+    const a4 = JSON.parse(engine.snapshot());
+    engine.restore(initialSfen, JSON.stringify([...historyB, ...cycle]));
+    const b4 = JSON.parse(engine.snapshot());
+    if (a4.sfen !== b4.sfen) {
+      throw new Error("the extended cycle must preserve the shared endpoint");
+    }
+    if (a4.terminal === null || a4.terminal.kind !== "repetition") {
+      throw new Error(
+        "the four-occurrence history must be judged a repetition draw",
+      );
+    }
+    if (b4.terminal !== null) {
+      throw new Error(
+        "the three-occurrence history must not be judged a repetition",
+      );
+    }
+    console.log(
+      "AI Wasm separated identical-SFN repetition histories (same endpoint, different verdicts)",
+    );
   } catch (error) {
     console.error(`FAIL AI Wasm execution smoke failed: ${error.message}`);
     process.exitCode = 1;

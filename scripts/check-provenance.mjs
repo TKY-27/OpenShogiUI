@@ -21,6 +21,11 @@ const requiredProvenance = [
   analysisProtocolCommit,
   "open_shogi_analysis/v1",
   "open_shogi_time_control/v1",
+  // The pure-only play runtime identity and its tracked bytes.
+  "196055ffa4adf3d8a28a332080189dd92681fe83",
+  "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e",
+  "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137",
+  "assets/pure-runtime",
 ];
 const expectedBindings = new Map([
   [
@@ -33,7 +38,7 @@ const expectedBindings = new Map([
   ],
   [
     "open_shogi_wasm_bg.wasm",
-    "eb572a7183142394632aedd45f8ffb242e7b77143fe599097ba754169dc7cfd2",
+    "3a268345ff60293eba6ec8e354f5f2d6f995e1e8e931f4ef664a46a747d8246c",
   ],
   [
     "open_shogi_wasm_bg.wasm.d.ts",
@@ -55,6 +60,31 @@ for (const [name, expected] of expectedBindings) {
   const observed = createHash("sha256").update(bytes).digest("hex");
   if (observed !== expected) {
     failures.push(`binding provenance mismatch for ${name}: ${observed}`);
+  }
+}
+
+const expectedTrackedRuntime = new Map([
+  [
+    "open_shogi_wasm.js",
+    "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e",
+  ],
+  [
+    "open_shogi_wasm_bg.wasm",
+    "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137",
+  ],
+]);
+for (const [name, expected] of expectedTrackedRuntime) {
+  let observed;
+  try {
+    observed = createHash("sha256")
+      .update(readFileSync(join(root, "assets/pure-runtime", name)))
+      .digest("hex");
+  } catch (error) {
+    failures.push(`tracked pure runtime unreadable: ${name}: ${error.message}`);
+    continue;
+  }
+  if (observed !== expected) {
+    failures.push(`tracked pure runtime mismatch for ${name}: ${observed}`);
   }
 }
 

@@ -10,7 +10,7 @@ const RUNTIME_HASHES: Record<string, string> = {
   "engine.js":
     "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e",
   "engine.wasm":
-    "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a",
+    "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137",
   "controller.json":
     "66110bae4ef5fbedd6a3c5537813f0fae5b9276b576a745b2364b4a093141b63",
 };

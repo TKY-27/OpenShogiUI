@@ -4,13 +4,18 @@
 // against the sha256 pinned in release-model.json before it is accepted.
 //
 // Sources, in order:
-//   1. OPENSHOGI_ASSET_MIRROR: a local directory or base URL with the same
+//   1. Repo-tracked bytes: the asset map may point at a file in this checkout
+//      (`tracked`). The pure browser runtime ships this way so a clean build
+//      reproduces the reviewed bytes without republishing the models-v1
+//      release, which stays the source for weights and rights records.
+//   2. OPENSHOGI_ASSET_MIRROR: a local directory or base URL with the same
 //      asset names (pre-publication mirror, e.g. an assembled
-//      OpenShogiAI/local/release/models-v1 staging directory).
-//   2. The fixed GitHub release download URL recorded in release-assets.json.
+//      OpenShogiAI/local/release/models-v1 staging directory). Tracked
+//      entries never consult the mirror; both sources are hash-pinned.
+//   3. The fixed GitHub release download URL recorded in release-assets.json.
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -69,6 +74,27 @@ async function fetchBytes(assetName) {
   };
 }
 
+/** Repo-tracked bytes replace a release download; they are still hash-verified. */
+async function trackedBytes(trackedPath, sha256) {
+  if (
+    !/^assets\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9._-]+)*$/.test(trackedPath) ||
+    trackedPath.split("/").includes("..")
+  )
+    throw new Error(`Invalid tracked asset path: ${trackedPath}`);
+  // fileURLToPath of a directory URL keeps its trailing slash; normalize so
+  // the containment prefix is exact either way.
+  const base = root.endsWith(sep) ? root : root + sep;
+  const absolute = resolve(root, trackedPath);
+  if (!absolute.startsWith(base))
+    throw new Error(`Tracked asset escapes the checkout: ${trackedPath}`);
+  const bytes = await readFile(absolute).catch(() => {
+    throw new Error(`Tracked asset is missing: ${trackedPath}`);
+  });
+  if (digest(bytes) !== sha256)
+    throw new Error(`Tracked asset hash mismatch: ${trackedPath}`);
+  return bytes;
+}
+
 const wanted = new Map();
 for (const entry of allowlist.models) {
   for (const [name, artifact] of Object.entries(entry.model.artifacts)) {
@@ -118,7 +144,12 @@ for (const [sha256, spec] of wanted) {
     continue;
   }
   const mapEntry = assetMap.assets[sha256];
-  const { bytes, source } = await fetchBytes(mapEntry.name);
+  const { bytes, source } = mapEntry.tracked
+    ? {
+        bytes: await trackedBytes(mapEntry.tracked, sha256),
+        source: mapEntry.tracked,
+      }
+    : await fetchBytes(mapEntry.name);
   if (bytes.length !== mapEntry.bytes || digest(bytes) !== sha256)
     throw new Error(
       `Hash or size mismatch for ${mapEntry.name} from ${source}: expected ${sha256}/${mapEntry.bytes}`,

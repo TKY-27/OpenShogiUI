@@ -24,6 +24,7 @@ import type {
 import { KifuSaveMenu } from "./KifuSaveMenu";
 import { downloadText } from "./kifu";
 import { MAX_KIFU_BYTES, parseKifuBytes } from "./kifu-import";
+import { START_SFEN } from "./collection";
 import { pvJapanese } from "./pv-notation";
 import { parseUsiMoveShape, type MoveHighlight } from "./play-settings";
 import "./core-prototype.css";
@@ -243,13 +244,17 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
           "Discard the loaded record and comments, and return to the start position?",
         ),
       )
-    )
+    ) {
+      // A file read still in arrayBuffer/parse must not surface after the
+      // reset and overwrite it.
+      fileGeneration.current++;
       void sessionRef.current
-        ?.loadPosition({
-          initialSfen: "position startpos",
-          moves: [],
-        })
+        // The restore contract takes a canonical SFEN; "position startpos"
+        // is a USI command, not one. This is the same normalized initial
+        // position `readAnalysisPosition` produces for "startpos".
+        ?.loadPosition({ initialSfen: START_SFEN, moves: [] })
         .catch(() => {});
+    }
   };
 
   /** The displayed line: the record, or the preview branch when one is active. */
@@ -909,9 +914,12 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
               selection={state.selection}
               disabled={false}
               locale={locale}
-              onSelect={(value: PrototypeSelection) =>
-                void sessionRef.current?.prepare(value)
-              }
+              onSelect={(value: PrototypeSelection) => {
+                // A model switch supersedes a file read that has not reached
+                // the session yet, exactly like another load would.
+                fileGeneration.current++;
+                void sessionRef.current?.prepare(value);
+              }}
             />
             {state.identity ? (
               <p className="analysis-settings__identity">

@@ -22,7 +22,7 @@
           },
           "engine.wasm": {
             "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
-            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+            "sha256": "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137"
           },
           "leaf.osaval03": {
             "path": "local/runs/r4-c4/attempt-01/generations/G02/fit/trained_candidate.osaval03",
@@ -52,7 +52,7 @@
           },
           "engine.wasm": {
             "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
-            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+            "sha256": "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137"
           },
           "leaf.osaval03": {
             "path": "local/runs/r4-c3/attempt-01/fit/trained_candidate.osaval03",
@@ -82,7 +82,7 @@
           },
           "engine.wasm": {
             "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
-            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+            "sha256": "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137"
           },
           "leaf.osaval03": {
             "path": "local/runs/r4-c1/attempt-01/fit/best.osaval03",
@@ -112,7 +112,7 @@
           },
           "engine.wasm": {
             "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
-            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+            "sha256": "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137"
           },
           "leaf.osaval03": {
             "path": "local/runs/defense-20260912/recovery-r3/fit/best.osaval03",
@@ -142,7 +142,7 @@
           },
           "engine.wasm": {
             "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
-            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+            "sha256": "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137"
           },
           "leaf.osaval03": {
             "path": "local/runs/evaluator-20260910/main-r3/fit/best.osaval03",
@@ -172,7 +172,7 @@
           },
           "engine.wasm": {
             "path": "local/runs/r4-c4/attempt-01/runtime/open_shogi_wasm_bg.wasm",
-            "sha256": "ab7fcf0e2433afeea630dbf029f6dc2e9c1130ea315ae189805cda80e1ef8b3a"
+            "sha256": "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137"
           },
           "leaf.osaval03": {
             "path": "local/frozen/baseline/model.osaval03",

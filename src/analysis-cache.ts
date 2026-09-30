@@ -17,7 +17,16 @@ export interface CachedAnalysisSummary {
   update: AnalysisUpdate;
 }
 
-export function analysisCacheIdentity(request: AnalysisStart): string {
+/**
+ * Persistent cache identity. `historyIdentity` is the initial SFEN plus the
+ * full move list: the pure search is history-dependent, so two lines ending
+ * in the same SFEN must never share an entry. The wire request itself is
+ * unchanged; the history only namespaces host-side caches.
+ */
+export function analysisCacheIdentity(
+  request: AnalysisStart,
+  historyIdentity?: string,
+): string {
   return [
     request.schema,
     request.positionSfen,
@@ -29,6 +38,7 @@ export function analysisCacheIdentity(request: AnalysisStart): string {
     request.openingProfileHash,
     String(request.multiPv),
     ENGINE_SNAPSHOT_SHA256,
+    ...(historyIdentity === undefined ? [] : [historyIdentity]),
   ].join("|");
 }
 
@@ -52,8 +62,11 @@ export class AnalysisSummaryStore {
   private readonly memory = new Map<string, CachedAnalysisSummary>();
   private databasePromise: Promise<IDBDatabase | null> | null = null;
 
-  async get(request: AnalysisStart): Promise<CachedAnalysisSummary | null> {
-    const key = analysisCacheIdentity(request);
+  async get(
+    request: AnalysisStart,
+    historyIdentity?: string,
+  ): Promise<CachedAnalysisSummary | null> {
+    const key = analysisCacheIdentity(request, historyIdentity);
     const memory = this.memory.get(key);
     if (memory !== undefined) return memory;
     const database = await this.database();
@@ -76,10 +89,14 @@ export class AnalysisSummaryStore {
     }
   }
 
-  async put(request: AnalysisStart, update: AnalysisUpdate): Promise<void> {
+  async put(
+    request: AnalysisStart,
+    update: AnalysisUpdate,
+    historyIdentity?: string,
+  ): Promise<void> {
     if (!updateMatchesRequest(update, request) || update.depth === 0) return;
     const entry: CachedAnalysisSummary = {
-      key: analysisCacheIdentity(request),
+      key: analysisCacheIdentity(request, historyIdentity),
       savedAtMs: Date.now(),
       update,
     };

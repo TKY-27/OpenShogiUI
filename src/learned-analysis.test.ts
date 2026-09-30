@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   LearnedAnalysisSession,
   analysisRequest,
+  positionHistoryIdentity,
   readAnalysisPosition,
 } from "./learned-analysis";
+import { AnalysisSummaryStore } from "./analysis-cache";
 import { START_SFEN } from "./collection";
 import type { PrototypeWorkerClient } from "./core-prototype-client";
 import type {
@@ -29,6 +31,26 @@ function manifest(selection: PrototypeSelection): PrototypeManifest {
       "engine.js": asset,
       "engine.wasm": asset,
       "leaf.osaval03": asset,
+      "controller.json": null,
+    },
+  };
+}
+/** Same runtime bytes as `manifest`, but a different model generation. */
+function siblingManifest(selection: PrototypeSelection): PrototypeManifest {
+  const runtime = { url: "/test", sha256: modelHash, size: 1 };
+  const leaf = {
+    url: "/test-leaf",
+    sha256: selection === "r4c1" ? "d".repeat(64) : "c".repeat(64),
+    size: 1,
+  };
+  return {
+    schema: "open_shogi_core_prototype_assets/v2",
+    selection,
+    runId: `test-${selection}`,
+    artifacts: {
+      "engine.js": runtime,
+      "engine.wasm": { ...runtime },
+      "leaf.osaval03": leaf,
       "controller.json": null,
     },
   };
@@ -279,28 +301,48 @@ describe("kifu navigation and branching", () => {
   });
 
   it("keeps the previous record when an import fails validation", async () => {
-    const failing = new LearnedAnalysisSession(
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce(manifest("r4c3"))
+      .mockRejectedValueOnce(new Error("invalid kifu"));
+    const session = new LearnedAnalysisSession(
       () => {},
       () => {
-        throw Error("must not initialize");
+        const client = {
+          initialize: vi.fn(
+            async (
+              m: PrototypeManifest,
+              _enabled: boolean,
+              position: { moves: string[] } | null,
+            ) => ({
+              ...ready(m),
+              snapshot: { ...snapshot, moves: [...(position?.moves ?? [])] },
+            }),
+          ),
+          dispose: vi.fn(),
+        };
+        return client as unknown as PrototypeWorkerClient;
       },
-      async () => {
-        throw Error("invalid kifu");
-      },
+      loader,
     );
-    await failing.prepare("r4c3", {
+    await session.prepare("r4c3", {
       initialSfen: START_SFEN,
       moves: ["7g7f"],
     });
-    const before = failing.state.record;
-    await failing.loadPosition({
+    expect(session.state.record.moves).toEqual(["7g7f"]);
+    const before = session.state.record;
+    // The Wasm replay rejects the imported line; the committed record, the
+    // displayed board and the cursor all stay exactly as they were.
+    await session.loadPosition({
       initialSfen: START_SFEN,
       moves: ["7g7f", "3c3d"],
     });
-    expect(failing.state.phase).toBe("error");
-    expect(failing.state.record).toBe(before);
-    expect(failing.state.record.moves).toEqual(["7g7f"]);
-    failing.dispose();
+    expect(session.state.phase).toBe("error");
+    expect(session.state.record).toBe(before);
+    expect(session.state.record.moves).toEqual(["7g7f"]);
+    expect(session.state.snapshot?.moves).toEqual(["7g7f"]);
+    expect(session.state.cursor).toBe(1);
+    session.dispose();
   });
 });
 
@@ -1420,5 +1462,806 @@ describe("position-analysis auto-follow", () => {
     // the idle navigation worker remains until dispose().
     session.dispose();
     expect(disposed).toBe(created.length);
+  });
+});
+
+describe("record load ownership", () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<T>((done, fail) => {
+      resolve = done;
+      reject = fail;
+    });
+    return { promise, resolve, reject };
+  }
+  /** A client whose initialize replays the requested position history. */
+  function replayFactory() {
+    const inits: string[][] = [];
+    return () => {
+      const client = {
+        initialize: vi.fn(
+          async (
+            m: PrototypeManifest,
+            _enabled: boolean,
+            position: { moves: string[] } | null,
+          ) => {
+            const moves = [...(position?.moves ?? [])];
+            inits.push(moves);
+            return {
+              ...ready(m),
+              snapshot: {
+                ...snapshot,
+                moves,
+                leafSha256: m.artifacts["leaf.osaval03"].sha256,
+              },
+            };
+          },
+        ),
+        move: vi.fn(async () => snapshot),
+        dispose: vi.fn(),
+      };
+      return client as unknown as PrototypeWorkerClient;
+    };
+  }
+
+  it("never publishes the older of two overlapping loads", async () => {
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(manifest("r4c3"));
+    const session = new LearnedAnalysisSession(
+      () => {},
+      replayFactory(),
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    const loadA = session.loadPosition({
+      initialSfen: START_SFEN,
+      moves: ["7g7f"],
+    });
+    const loadB = session.loadPosition({
+      initialSfen: START_SFEN,
+      moves: ["7g7f", "3c3d"],
+    });
+    await loadB;
+    expect(session.state.record.moves).toEqual(["7g7f", "3c3d"]);
+    expect(session.state.phase).toBe("ready");
+    // A's manifest arrives after B settled: A must not republish its record,
+    // navigate or restart analysis over B's state.
+    slow.resolve(manifest("r4c3"));
+    await loadA;
+    expect(session.state.record.moves).toEqual(["7g7f", "3c3d"]);
+    expect(session.state.phase).toBe("ready");
+    expect(session.state.error).toBeNull();
+    session.dispose();
+  });
+
+  it("drops a stale failed load without rolling back the newer record", async () => {
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(manifest("r4c3"));
+    const session = new LearnedAnalysisSession(
+      () => {},
+      replayFactory(),
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    const loadA = session.loadPosition({
+      initialSfen: START_SFEN,
+      moves: ["7g7f"],
+    });
+    const loadB = session.loadPosition({
+      initialSfen: START_SFEN,
+      moves: ["7g7f", "3c3d"],
+    });
+    await loadB;
+    slow.reject(new Error("A's file was unreadable"));
+    await loadA;
+    // B's coherent state survives; A's failure is neither shown nor rolled
+    // back. The displayed board is B's line at B's cursor (the start of B).
+    expect(session.state.phase).toBe("ready");
+    expect(session.state.error).toBeNull();
+    expect(session.state.record.moves).toEqual(["7g7f", "3c3d"]);
+    expect(session.state.line).toEqual(["7g7f", "3c3d"]);
+    expect(session.state.snapshot?.moves).toEqual([]);
+    expect(session.state.cursor).toBe(0);
+    session.dispose();
+  });
+
+  it("invalidates a file read that has not reached the session when a reset wins", async () => {
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(manifest("r4c3"));
+    const session = new LearnedAnalysisSession(
+      () => {},
+      replayFactory(),
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    const loadA = session.loadPosition({
+      initialSfen: START_SFEN,
+      moves: ["7g7f", "3c3d"],
+    });
+    // The reset is the same operation loadPosition performs for START_SFEN.
+    const reset = session.loadPosition({ initialSfen: START_SFEN, moves: [] });
+    await reset;
+    expect(session.state.record.moves).toEqual([]);
+    slow.resolve(manifest("r4c3"));
+    await loadA;
+    expect(session.state.record.moves).toEqual([]);
+    expect(session.state.phase).toBe("ready");
+    session.dispose();
+  });
+
+  it("gives a model switch ownership over an in-flight record load", async () => {
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      .mockReturnValueOnce(slow.promise)
+      .mockImplementation(async (selection: PrototypeSelection) =>
+        manifest(selection!),
+      );
+    const session = new LearnedAnalysisSession(
+      () => {},
+      replayFactory(),
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    const loadA = session.loadPosition({
+      initialSfen: START_SFEN,
+      moves: ["7g7f", "3c3d"],
+    });
+    await session.prepare("r4c1");
+    expect(session.state.selection).toBe("r4c1");
+    slow.resolve(manifest("r4c3"));
+    await loadA;
+    expect(session.state.selection).toBe("r4c1");
+    expect(session.state.record.moves).toEqual([]);
+    expect(session.state.identity?.leafSha256).toBe(modelHash);
+    session.dispose();
+  });
+
+  it("ignores navigation during a model load instead of killing the load", async () => {
+    // Graph points and the ply slider stay clickable while a switch is in
+    // flight; navigation there must neither supersede the load nor wedge
+    // the session in "loading".
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce(manifest("r4c3"))
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(manifest("r4c1"));
+    const session = new LearnedAnalysisSession(
+      () => {},
+      replayFactory(),
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    await session.prepare("r4c3", {
+      initialSfen: START_SFEN,
+      moves: ["7g7f", "3c3d"],
+    });
+    const switching = session.prepare("r4c1");
+    expect(session.state.phase).toBe("loading");
+    await session.goto(0);
+    slow.resolve(manifest("r4c1"));
+    await switching;
+    expect(session.state.phase).toBe("ready");
+    expect(session.state.selection).toBe("r4c1");
+    expect(session.state.record.moves).toEqual(["7g7f", "3c3d"]);
+    session.dispose();
+  });
+
+  it("keeps analysis stopped when an older load completes after Stop", async () => {
+    const requests: AnalysisStart[] = [];
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      // The base prepare consumes the first slot; loadA is held.
+      .mockResolvedValueOnce(manifest("r4c3"))
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(manifest("r4c3"));
+    const make = () => {
+      const client = {
+        initialize: vi.fn(
+          async (
+            m: PrototypeManifest,
+            _enabled: boolean,
+            position: { moves: string[] } | null,
+          ) => ({
+            ...ready(m),
+            snapshot: {
+              ...snapshot,
+              moves: [...(position?.moves ?? [])],
+              leafSha256: m.artifacts["leaf.osaval03"].sha256,
+              legalMoves: [
+                {
+                  usi: "7g7f",
+                  from: null,
+                  to: { file: 7, rank: 6 },
+                  drop: null,
+                  promote: false,
+                },
+              ],
+            },
+          }),
+        ),
+        move: vi.fn(async () => snapshot),
+        analysisStart: vi.fn(async (request: AnalysisStart) => {
+          requests.push(request);
+          return {
+            schema: "open_shogi_analysis/v1",
+            event: "started",
+            updates: [],
+          } satisfies AnalysisResponse;
+        }),
+        analysisStep: vi.fn(async (): Promise<AnalysisResponse> => {
+          const request = requests.at(-1)!;
+          return {
+            schema: "open_shogi_analysis/v1",
+            event: "updates",
+            updates: [
+              {
+                source: "search" as const,
+                canonicalPosition: request.positionSfen,
+                positionHash: "0".repeat(64),
+                modelHash: request.modelHash,
+                evaluatorConfigHash: request.evaluatorConfigHash,
+                featureSchemaHash: request.featureSchemaHash,
+                evaluationSemanticsHash: request.evaluationSemanticsHash,
+                searchOptionsHash: request.searchOptionsHash,
+                openingProfileHash: request.openingProfileHash,
+                multiPv: request.multiPv,
+                depth: 5,
+                nodes: 1000,
+                nps: 1000,
+                score: 80,
+                mateScore: null,
+                lines: [
+                  {
+                    rank: 1,
+                    score: 80,
+                    mateScore: null,
+                    depth: 5,
+                    nodes: 1000,
+                    pv: ["7g7f"],
+                  },
+                ],
+                rootMoveStatistics: [],
+                timestampMs: 0,
+                engineVersion: "test",
+              },
+            ],
+            slice: {
+              depth: 5,
+              nodes: 1000,
+              elapsedNs: 1_000_000,
+              termination: "completed" as const,
+            },
+          };
+        }),
+        analysisStop: vi.fn(
+          async () =>
+            ({
+              schema: "open_shogi_analysis/v1",
+              event: "stopped",
+              updates: [],
+            }) satisfies AnalysisResponse,
+        ),
+        dispose: vi.fn(),
+      };
+      return client as unknown as PrototypeWorkerClient;
+    };
+    const session = new LearnedAnalysisSession(
+      () => {},
+      make,
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    await session.prepare("r4c3");
+    void session.analyze("balanced", 250, 1);
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    await vi.waitFor(() => expect(session.state.phase).toBe("ready"));
+    const loadA = session.loadPosition({
+      initialSfen: START_SFEN,
+      moves: ["7g7f", "3c3d"],
+    });
+    session.stop();
+    expect(session.state.autoFollow).toBe(false);
+    slow.resolve(manifest("r4c3"));
+    await loadA;
+    // The record itself completes (the user asked for the load), but no
+    // analysis may restart from the stale completion.
+    expect(session.state.record.moves).toEqual(["7g7f", "3c3d"]);
+    expect(requests).toHaveLength(1);
+    expect(session.state.autoFollow).toBe(false);
+    session.dispose();
+  });
+});
+
+describe("model-switch cache identity", () => {
+  /** Immediate, model-flavored analysis so stale reuse is directly visible. */
+  function scoringFactory(record: {
+    requests: AnalysisStart[];
+    models: string[];
+    failNextInitialize?: boolean;
+  }) {
+    return () => {
+      const client = {
+        initialize: vi.fn(
+          async (
+            m: PrototypeManifest,
+            _enabled: boolean,
+            position: { moves: string[] } | null,
+          ) => {
+            if (record.failNextInitialize)
+              throw new Error("runtime fetch failed");
+            const leaf = m.artifacts["leaf.osaval03"].sha256;
+            return {
+              snapshot: {
+                ...snapshot,
+                moves: [...(position?.moves ?? [])],
+                leafSha256: leaf,
+                legalMoves: [
+                  {
+                    usi: "7g7f",
+                    from: null,
+                    to: { file: 7, rank: 6 },
+                    drop: null,
+                    promote: false,
+                  },
+                ],
+              },
+              identity: { ...ready(m).identity, leafSha256: leaf },
+              preparation: ready(m).preparation,
+            };
+          },
+        ),
+        move: vi.fn(async () => snapshot),
+        analysisStart: vi.fn(async (request: AnalysisStart) => {
+          record.requests.push(request);
+          record.models.push(request.modelHash.slice(0, 4));
+          return {
+            schema: "open_shogi_analysis/v1",
+            event: "started",
+            updates: [],
+          } satisfies AnalysisResponse;
+        }),
+        analysisStep: vi.fn(async (): Promise<AnalysisResponse> => {
+          const request = record.requests.at(-1)!;
+          const score = request.modelHash === "c".repeat(64) ? 80 : 999;
+          return {
+            schema: "open_shogi_analysis/v1",
+            event: "updates",
+            updates: [
+              {
+                source: "search" as const,
+                canonicalPosition: request.positionSfen,
+                positionHash: "0".repeat(64),
+                modelHash: request.modelHash,
+                evaluatorConfigHash: request.evaluatorConfigHash,
+                featureSchemaHash: request.featureSchemaHash,
+                evaluationSemanticsHash: request.evaluationSemanticsHash,
+                searchOptionsHash: request.searchOptionsHash,
+                openingProfileHash: request.openingProfileHash,
+                multiPv: request.multiPv,
+                depth: 5,
+                nodes: 1000,
+                nps: 1000,
+                score,
+                mateScore: null,
+                lines: [
+                  {
+                    rank: 1,
+                    score,
+                    mateScore: null,
+                    depth: 5,
+                    nodes: 1000,
+                    pv: ["7g7f"],
+                  },
+                ],
+                rootMoveStatistics: [],
+                timestampMs: 0,
+                engineVersion: "test",
+              },
+            ],
+            slice: {
+              depth: 5,
+              nodes: 1000,
+              elapsedNs: 1_000_000,
+              termination: "completed" as const,
+            },
+          };
+        }),
+        analysisStop: vi.fn(
+          async () =>
+            ({
+              schema: "open_shogi_analysis/v1",
+              event: "stopped",
+              updates: [],
+            }) satisfies AnalysisResponse,
+        ),
+        dispose: vi.fn(),
+      };
+      return client as unknown as PrototypeWorkerClient;
+    };
+  }
+
+  it("shows only the selected model's evaluations after a switch on the same runtime", async () => {
+    const record: { requests: AnalysisStart[]; models: string[] } = {
+      requests: [],
+      models: [],
+    };
+    const loader = vi.fn(async (selection: PrototypeSelection) =>
+      siblingManifest(selection!),
+    );
+    const session = new LearnedAnalysisSession(
+      () => {},
+      scoringFactory(record),
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    const leafA = "c".repeat(64);
+    const leafB = "d".repeat(64);
+    // A real record gives navigation somewhere to go: after the switch the
+    // cached A-model snapshot for ply 0 must be gone, not reused.
+    await session.prepare("r4c3", { initialSfen: START_SFEN, moves: ["7g7f"] });
+    expect(session.state.record.moves).toEqual(["7g7f"]);
+    expect(session.state.snapshot?.leafSha256).toBe(leafA);
+    void session.analyze("balanced", 250, 1);
+    await vi.waitFor(() => expect(record.requests).toHaveLength(1));
+    await vi.waitFor(() => expect(session.state.phase).toBe("ready"));
+    expect(session.state.update?.modelHash).toBe(leafA);
+    expect(session.state.update?.lines[0]!.score).toBe(80);
+    expect(session.state.graph).toHaveLength(2);
+    // Only the analyzed ply (1) carries a point; ply 0 is an honest gap.
+    expect(session.state.graph[0]).toBeNull();
+    expect(session.state.graph[1]).not.toBeNull();
+    // Switch models on the same runtime bytes. Right after the verified
+    // switch the old model's graph is gone (honest gaps), and the armed
+    // auto-follow restarts under the new model only.
+    await session.prepare("r4c1");
+    expect(session.state.snapshot?.leafSha256).toBe(leafB);
+    expect(session.state.graph.every((point) => point === null)).toBe(true);
+    await vi.waitFor(() => expect(record.requests).toHaveLength(2));
+    expect(record.requests[1]!.modelHash).toBe(leafB);
+    await vi.waitFor(() => expect(session.state.phase).toBe("ready"));
+    expect(session.state.update?.modelHash).toBe(leafB);
+    expect(session.state.update?.lines[0]!.score).toBe(999);
+    // Navigating to ply 0 re-syncs from the worker: the cached A-model
+    // snapshot cannot survive, and the displayed result is B's or nothing.
+    await session.goto(0);
+    await vi.waitFor(() => expect(session.state.snapshot?.moves).toEqual([]));
+    expect(session.state.snapshot?.leafSha256).toBe(leafB);
+    const shown = session.state.update;
+    expect(shown === null || shown.modelHash === leafB).toBe(true);
+    session.dispose();
+  });
+
+  it("keeps the previous model's caches coherent when a switch fails", async () => {
+    // Manifest resolves but the runtime fails to load: the previous model's
+    // cached position and evaluation must survive untouched and stay
+    // mutually consistent; the retry then clears them under the new model.
+    const record: {
+      requests: AnalysisStart[];
+      models: string[];
+      failNextInitialize?: boolean;
+    } = { requests: [], models: [] };
+    const loader = vi.fn(async (selection: PrototypeSelection) =>
+      siblingManifest(selection!),
+    );
+    const session = new LearnedAnalysisSession(
+      () => {},
+      scoringFactory(record),
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    await session.prepare("r4c3", { initialSfen: START_SFEN, moves: ["7g7f"] });
+    void session.analyze("balanced", 250, 1);
+    await vi.waitFor(() => expect(record.requests).toHaveLength(1));
+    await vi.waitFor(() => expect(session.state.phase).toBe("ready"));
+    expect(session.state.graph[1]).not.toBeNull();
+    record.failNextInitialize = true;
+    await session.prepare("r4c1");
+    expect(session.state.phase).toBe("error");
+    // The old model's graph point and snapshot survive the failed switch.
+    expect(session.state.graph[1]).not.toBeNull();
+    expect(session.state.snapshot?.leafSha256).toBe("c".repeat(64));
+    // Round-trip navigation while the old model is still active: the return
+    // to ply 1 must hit the cached A-model snapshot and its stored result.
+    // A cache clear placed before initialize would short-circuit lookupUpdate
+    // and surface null here, so this pins the placement.
+    await session.goto(0);
+    await session.goto(1);
+    expect(session.state.update?.modelHash).toBe("c".repeat(64));
+    expect(session.state.update?.lines[0]!.score).toBe(80);
+    expect(session.state.snapshot?.leafSha256).toBe("c".repeat(64));
+    // The retry succeeds and rebuilds under the new model only.
+    record.failNextInitialize = false;
+    await session.prepare("r4c1");
+    // The armed auto-follow restarts under the new model; wait for it.
+    await vi.waitFor(() => expect(record.requests).toHaveLength(2));
+    await vi.waitFor(() => expect(session.state.phase).toBe("ready"));
+    expect(session.state.snapshot?.leafSha256).toBe("d".repeat(64));
+    expect(session.state.update?.modelHash).toBe("d".repeat(64));
+    expect(session.state.graph[1]).not.toBeNull();
+    session.dispose();
+  });
+});
+
+describe("history-separated analysis identity", () => {
+  function updateFor(request: AnalysisStart, score: number): AnalysisUpdate {
+    return {
+      source: "search" as const,
+      canonicalPosition: request.positionSfen,
+      positionHash: "0".repeat(64),
+      modelHash: request.modelHash,
+      evaluatorConfigHash: request.evaluatorConfigHash,
+      featureSchemaHash: request.featureSchemaHash,
+      evaluationSemanticsHash: request.evaluationSemanticsHash,
+      searchOptionsHash: request.searchOptionsHash,
+      openingProfileHash: request.openingProfileHash,
+      multiPv: request.multiPv,
+      depth: 5,
+      nodes: 1000,
+      nps: 1000,
+      score,
+      mateScore: null,
+      lines: [
+        {
+          rank: 1,
+          score,
+          mateScore: null,
+          depth: 5,
+          nodes: 1000,
+          pv: ["7g7f"],
+        },
+      ],
+      rootMoveStatistics: [],
+      timestampMs: 0,
+      engineVersion: "test",
+    };
+  }
+
+  it("never reuses a stored result across different histories of one SFEN", async () => {
+    const historyA = { ...snapshot, moves: ["7g7f", "3c3d", "7g7f", "3c3d"] };
+    const historyB = { ...snapshot, moves: ["2b8h+", "3c3d", "7g7f", "3c3d"] };
+    expect(historyA.sfen).toBe(historyB.sfen);
+    expect(positionHistoryIdentity(historyA)).not.toBe(
+      positionHistoryIdentity(historyB),
+    );
+    const request = await analysisRequest(
+      historyA,
+      manifest("r4c3"),
+      "balanced",
+      1,
+    );
+    const store = new AnalysisSummaryStore();
+    await store.put(
+      request,
+      updateFor(request, 120),
+      positionHistoryIdentity(historyA),
+    );
+    // Same request bytes, different history: no cross-hit.
+    expect(
+      await store.get(request, positionHistoryIdentity(historyB)),
+    ).toBeNull();
+    expect(
+      await store.get(request, positionHistoryIdentity(historyA)),
+    ).toMatchObject({ update: { score: 120 } });
+  });
+});
+
+describe("sweep display vs branched history at one SFEN", () => {
+  it("keeps a branched board's score independent of a sweep at the same SFEN", async () => {
+    // All positions share one SFEN (the wire request cannot tell histories
+    // apart), so the sweep's per-ply display publish is the place where a
+    // mainline result could leak onto a branched board.
+    const SHARED_SFEN = `${START_SFEN}|shared`;
+    const legal = ["7g7f", "3c3d", "2b8h+"];
+    const snap = (moves: string[]): PrototypeSnapshot => ({
+      ...snapshot,
+      sfen: SHARED_SFEN,
+      moves,
+      sideToMove: moves.length % 2 === 0 ? "black" : "white",
+      legalMoves: legal.map((usi) => ({
+        usi,
+        from: null,
+        to: { file: 7, rank: 7 },
+        drop: null,
+        promote: usi.endsWith("+"),
+      })),
+    });
+    const requests: AnalysisStart[] = [];
+    let moves: string[] = [];
+    let parked: ((value: AnalysisResponse) => void) | null = null;
+    let current: AnalysisStart | null = null;
+    let parks = true;
+    const release = () => {
+      const request = current!;
+      parked?.({
+        schema: "open_shogi_analysis/v1",
+        event: "updates",
+        updates: [
+          {
+            source: "search" as const,
+            canonicalPosition: request.positionSfen,
+            positionHash: "0".repeat(64),
+            modelHash: request.modelHash,
+            evaluatorConfigHash: request.evaluatorConfigHash,
+            featureSchemaHash: request.featureSchemaHash,
+            evaluationSemanticsHash: request.evaluationSemanticsHash,
+            searchOptionsHash: request.searchOptionsHash,
+            openingProfileHash: request.openingProfileHash,
+            multiPv: request.multiPv,
+            depth: 5,
+            nodes: 1000,
+            nps: 1000,
+            score: 400,
+            mateScore: null,
+            lines: [
+              {
+                rank: 1,
+                score: 400,
+                mateScore: null,
+                depth: 5,
+                nodes: 1000,
+                pv: ["7g7f"],
+              },
+            ],
+            rootMoveStatistics: [],
+            timestampMs: 0,
+            engineVersion: "test",
+          },
+        ],
+        slice: {
+          depth: 5,
+          nodes: 1000,
+          elapsedNs: 1_000_000,
+          termination: "completed" as const,
+        },
+      });
+      parked = null;
+    };
+    const make = () => {
+      const client = {
+        initialize: vi.fn(
+          async (
+            m: PrototypeManifest,
+            _enabled: boolean,
+            position: { moves: string[] } | null,
+          ) => {
+            moves = [...(position?.moves ?? [])];
+            return { ...ready(m), snapshot: snap(moves) };
+          },
+        ),
+        move: vi.fn(async (movement: string) => {
+          moves = [...moves, movement];
+          return snap(moves);
+        }),
+        analysisStart: vi.fn(async (request: AnalysisStart) => {
+          requests.push(request);
+          current = request;
+          return {
+            schema: "open_shogi_analysis/v1",
+            event: "started",
+            updates: [],
+          } satisfies AnalysisResponse;
+        }),
+        analysisStep: vi.fn(
+          () =>
+            new Promise<AnalysisResponse>((resolve) => {
+              if (parks) {
+                parked = resolve;
+              } else {
+                const request = current!;
+                resolve({
+                  schema: "open_shogi_analysis/v1",
+                  event: "updates",
+                  updates: [
+                    {
+                      source: "search" as const,
+                      canonicalPosition: request.positionSfen,
+                      positionHash: "0".repeat(64),
+                      modelHash: request.modelHash,
+                      evaluatorConfigHash: request.evaluatorConfigHash,
+                      featureSchemaHash: request.featureSchemaHash,
+                      evaluationSemanticsHash: request.evaluationSemanticsHash,
+                      searchOptionsHash: request.searchOptionsHash,
+                      openingProfileHash: request.openingProfileHash,
+                      multiPv: request.multiPv,
+                      depth: 5,
+                      nodes: 1000,
+                      nps: 1000,
+                      score: 400,
+                      mateScore: null,
+                      lines: [
+                        {
+                          rank: 1,
+                          score: 400,
+                          mateScore: null,
+                          depth: 5,
+                          nodes: 1000,
+                          pv: ["7g7f"],
+                        },
+                      ],
+                      rootMoveStatistics: [],
+                      timestampMs: 0,
+                      engineVersion: "test",
+                    },
+                  ],
+                  slice: {
+                    depth: 5,
+                    nodes: 1000,
+                    elapsedNs: 1_000_000,
+                    termination: "completed" as const,
+                  },
+                });
+              }
+            }),
+        ),
+        analysisStop: vi.fn(
+          async () =>
+            ({
+              schema: "open_shogi_analysis/v1",
+              event: "stopped",
+              updates: [],
+            }) satisfies AnalysisResponse,
+        ),
+        dispose: vi.fn(() => {
+          release();
+        }),
+      };
+      return client as unknown as PrototypeWorkerClient;
+    };
+    const session = new LearnedAnalysisSession(
+      () => {},
+      make,
+      async (selection) => manifest(selection!),
+    );
+    await session.prepare("r4c3", {
+      initialSfen: START_SFEN,
+      moves: ["7g7f", "3c3d"],
+    });
+    expect(session.state.snapshot?.sfen).toBe(SHARED_SFEN);
+    // The sweep analyzes the committed main line; its steps park so the
+    // branch can land mid-sweep.
+    parks = true;
+    const sweep = session.sweep("balanced", 250, 1);
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    // The user branches at ply 1: same depth, same SFEN, different history.
+    await session.goto(1);
+    await session.move("2b8h+");
+    expect(session.state.branching).toBe(true);
+    expect(session.state.snapshot?.sfen).toBe(SHARED_SFEN);
+    expect(session.state.update).toBeNull();
+    // Sweep ply 0 (main-line history) completes under the branched display.
+    release();
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    // The main-line result must not take over the branched board's score
+    // even though every wire field matches.
+    expect(session.state.update).toBeNull();
+    release();
+    await vi.waitFor(() => expect(requests).toHaveLength(3));
+    expect(session.state.update).toBeNull();
+    release();
+    await sweep;
+    expect(session.state.phase).toBe("ready");
+    expect(session.state.update).toBeNull();
+    session.dispose();
   });
 });

@@ -2,6 +2,7 @@ import type { SearchProfile, Side } from "./browser-engine";
 import { releaseControllerEnabled } from "virtual:shogi-runtime";
 import {
   chargeTurn,
+  fixedTurnTimeControl,
   hasFlagFallen,
   initialClockFor,
   matchTimeControl,
@@ -341,12 +342,21 @@ export class PrototypeMatchSession {
       position.sideToMove,
       this.now() - startedAt,
     );
+    // The charge can exhaust the very last millisecond of a resumed turn; the
+    // flag adjudication must win over issuing a fabricated budget.
+    if (this.tick()) return;
     this.searching = true;
-    // fixed10's UI clock is a display-only per-turn allowance, never an engine
-    // handoff: the request stays zero base time plus the 10-second byoyomi
-    // period, and the engine keeps allocating its own search inside it.
+    // fixed10 forwards the *remaining* per-turn allowance as zero main time
+    // plus that much byoyomi: a stop/resume inside the turn inherits the
+    // leftover budget, so the engine request, the UI deadline and the flag
+    // watchdog all follow the same clock. At the start of a turn the leftover
+    // is the full 10 seconds — the same request as before.
     const control = presetTurnAllowanceMs(this.state.preset)
-      ? matchTimeControl(this.state.preset)
+      ? fixedTurnTimeControl(
+          remaining[
+            position.sideToMove === "black" ? "blackTimeMs" : "whiteTimeMs"
+          ],
+        )
       : matchTimeControl(this.state.preset, remaining);
     const response = await this.client!.search(control, this.state.profile);
     if (!this.current(generation)) return;
@@ -430,8 +440,10 @@ export class PrototypeMatchSession {
       throw new Error("Move response does not extend the committed game");
     const clockKey =
       before.sideToMove === "black" ? "blackTimeMs" : "whiteTimeMs";
-    // Clocked presets derive the spent time from the charged clock; per-move
-    // and untimed presets have no clock, so the wall-clock turn time is used.
+    // Clocked presets derive the spent time from the charged clock, so the
+    // delta includes earlier cancelled searches but never paused time;
+    // per-move and untimed presets have no clock, so the wall-clock turn time
+    // since the latest turn start (the last resume, if any) is used.
     const elapsedMs = presetIsClocked(this.state.preset)
       ? (this.state.moveTimes.at(-1)?.remaining ??
           initialClockFor(this.state.preset))[clockKey] -

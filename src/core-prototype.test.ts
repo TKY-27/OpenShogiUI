@@ -296,7 +296,9 @@ class FakeEngine implements PrototypeEngineClient {
     this.position = position([...this.position.moves, move]);
     return this.position;
   });
-  search = vi.fn(() => this.result.promise);
+  search = vi.fn(
+    (_timeControl: unknown, _profile: string) => this.result.promise,
+  );
   dispose = vi.fn();
 }
 async function harness() {
@@ -322,6 +324,12 @@ async function harness() {
       now = value;
     },
   };
+}
+/** Time-control bodies of every search request, typed for assertions. */
+function searchRequests(client: FakeEngine): Record<string, unknown>[] {
+  return client.search.mock.calls.map(
+    ([control]) => control as Record<string, unknown>,
+  );
 }
 
 describe("isolated prototype protocol", () => {
@@ -933,6 +941,208 @@ describe("prototype game clock and cancellation", () => {
     });
     h.session.dispose();
   });
+  it("inherits the remaining fixed10 allowance across a stop and resume (AI sente)", async () => {
+    const h = await harness();
+    const started = h.session.start("white", false, "fixed10", "balanced");
+    await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
+    expect(h.clients[0].search.mock.calls[0]).toEqual([
+      {
+        schema: "open_shogi_time_control/v1",
+        blackTimeMs: 0,
+        whiteTimeMs: 0,
+        byoyomiMs: 10_000,
+        blackIncrementMs: 0,
+        whiteIncrementMs: 0,
+        safetyMarginMs: 50,
+      },
+      "balanced",
+    ]);
+    // The AI spends 7 seconds, the user stops, the cancellation lands at 7.2.
+    h.at(7_100);
+    h.session.stop();
+    expect(h.session.state.phase).toBe("stopping");
+    h.at(7_200);
+    h.clients[0].result.resolve({
+      ...searchResult("black"),
+      termination: "cancelled",
+    });
+    await started;
+    expect(h.session.state.phase).toBe("stopped");
+    // The UI clock keeps the leftover 2.9 seconds, including stop latency.
+    expect(h.session.state.clock.blackTimeMs).toBe(2_900);
+    // The resumed search must ask for exactly the leftover as zero main time
+    // plus that much byoyomi — not a fresh 10 seconds and not a positive
+    // main clock.
+    h.clients[0].result = deferred<PrototypeSearch>();
+    h.at(10_000);
+    const resumed = h.session.resume();
+    await vi.waitFor(() =>
+      expect(h.clients[0].search).toHaveBeenCalledTimes(2),
+    );
+    expect(h.clients[0].search.mock.calls[1]).toEqual([
+      {
+        schema: "open_shogi_time_control/v1",
+        blackTimeMs: 0,
+        whiteTimeMs: 0,
+        byoyomiMs: 2_900,
+        blackIncrementMs: 0,
+        whiteIncrementMs: 0,
+        safetyMarginMs: 50,
+      },
+      "balanced",
+    ]);
+    // The resumed turn flags at the inherited deadline, not 10s after resume.
+    h.at(12_700);
+    expect(h.session.tick()).toBe(false);
+    h.at(12_900);
+    expect(h.session.tick()).toBe(true);
+    h.clients[0].result.resolve(searchResult("black"));
+    await resumed;
+    expect(h.session.state.result).toEqual({
+      reason: "timeout",
+      winner: "white",
+    });
+    h.session.dispose();
+  });
+  it("inherits the remaining fixed10 allowance across a stop and resume (AI gote)", async () => {
+    const h = await harness();
+    await h.session.start("black", false, "fixed10", "balanced");
+    h.at(1_100);
+    const humanMove = h.session.move("7g7f");
+    await vi.waitFor(() => expect(h.clients[0].search).toHaveBeenCalledOnce());
+    h.at(7_100);
+    h.session.stop();
+    h.at(7_150);
+    h.clients[0].result.resolve({
+      ...searchResult(),
+      termination: "cancelled",
+    });
+    await humanMove;
+    expect(h.session.state.phase).toBe("stopped");
+    expect(h.session.state.clock.whiteTimeMs).toBe(3_950);
+    h.clients[0].result = deferred<PrototypeSearch>();
+    h.at(20_000);
+    const resumed = h.session.resume();
+    await vi.waitFor(() =>
+      expect(h.clients[0].search).toHaveBeenCalledTimes(2),
+    );
+    expect(h.clients[0].search.mock.calls[1]).toEqual([
+      {
+        schema: "open_shogi_time_control/v1",
+        blackTimeMs: 0,
+        whiteTimeMs: 0,
+        byoyomiMs: 3_950,
+        blackIncrementMs: 0,
+        whiteIncrementMs: 0,
+        safetyMarginMs: 50,
+      },
+      "balanced",
+    ]);
+    h.at(22_000);
+    h.clients[0].result.resolve(searchResult());
+    await resumed;
+    expect(h.session.state.snapshot?.moves).toEqual(["7g7f", "3c3d"]);
+    // The legal move starts the next turn from a fresh allowance.
+    expect(h.session.state.clock).toEqual({
+      blackTimeMs: 10_000,
+      whiteTimeMs: 10_000,
+    });
+    h.session.dispose();
+  });
+  it("carries the fixed10 leftover across repeated stop/resume cycles in one turn", async () => {
+    const h = await harness();
+    const first = h.session.start("white", false, "fixed10", "balanced");
+    await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
+    h.at(4_100);
+    h.session.stop();
+    h.at(4_200);
+    h.clients[0].result.resolve({
+      ...searchResult("black"),
+      termination: "cancelled",
+    });
+    await first;
+    h.clients[0].result = deferred<PrototypeSearch>();
+    h.at(5_000);
+    const second = h.session.resume();
+    await vi.waitFor(() =>
+      expect(h.clients[0].search).toHaveBeenCalledTimes(2),
+    );
+    expect(searchRequests(h.clients[0])[1]!.byoyomiMs).toBe(5_900);
+    h.at(6_900);
+    h.session.stop();
+    h.at(7_000);
+    h.clients[0].result.resolve({
+      ...searchResult("black"),
+      termination: "cancelled",
+    });
+    await second;
+    expect(h.session.state.clock.blackTimeMs).toBe(3_900);
+    h.clients[0].result = deferred<PrototypeSearch>();
+    h.at(8_000);
+    const third = h.session.resume();
+    await vi.waitFor(() =>
+      expect(h.clients[0].search).toHaveBeenCalledTimes(3),
+    );
+    expect(h.clients[0].search.mock.calls[2]![0]).toEqual({
+      schema: "open_shogi_time_control/v1",
+      blackTimeMs: 0,
+      whiteTimeMs: 0,
+      byoyomiMs: 3_900,
+      blackIncrementMs: 0,
+      whiteIncrementMs: 0,
+      safetyMarginMs: 50,
+    });
+    h.at(9_000);
+    h.clients[0].result.resolve(searchResult("black"));
+    await third;
+    expect(h.session.state.snapshot?.moves).toEqual(["7g7f"]);
+    // The wall-clock move time covers the final playing stretch only from
+    // the last resume; the paused time is not billed to the move.
+    expect(h.session.state.moveTimes).toEqual([
+      {
+        side: "black",
+        movement: "7g7f",
+        elapsedMs: 1_000,
+        remaining: { blackTimeMs: 10_000, whiteTimeMs: 10_000 },
+      },
+    ]);
+    h.session.dispose();
+  });
+  it("does not let a background-timer catch-up grant extra fixed10 time after resume", async () => {
+    const h = await harness();
+    const started = h.session.start("white", false, "fixed10", "balanced");
+    await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
+    h.at(9_900);
+    h.session.stop();
+    h.at(9_950);
+    h.clients[0].result.resolve({
+      ...searchResult("black"),
+      termination: "cancelled",
+    });
+    await started;
+    expect(h.session.state.clock.blackTimeMs).toBe(150);
+    h.clients[0].result = deferred<PrototypeSearch>();
+    h.at(10_000);
+    const resumed = h.session.resume();
+    await vi.waitFor(() =>
+      expect(h.clients[0].search).toHaveBeenCalledTimes(2),
+    );
+    // A nearly exhausted turn still forwards its positive leftover.
+    expect(searchRequests(h.clients[0])[1]!.byoyomiMs).toBe(150);
+    // Any late timer callback after the inherited deadline flags the turn
+    // instead of letting the engine spend time it does not have.
+    h.at(10_140);
+    expect(h.session.tick()).toBe(false);
+    h.at(10_150);
+    expect(h.session.tick()).toBe(true);
+    h.clients[0].result.resolve(searchResult("black"));
+    await resumed;
+    expect(h.session.state.result).toEqual({
+      reason: "timeout",
+      winner: "white",
+    });
+    h.session.dispose();
+  });
   it("does not commit a fixed10 AI move whose application completes after the allowance", async () => {
     const h = await harness();
     const started = h.session.start("white", false, "fixed10", "balanced");
@@ -1223,6 +1433,53 @@ describe("prototype Worker transport", () => {
         data: { id: 1, kind: "search", ok: true, data: searchResult("black") },
       });
       expect(worker.terminate).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("arms the host watchdog from the per-move byoyomi when main clocks are zero", async () => {
+    // fixed10 stop/resume requests are zero-main plus the leftover byoyomi;
+    // the physical watchdog must follow that leftover, not a main clock.
+    vi.useFakeTimers();
+    vi.stubGlobal("crossOriginIsolated", true);
+    try {
+      const listeners: Record<string, (event: { data?: unknown }) => void> = {};
+      const worker = {
+        addEventListener: vi.fn((name, listener) => {
+          listeners[name] = listener;
+        }),
+        postMessage: vi.fn(),
+        terminate: vi.fn(),
+      };
+      const client = new PrototypeWorkerClient(
+        () => worker as unknown as Worker,
+      );
+      const pending = client.search(
+        {
+          schema: "open_shogi_time_control/v1",
+          blackTimeMs: 0,
+          whiteTimeMs: 0,
+          byoyomiMs: 2_900,
+          blackIncrementMs: 0,
+          whiteIncrementMs: 0,
+          safetyMarginMs: 50,
+        },
+        "balanced",
+      );
+      const rejection = expect(pending).rejects.toThrow(
+        "Search did not publish a verified legal response",
+      );
+      await vi.advanceTimersByTimeAsync(2_899);
+      expect(worker.terminate).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      // The cooperative cancel fired at the inherited deadline; the physical
+      // termination follows after the 100 ms watchdog.
+      expect(worker.terminate).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(worker.terminate).toHaveBeenCalledOnce();
+      await rejection;
     } finally {
       vi.useRealTimers();
       vi.unstubAllGlobals();
