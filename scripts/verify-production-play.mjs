@@ -59,6 +59,7 @@ for (const model of manifest.models) {
     (entry) => entry.selection === model.selection,
   );
   assert(pinned, `model ${model.selection} is not in release-model.json`);
+  const artifactNames = Object.keys(pinned.model.artifacts);
   const pinnedHashes = Object.fromEntries(
     Object.entries(pinned.model.artifacts).map(([name, artifact]) => [
       name,
@@ -72,7 +73,8 @@ for (const model of manifest.models) {
     ]),
   );
   assert(
-    JSON.stringify(pinnedHashes) === JSON.stringify(emittedHashes),
+    artifactNames.length === Object.keys(emittedHashes).length &&
+      artifactNames.every((name) => pinnedHashes[name] === emittedHashes[name]),
     `model ${model.selection} artifacts drift from release-model.json`,
   );
   assert(
@@ -189,6 +191,10 @@ const server = createServer((request, response) => {
   );
   response.end(readFileSync(file));
 });
+server.on("error", (error) => {
+  console.error(`production play smoke: local server failed: ${error.message}`);
+  process.exit(1);
+});
 await new Promise((done) => server.listen(port, "127.0.0.1", done));
 try {
   const base = `http://127.0.0.1:${port}`;
@@ -199,9 +205,14 @@ try {
       .then((r) => r.ok)
       .catch(() => false);
   }
-  assert(up, "vite preview did not start");
+  assert(up, "the local dist server did not start");
 
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
+  let browser;
+  try {
+    browser = await chromium.launch({ channel: "chrome", headless: true });
+  } catch (error) {
+    throw new Error(`chromium launch failed: ${error.message}`);
+  }
   try {
     const page = await browser.newPage({
       viewport: { width: 1280, height: 800 },
@@ -416,10 +427,12 @@ try {
             throw new Error("reset did not restore the initial position");
 
           // 7. Negative: a deliberately wrong runtime identity must fail.
-          // The claimed URL embeds the claimed hash, so manifest validation
-          // passes and the real emitted Wasm bytes fail the byte-verification
-          // hash gate itself (the claimed URL is served from the tracked
-          // bytes by the host-side route set up before this evaluate).
+          // The manifest carries the claimed hash, so the Worker's compiled
+          // release pin (parsePrototypeManifest against the baked-in
+          // manifest) rejects it during request validation, before any byte
+          // is fetched — fail-closed at the identity layer. The byte-hash
+          // gate beneath it (verifyArtifactBytes) is covered by the vitest
+          // suite; in production the pin always fires first.
           const wrongWasm = structuredClone(release);
           wrongWasm.artifacts = {
             ...wrongWasm.artifacts,
@@ -444,9 +457,8 @@ try {
           );
 
           // 8. Negative: a deliberately wrong model identity must fail.
-          // The claimed leaf URL serves the real gzip bytes, so verification
-          // passes and the engine's own expected-hash load check rejects the
-          // wrong model identity.
+          // The same compiled pin compares the claimed leaf hash and rejects
+          // the wrong model identity during request validation.
           const wrongLeaf = structuredClone(release);
           wrongLeaf.artifacts = {
             ...wrongLeaf.artifacts,
@@ -482,7 +494,7 @@ try {
       "browser: production Worker initialized the frozen R4, replayed legal moves, completed a timed pure search, cancelled cooperatively, and rejected wrong runtime/model identities",
     );
   } finally {
-    await browser.close().catch(() => {});
+    await browser?.close().catch(() => {});
   }
 } finally {
   server.close();
