@@ -30,6 +30,8 @@ import {
   type PureRuntimeProof,
 } from "./core-prototype-protocol";
 import { PrototypeMatchSession } from "./core-prototype-session";
+import { buildKifuFile } from "./kifu-export";
+import { START_SFEN } from "./collection";
 import { routeForHash } from "./project";
 
 const controllerHash = "a".repeat(64);
@@ -1096,13 +1098,123 @@ describe("prototype game clock and cancellation", () => {
     h.clients[0].result.resolve(searchResult("black"));
     await third;
     expect(h.session.state.snapshot?.moves).toEqual(["7g7f"]);
-    // The wall-clock move time covers the final playing stretch only from
-    // the last resume; the paused time is not billed to the move.
+    // The recorded move time is the clock's cumulative charge for the whole
+    // turn — every playing stretch between pauses, never the paused gaps
+    // (4200→5000 and 7000→8000 stay unbilled): 10000 − 2900 = 7100.
+    expect(h.session.state.moveTimes).toEqual([
+      {
+        side: "black",
+        movement: "7g7f",
+        elapsedMs: 7_100,
+        remaining: { blackTimeMs: 10_000, whiteTimeMs: 10_000 },
+      },
+    ]);
+    h.session.dispose();
+  });
+  it("records a fixed10 move's pre-pause thinking time in its duration (AI gote)", async () => {
+    const h = await harness();
+    await h.session.start("black", false, "fixed10", "balanced");
+    h.at(1_100);
+    const humanMove = h.session.move("7g7f");
+    await vi.waitFor(() => expect(h.clients[0].search).toHaveBeenCalledOnce());
+    // The AI spends 6000 ms of its turn, the user stops, and the cancellation
+    // lands in the same millisecond: the clock keeps the 4000 ms remainder.
+    h.at(7_100);
+    h.session.stop();
+    h.clients[0].result.resolve({
+      ...searchResult(),
+      termination: "cancelled",
+    });
+    await humanMove;
+    expect(h.session.state.phase).toBe("stopped");
+    expect(h.session.state.clock.whiteTimeMs).toBe(4_000);
+    h.clients[0].result = deferred<PrototypeSearch>();
+    h.at(50_000);
+    const resumed = h.session.resume();
+    await vi.waitFor(() =>
+      expect(h.clients[0].search).toHaveBeenCalledTimes(2),
+    );
+    // The resumed search still inherits exactly the leftover allowance.
+    expect(searchRequests(h.clients[0])[1]!.byoyomiMs).toBe(4_000);
+    h.at(52_000);
+    h.clients[0].result.resolve(searchResult());
+    await resumed;
+    expect(h.session.state.snapshot?.moves).toEqual(["7g7f", "3c3d"]);
+    // The move's recorded duration is the full billed turn: 6000 ms before
+    // the pause plus 2000 ms after the resume — never the paused wall time.
     expect(h.session.state.moveTimes).toEqual([
       {
         side: "black",
         movement: "7g7f",
         elapsedMs: 1_000,
+        remaining: { blackTimeMs: 10_000, whiteTimeMs: 10_000 },
+      },
+      {
+        side: "white",
+        movement: "3c3d",
+        elapsedMs: 8_000,
+        remaining: { blackTimeMs: 10_000, whiteTimeMs: 10_000 },
+      },
+    ]);
+    // The exported KIF carries exactly this accounting: the second move is
+    // the full 8 seconds (6 before the pause + 2 after), not 2.
+    const text = await new TextDecoder().decode(
+      (
+        await buildKifuFile(
+          {
+            initialSfen: START_SFEN,
+            moves: h.session.state.snapshot!.moves,
+            blackName: "あなた",
+            whiteName: "OpenShogiAI",
+            moveTimesMs: h.session.state.moveTimes.map(
+              ({ elapsedMs }) => elapsedMs,
+            ),
+          },
+          "kif",
+          "shogi-match",
+        )
+      ).bytes,
+    );
+    expect(text).toContain("( 0:01/00:00:01)");
+    expect(text).toContain("( 0:08/00:00:08)");
+    expect(text).not.toContain("( 0:02/00:00:");
+    h.session.dispose();
+  });
+  it("records a near-deadline fixed10 move with its cumulative turn charge (AI sente)", async () => {
+    const h = await harness();
+    const started = h.session.start("white", false, "fixed10", "balanced");
+    await vi.waitFor(() => expect(h.clients[0]?.search).toHaveBeenCalledOnce());
+    // Cancel 100 ms before the deadline; 50 ms of delivery latency land in
+    // the same turn and the resumed search inherits the last 150 ms.
+    h.at(9_900);
+    h.session.stop();
+    h.at(9_950);
+    h.clients[0].result.resolve({
+      ...searchResult("black"),
+      termination: "cancelled",
+    });
+    await started;
+    expect(h.session.state.clock.blackTimeMs).toBe(150);
+    h.clients[0].result = deferred<PrototypeSearch>();
+    h.at(10_000);
+    const resumed = h.session.resume();
+    await vi.waitFor(() =>
+      expect(h.clients[0].search).toHaveBeenCalledTimes(2),
+    );
+    expect(searchRequests(h.clients[0])[1]!.byoyomiMs).toBe(150);
+    // The move is confirmed 10 ms inside the inherited deadline.
+    h.at(10_140);
+    h.clients[0].result.resolve(searchResult("black"));
+    await resumed;
+    expect(h.session.state.result).toBeNull();
+    expect(h.session.state.snapshot?.moves).toEqual(["7g7f"]);
+    // The duration spans both stretches (9850 + 140 = 9990), not just the
+    // 140 ms after the resume.
+    expect(h.session.state.moveTimes).toEqual([
+      {
+        side: "black",
+        movement: "7g7f",
+        elapsedMs: 9_990,
         remaining: { blackTimeMs: 10_000, whiteTimeMs: 10_000 },
       },
     ]);

@@ -36,6 +36,7 @@
     "test:collection": "vitest run src/collection.test.ts worker/collection-api.test.ts",
     "test:collection:local": "WRANGLER_SEND_METRICS=false node scripts/verify-local-collection.mjs",
     "test:collection:browser": "node scripts/verify-collection-browser.mjs",
+    "test:prod:play": "node scripts/verify-production-play.mjs",
     "brand:generate": "node scripts/generate-brand.mjs",
     "test:ui:local": "node scripts/verify-local-ui.mjs"
   },

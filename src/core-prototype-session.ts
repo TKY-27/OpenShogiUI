@@ -441,14 +441,20 @@ export class PrototypeMatchSession {
     const clockKey =
       before.sideToMove === "black" ? "blackTimeMs" : "whiteTimeMs";
     // Clocked presets derive the spent time from the charged clock, so the
-    // delta includes earlier cancelled searches but never paused time;
-    // per-move and untimed presets have no clock, so the wall-clock turn time
-    // since the latest turn start (the last resume, if any) is used.
+    // delta includes earlier cancelled searches but never paused time.
+    // fixed10 bills the same way: its per-turn clock has accumulated every
+    // charge of this turn across stop/resume cycles and resets only after
+    // this move, so the spent time is the initial allowance minus what is
+    // left. Per-move and untimed presets without such a clock use the
+    // wall-clock turn time since the latest turn start (the last resume).
+    const allowanceMs = presetTurnAllowanceMs(this.state.preset);
     const elapsedMs = presetIsClocked(this.state.preset)
       ? (this.state.moveTimes.at(-1)?.remaining ??
           initialClockFor(this.state.preset))[clockKey] -
         this.state.clock[clockKey]
-      : Math.max(0, Math.round(turnElapsedMs));
+      : allowanceMs !== null
+        ? Math.max(0, Math.round(allowanceMs - this.state.clock[clockKey]))
+        : Math.max(0, Math.round(turnElapsedMs));
     // fixed10 bills the elapsed turn to the move times only; the countdown
     // resets to the full allowance for the next mover instead of accumulating.
     const turnEndClock = presetTurnAllowanceMs(this.state.preset)

@@ -1505,6 +1505,112 @@ describe("record load ownership", () => {
     };
   }
 
+  /**
+   * A client that records every initialize input (selection + replayed
+   * moves) and supports the full analysis protocol, so tests can observe
+   * navigation against the wrong manifest and analysis restarts.
+   */
+  function ownershipFactory() {
+    const inits: { selection: PrototypeSelection; moves: string[] }[] = [];
+    const requests: AnalysisStart[] = [];
+    const make = () => {
+      const client = {
+        initialize: vi.fn(
+          async (
+            m: PrototypeManifest,
+            _enabled: boolean,
+            position: { moves: string[] } | null,
+          ) => {
+            const moves = [...(position?.moves ?? [])];
+            inits.push({ selection: m.selection, moves });
+            return {
+              ...ready(m),
+              snapshot: {
+                ...snapshot,
+                moves,
+                leafSha256: m.artifacts["leaf.osaval03"].sha256,
+                legalMoves: [
+                  {
+                    usi: "7g7f",
+                    from: null,
+                    to: { file: 7, rank: 6 },
+                    drop: null,
+                    promote: false,
+                  },
+                ],
+              },
+            };
+          },
+        ),
+        move: vi.fn(async () => snapshot),
+        analysisStart: vi.fn(async (request: AnalysisStart) => {
+          requests.push(request);
+          return {
+            schema: "open_shogi_analysis/v1",
+            event: "started",
+            updates: [],
+          } satisfies AnalysisResponse;
+        }),
+        analysisStep: vi.fn(async (): Promise<AnalysisResponse> => {
+          const request = requests.at(-1)!;
+          return {
+            schema: "open_shogi_analysis/v1",
+            event: "updates",
+            updates: [
+              {
+                source: "search" as const,
+                canonicalPosition: request.positionSfen,
+                positionHash: "0".repeat(64),
+                modelHash: request.modelHash,
+                evaluatorConfigHash: request.evaluatorConfigHash,
+                featureSchemaHash: request.featureSchemaHash,
+                evaluationSemanticsHash: request.evaluationSemanticsHash,
+                searchOptionsHash: request.searchOptionsHash,
+                openingProfileHash: request.openingProfileHash,
+                multiPv: request.multiPv,
+                depth: 5,
+                nodes: 1000,
+                nps: 1000,
+                score: 80,
+                mateScore: null,
+                lines: [
+                  {
+                    rank: 1,
+                    score: 80,
+                    mateScore: null,
+                    depth: 5,
+                    nodes: 1000,
+                    pv: ["7g7f"],
+                  },
+                ],
+                rootMoveStatistics: [],
+                timestampMs: 0,
+                engineVersion: "test",
+              },
+            ],
+            slice: {
+              depth: 5,
+              nodes: 1000,
+              elapsedNs: 1_000_000,
+              termination: "completed" as const,
+            },
+          };
+        }),
+        analysisStop: vi.fn(
+          async () =>
+            ({
+              schema: "open_shogi_analysis/v1",
+              event: "stopped",
+              updates: [],
+            }) satisfies AnalysisResponse,
+        ),
+        dispose: vi.fn(),
+      };
+      return client as unknown as PrototypeWorkerClient;
+    };
+    return { make, inits, requests };
+  }
+
   it("never publishes the older of two overlapping loads", async () => {
     const slow = deferred<PrototypeManifest>();
     const loader = vi
@@ -1782,12 +1888,207 @@ describe("record load ownership", () => {
     expect(session.state.autoFollow).toBe(false);
     slow.resolve(manifest("r4c3"));
     await loadA;
-    // The record itself completes (the user asked for the load), but no
-    // analysis may restart from the stale completion.
+    // The record itself completes (the user asked for the load), but Stop's
+    // intent holds: the session lands stopped, no analysis restarts from the
+    // stale completion, and Start works normally afterwards.
     expect(session.state.record.moves).toEqual(["7g7f", "3c3d"]);
+    expect(session.state.phase).toBe("stopped");
     expect(requests).toHaveLength(1);
     expect(session.state.autoFollow).toBe(false);
+    void session.analyze("balanced", 250, 1);
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    await vi.waitFor(() => expect(session.state.phase).toBe("ready"));
     session.dispose();
+  });
+
+  it("keeps the pending load owning the display when Stop erases the loading phase", async () => {
+    const { make, inits } = ownershipFactory();
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce(manifest("r4c3"))
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(manifest("r4c1"));
+    const session = new LearnedAnalysisSession(
+      () => {},
+      make,
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    await session.prepare("r4c3", {
+      initialSfen: START_SFEN,
+      moves: ["7g7f", "3c3d", "5a6b"],
+    });
+    expect(session.state.phase).toBe("ready");
+    expect(inits).toHaveLength(1);
+    const switching = session.prepare("r4c1");
+    expect(session.state.phase).toBe("loading");
+    // Stop with auto-follow disarmed records its intent while the switch is
+    // still in flight: the phase label keeps reporting the load, auto-follow
+    // is disarmed immediately, and the load — not the label — owns display.
+    session.stop();
+    expect(session.state.phase).toBe("loading");
+    expect(session.state.autoFollow).toBe(false);
+    // The always-clickable kifu/slider navigation must not act on the
+    // unverified pending state: no navigation generation, no worker created
+    // against the still-held previous manifest.
+    await session.goto(1);
+    expect(inits).toHaveLength(1);
+    slow.resolve(manifest("r4c1"));
+    await switching;
+    // The load still owns the display and completes coherently into the
+    // stopped session: same record, same cursor, verified identity.
+    expect(session.state.selection).toBe("r4c1");
+    expect(session.state.phase).toBe("stopped");
+    expect(session.state.error).toBeNull();
+    expect(session.state.record.moves).toEqual(["7g7f", "3c3d", "5a6b"]);
+    expect(session.state.line).toEqual(["7g7f", "3c3d", "5a6b"]);
+    expect(session.state.cursor).toBe(3);
+    expect(session.state.identity?.leafSha256).toBe(modelHash);
+    // Only the base worker and the load's own worker were ever created, and
+    // the session is fully usable again: navigation works against the
+    // verified model.
+    expect(inits).toHaveLength(2);
+    expect(inits[1]).toEqual({
+      selection: "r4c1",
+      moves: ["7g7f", "3c3d", "5a6b"],
+    });
+    await session.goto(1);
+    expect(session.state.cursor).toBe(1);
+    expect(inits).toHaveLength(3);
+    session.dispose();
+  });
+
+  it("keeps a pending load intact when settings change while disarmed", async () => {
+    const { make, inits } = ownershipFactory();
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce(manifest("r4c3"))
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(manifest("r4c1"));
+    const session = new LearnedAnalysisSession(
+      () => {},
+      make,
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    await session.prepare("r4c3", {
+      initialSfen: START_SFEN,
+      moves: ["7g7f", "3c3d"],
+    });
+    const switching = session.prepare("r4c1");
+    expect(session.state.phase).toBe("loading");
+    // A disarmed settings change used to stop(true) mid-load and erase the
+    // only navigation guard; it must defer instead.
+    session.applyAnalysisOptions("quality", 3000, 3);
+    expect(session.state.phase).toBe("loading");
+    await session.goto(1);
+    expect(inits).toHaveLength(1);
+    slow.resolve(manifest("r4c1"));
+    await switching;
+    expect(session.state.phase).toBe("ready");
+    expect(session.state.selection).toBe("r4c1");
+    expect(session.state.record.moves).toEqual(["7g7f", "3c3d"]);
+    expect(session.state.cursor).toBe(2);
+    session.dispose();
+  });
+
+  it("applies settings changed during a pending load to the settled armed session", async () => {
+    const { make, requests } = ownershipFactory();
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce(manifest("r4c3"))
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(manifest("r4c1"));
+    const session = new LearnedAnalysisSession(
+      () => {},
+      make,
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    await session.prepare("r4c3", { initialSfen: START_SFEN, moves: ["7g7f"] });
+    void session.analyze("balanced", 250, 1);
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    await vi.waitFor(() => expect(session.state.phase).toBe("ready"));
+    const switching = session.prepare("r4c1");
+    session.applyAnalysisOptions("quality", 3000, 3);
+    // Nothing new starts against the old model while the load is pending.
+    expect(requests).toHaveLength(1);
+    expect(session.state.phase).toBe("loading");
+    session.goto(1);
+    slow.resolve(manifest("r4c1"));
+    await switching;
+    // The settled load restarts the armed analysis under the new options.
+    await vi.waitFor(() => expect(requests).toHaveLength(2));
+    expect(requests[1]!.multiPv).toBe(3);
+    await vi.waitFor(() => expect(session.state.phase).toBe("ready"));
+    expect(session.state.record.moves).toEqual(["7g7f"]);
+    session.dispose();
+  });
+
+  it("refuses record mutations, comments and sweep entry while a load owns the display", async () => {
+    const { make, requests } = ownershipFactory();
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce(manifest("r4c3"))
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(manifest("r4c1"));
+    const session = new LearnedAnalysisSession(
+      () => {},
+      make,
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    await session.prepare("r4c3", {
+      initialSfen: START_SFEN,
+      moves: ["7g7f", "3c3d"],
+    });
+    const switching = session.prepare("r4c1");
+    session.setComment(1, "mid-load note");
+    expect(session.state.record.comments).toEqual([]);
+    session.discardBranch();
+    session.adoptBranch();
+    expect(session.state.branching).toBe(false);
+    await session.sweep("balanced", 250, 1);
+    expect(requests).toHaveLength(0);
+    expect(session.state.sweep).toBeNull();
+    expect(session.state.phase).toBe("loading");
+    slow.resolve(manifest("r4c1"));
+    await switching;
+    expect(session.state.phase).toBe("ready");
+    expect(session.state.record.moves).toEqual(["7g7f", "3c3d"]);
+    session.dispose();
+  });
+
+  it("a disposed session never publishes a settling load", async () => {
+    const { make } = ownershipFactory();
+    const slow = deferred<PrototypeManifest>();
+    const loader = vi
+      .fn()
+      .mockResolvedValueOnce(manifest("r4c3"))
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValue(manifest("r4c1"));
+    const session = new LearnedAnalysisSession(
+      () => {},
+      make,
+      loader as unknown as (
+        selection?: PrototypeSelection,
+      ) => Promise<PrototypeManifest>,
+    );
+    await session.prepare("r4c3");
+    const switching = session.prepare("r4c1");
+    session.dispose();
+    slow.resolve(manifest("r4c1"));
+    await switching;
+    expect(session.state.phase).toBe("loading");
+    expect(session.state.identity).toBeNull();
   });
 });
 

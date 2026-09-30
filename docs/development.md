@@ -54,6 +54,15 @@ npm run dev:isolated
 npm run test:ui:local -- http://127.0.0.1:5186 local/ui-check
 ```
 
+Production play smoke (needs a current `dist/` from `npm run build` plus a
+local Chrome; verifies the emitted manifest against the release allowlist and
+drives the exact emitted Worker through initialization, legal moves, a timed
+pure search, cooperative cancellation, reset and wrong-identity rejection):
+
+```sh
+npm run test:prod:play
+```
+
 ## Production model allowlist
 
 `release-model.json` (`open_shogi_release_allowlist/v1`) is the reviewed

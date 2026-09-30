@@ -11,9 +11,9 @@
       "bytes": 38192,
       "tracked": "assets/pure-runtime/open_shogi_wasm.js"
     },
-    "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137": {
+    "b1ce9a381f47367017aa8b891aa76b5a0356308b019093039536222930a90b67": {
       "name": "open-shogi-engine.wasm",
-      "bytes": 843040,
+      "bytes": 843092,
       "tracked": "assets/pure-runtime/open_shogi_wasm_bg.wasm"
     },
     "9466a7e8cf11b7d165b325edd9a5a421bdbaa4bed550940afcf33c9faf3bfd0f": {

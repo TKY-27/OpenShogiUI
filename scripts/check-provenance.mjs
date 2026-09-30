@@ -22,9 +22,9 @@ const requiredProvenance = [
   "open_shogi_analysis/v1",
   "open_shogi_time_control/v1",
   // The pure-only play runtime identity and its tracked bytes.
-  "196055ffa4adf3d8a28a332080189dd92681fe83",
+  "9433ffce1f4f21bb042e0b6cee858b1a674542d3",
   "907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e",
-  "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137",
+  "b1ce9a381f47367017aa8b891aa76b5a0356308b019093039536222930a90b67",
   "assets/pure-runtime",
 ];
 const expectedBindings = new Map([
@@ -38,7 +38,7 @@ const expectedBindings = new Map([
   ],
   [
     "open_shogi_wasm_bg.wasm",
-    "3a268345ff60293eba6ec8e354f5f2d6f995e1e8e931f4ef664a46a747d8246c",
+    "d99db1f648f5adc0efb46927dd0b1f22a77f0334adcb457656576a66fb76fc36",
   ],
   [
     "open_shogi_wasm_bg.wasm.d.ts",
@@ -70,7 +70,7 @@ const expectedTrackedRuntime = new Map([
   ],
   [
     "open_shogi_wasm_bg.wasm",
-    "6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137",
+    "b1ce9a381f47367017aa8b891aa76b5a0356308b019093039536222930a90b67",
   ],
 ]);
 for (const [name, expected] of expectedTrackedRuntime) {

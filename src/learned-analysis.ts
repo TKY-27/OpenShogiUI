@@ -208,6 +208,21 @@ export class LearnedAnalysisSession {
    * record, roll back, navigate or re-arm analysis when it resumes.
    */
   private loadSequence = 0;
+  /**
+   * Token of the in-flight record load, or null. Set synchronously when a
+   * load starts and cleared when it settles, this — not the display phase —
+   * decides whether the session accepts navigation, moves, comments, branch
+   * changes, searches or option changes: stop() and settings changes
+   * republish the phase label while a load is still pending, so a phase
+   * check alone cannot protect it.
+   */
+  private pendingLoad: number | null = null;
+  /**
+   * Stop pressed while a load was pending. The load still completes (the
+   * user asked for it) but lands in a stopped session and never re-arms
+   * analysis; while it is pending the unverified model stays unnavigable.
+   */
+  private stopIntentDuringLoad = false;
   /** Selection plus artifact hashes of the last verified manifest. */
   private loadedModelIdentity: string | null = null;
   private readonly snapshots = new Map<string, PrototypeSnapshot>();
@@ -247,14 +262,17 @@ export class LearnedAnalysisSession {
     selection = this.state.selection,
     position: Pick<PrototypeSnapshot, "initialSfen" | "moves"> | null = null,
   ): Promise<void> {
-    this.loadSequence++;
     await this.prepareInternal(selection, position);
   }
 
+  /** Runs one load and returns its ownership token. */
   private async prepareInternal(
     selection = this.state.selection,
     position: Pick<PrototypeSnapshot, "initialSfen" | "moves"> | null = null,
-  ): Promise<void> {
+  ): Promise<number> {
+    const token = ++this.loadSequence;
+    this.pendingLoad = token;
+    this.stopIntentDuringLoad = false;
     const generation = this.invalidate();
     const abort = new AbortController();
     this.abort = abort;
@@ -280,7 +298,7 @@ export class LearnedAnalysisSession {
     });
     try {
       const manifest = await this.loadManifest(selection, abort.signal);
-      if (!this.current(generation)) return;
+      if (!this.current(generation)) return token;
       const client = this.makeClient();
       this.client = client;
       const ready = await client.initialize(manifest, false, {
@@ -289,7 +307,7 @@ export class LearnedAnalysisSession {
           ? pending.moves
           : this.state.line.slice(0, this.state.cursor),
       });
-      if (!this.current(generation)) return;
+      if (!this.current(generation)) return token;
       // Cached snapshots and results embed the previous model's leaf
       // identity. They are dropped only once the new model has actually
       // loaded, so a failed switch leaves the previous model's coherent
@@ -303,8 +321,13 @@ export class LearnedAnalysisSession {
         this.loadedModelIdentity = modelIdentity;
       }
       this.manifest = manifest;
+      // A Stop pressed while this load was pending holds: the session lands
+      // stopped and no analysis re-arms from the completion.
+      this.pendingLoad = null;
+      const holdStopped = this.stopIntentDuringLoad;
+      this.stopIntentDuringLoad = false;
       this.publish({
-        phase: "ready",
+        phase: holdStopped ? "stopped" : "ready",
         snapshot: ready.snapshot,
         identity: ready.identity,
         ...(pending !== null
@@ -328,11 +351,16 @@ export class LearnedAnalysisSession {
       this.displayedCursor = this.state.cursor;
       this.publishGraph();
       // A model switch (no explicit position) keeps the displayed position;
-      // an armed auto-follow restarts it with the new runtime.
-      if (position === null) this.autoAnalyzeCurrent();
+      // an armed auto-follow restarts it with the new runtime — under any
+      // options that were changed while the load was pending.
+      if (position === null && !holdStopped) this.autoAnalyzeCurrent();
     } catch (error) {
       if (this.current(generation)) {
         this.invalidate();
+        if (this.pendingLoad === token) {
+          this.pendingLoad = null;
+          this.stopIntentDuringLoad = false;
+        }
         this.publish({
           phase: "error",
           error:
@@ -342,6 +370,7 @@ export class LearnedAnalysisSession {
         });
       }
     }
+    return token;
   }
 
   /**
@@ -365,8 +394,7 @@ export class LearnedAnalysisSession {
     },
     cursorAfter: "start" | "end" = "start",
   ): Promise<void> {
-    const token = ++this.loadSequence;
-    await this.prepareInternal(this.state.selection, {
+    const token = await this.prepareInternal(this.state.selection, {
       initialSfen: source.initialSfen,
       moves: source.moves,
     });
@@ -377,7 +405,9 @@ export class LearnedAnalysisSession {
       this.publishGraph();
       return;
     }
-    if (this.state.phase !== "ready") return;
+    // A load stopped mid-flight still completes (the user asked for it): its
+    // metadata publishes into the stopped session, which stays disarmed.
+    if (this.state.phase !== "ready" && this.state.phase !== "stopped") return;
     this.publish({
       record: {
         initialSfen: source.initialSfen,
@@ -400,10 +430,11 @@ export class LearnedAnalysisSession {
   /** Moves the displayed position without touching record or line. */
   async goto(cursor: number): Promise<void> {
     // Navigation during a model load would supersede the load's generation
-    // and leave the session wedged in "loading": the load is the active
-    // operation and owns the display until it settles. Graph points and the
-    // ply slider stay clickable, so the guard lives here, not in the UI.
-    if (this.state.phase === "loading") return;
+    // and leave the session wedged: the pending load owns the display until
+    // it settles, whatever the phase label says (Stop and settings changes
+    // republish it mid-flight). Graph points and the ply slider stay
+    // clickable, so the guard lives here, not in the UI.
+    if (this.pendingLoad !== null || this.state.phase === "loading") return;
     const target = Math.max(
       0,
       Math.min(Math.round(cursor), this.state.line.length),
@@ -503,8 +534,8 @@ export class LearnedAnalysisSession {
   async move(usi: string): Promise<void> {
     // A move during a model load would extend the old record while the load
     // owns the display; the board is disabled in the UI, and this guard
-    // keeps the session-level contract intact.
-    if (this.state.phase === "loading") return;
+    // keeps the session-level contract intact regardless of phase label.
+    if (this.pendingLoad !== null || this.state.phase === "loading") return;
     const position = this.state.snapshot;
     if (!position?.legalMoves.some((candidate) => candidate.usi === usi))
       return;
@@ -546,6 +577,7 @@ export class LearnedAnalysisSession {
 
   /** Discards a preview branch and returns to the committed record. */
   discardBranch(): void {
+    if (this.pendingLoad !== null || this.state.phase === "loading") return;
     if (!this.state.branching) return;
     this.state.line = [...this.state.record.moves];
     this.state.branching = false;
@@ -577,6 +609,7 @@ export class LearnedAnalysisSession {
 
   /** Promotes the displayed branch to the committed record. */
   adoptBranch(): void {
+    if (this.pendingLoad !== null || this.state.phase === "loading") return;
     if (!this.state.branching) return;
     const record = { ...this.state.record, moves: [...this.state.line] };
     this.state.record = record;
@@ -585,6 +618,7 @@ export class LearnedAnalysisSession {
   }
 
   setComment(ply: number, text: string): void {
+    if (this.pendingLoad !== null || this.state.phase === "loading") return;
     if (ply < 1 || ply > this.state.line.length) return;
     const comments = [...this.state.record.comments];
     while (comments.length < this.state.line.length) comments.push("");
@@ -602,6 +636,7 @@ export class LearnedAnalysisSession {
   ): Promise<void> {
     if (
       this.searchRunning ||
+      this.pendingLoad !== null ||
       this.state.phase === "loading" ||
       !this.state.snapshot ||
       ![250, 1000, 3000].includes(budgetMs) ||
@@ -724,7 +759,13 @@ export class LearnedAnalysisSession {
   ): Promise<void> {
     const line = [...this.state.line];
     const initialSfen = this.state.record.initialSfen;
-    if (this.searchRunning || line.length === 0) return;
+    if (
+      this.searchRunning ||
+      this.pendingLoad !== null ||
+      this.state.phase === "loading" ||
+      line.length === 0
+    )
+      return;
     // The sweep is its own activity: navigation during it must not restart
     // it, and an armed position-analysis intent does not survive it.
     this.autoFollowOptions = null;
@@ -845,6 +886,20 @@ export class LearnedAnalysisSession {
    */
   stop(clear = false): void {
     this.autoFollowOptions = null;
+    if (this.pendingLoad !== null || this.state.phase === "loading") {
+      // A pending load owns the display until it settles, whatever the phase
+      // label shows. Stop must not complete it into "ready" nor make the
+      // unverified model navigable, so it only records its intent: the load
+      // still finishes (the user asked for it) but lands stopped without
+      // re-arming analysis, and navigation stays refused meanwhile.
+      this.stopIntentDuringLoad = true;
+      this.publish({
+        autoFollow: false,
+        sweep: null,
+        ...(clear ? { update: null, progress: emptyProgress() } : {}),
+      });
+      return;
+    }
     if (this.searchRunning) {
       // Invalidate the running search silently: the search loop observes the
       // generation bump and returns without publishing an error.
@@ -869,6 +924,16 @@ export class LearnedAnalysisSession {
     budgetMs: number,
     multiPv: number,
   ): void {
+    if (this.pendingLoad !== null || this.state.phase === "loading") {
+      // Defer: a settings change during a pending load must not complete,
+      // invalidate or redirect load ownership (the old stop(true) path
+      // erased the only load guard). While analysis is armed, storing the
+      // choice here makes every settle path restart under the new options;
+      // disarmed, there is nothing to apply until Start.
+      if (this.autoFollowOptions !== null)
+        this.autoFollowOptions = { profile, budgetMs, multiPv };
+      return;
+    }
     if (this.autoFollowOptions === null) {
       this.stop(true);
       return;
@@ -883,6 +948,7 @@ export class LearnedAnalysisSession {
     // A record load that resumes after this point must not publish into a
     // disposed session, even one recreated for a fresh mount.
     this.loadSequence++;
+    this.pendingLoad = null;
     this.invalidate();
   }
 

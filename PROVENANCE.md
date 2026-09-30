@@ -75,7 +75,13 @@ parallel-search repair round (one shared deadline and one shared node budget
 per `go`, helper fork accounting, fork TT reuse, chained accumulator parity
 verification) regenerated in OpenShogiAI commit
 `196055ffa4adf3d8a28a332080189dd92681fe83`. Only the binary changed; the three
-text bindings are unchanged.
+text bindings are unchanged. Later the same day the binary was synchronized
+again with the mate-prepass budget closeout, in which one `go` pays the
+search controller's mate prepass from the same shared node pool and under the
+same absolute deadline as every worker, regenerated in OpenShogiAI commit
+`9433ffce1f4f21bb042e0b6cee858b1a674542d3`. Only the binary changed again;
+the three text bindings are unchanged, so the TypeScript surface stays
+identical.
 
 ## Pure-only play runtime
 
@@ -91,13 +97,19 @@ the verified runtime bytes are additionally tracked in this repository under
 `assets/pure-runtime/` and `release-assets.json` marks those two entries as
 `tracked` sources; weights and rights records continue to come from models-v1.
 The rebuild from OpenShogiAI `196055ffa4adf3d8a28a332080189dd92681fe83`
-reproduces both hashes byte-for-byte (wasm-bindgen output is deterministic for
-the same source and flags).
+reproduced those bytes byte-for-byte (wasm-bindgen output is deterministic for
+the same source and flags). Later on 2026-10-01 the tracked Wasm was replaced
+again with the mate-prepass budget closeout rebuild, whose every build input is
+content-identical to OpenShogiAI commit
+`9433ffce1f4f21bb042e0b6cee858b1a674542d3`; the staged bytes were taken from
+that closeout's durable handoff copy and re-verified against the hash below.
+The tracked JavaScript is unchanged and still reproduces from the same
+command.
 
 | Pure runtime file                          | SHA-256                                                            |
 | ------------------------------------------ | ------------------------------------------------------------------ |
 | `assets/pure-runtime/open_shogi_wasm.js`   | `907da1421263a2cbc621297095d13ccd3f707942b1e6f09bd7a2b2512efeee2e` |
-| `assets/pure-runtime/open_shogi_wasm_bg.wasm` | `6ad185d8fcdb863afa038017f1ec39adf7fa8263c357682a776473bb3f999137` |
+| `assets/pure-runtime/open_shogi_wasm_bg.wasm` | `b1ce9a381f47367017aa8b891aa76b5a0356308b019093039536222930a90b67` |
 
 The frozen R4 weights stay
 `9466a7e8cf11b7d165b325edd9a5a421bdbaa4bed550940afcf33c9faf3bfd0f`
@@ -108,5 +120,5 @@ release tag moved.
 | ------------------------------ | ------------------------------------------------------------------ |
 | `open_shogi_wasm.d.ts`         | `8b899de7246585f5c7ccafe0b5b2dde012eec0af12a8032d5d4e5741be9cf063` |
 | `open_shogi_wasm.js`           | `8d36745850bb91e90f93436a9c40d833686cca6c1232ab2c7c9346a59e109023` |
-| `open_shogi_wasm_bg.wasm`      | `3a268345ff60293eba6ec8e354f5f2d6f995e1e8e931f4ef664a46a747d8246c` |
+| `open_shogi_wasm_bg.wasm`      | `d99db1f648f5adc0efb46927dd0b1f22a77f0334adcb457656576a66fb76fc36` |
 | `open_shogi_wasm_bg.wasm.d.ts` | `efb20b72f02808e77a8baed92fc80fa2f3e1c9b8ce0709f2cd49ed7259933068` |
