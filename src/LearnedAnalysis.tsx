@@ -59,7 +59,10 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
   const [budget, setBudget] = useState(1000);
   const [multiPv, setMultiPv] = useState(3);
   const [recordText, setRecordText] = useState("position startpos");
-  const [inputError, setInputError] = useState<string | null>(null);
+  const [inputError, setInputError] = useState<{
+    source: "text" | "file" | "rail-file";
+    message: string;
+  } | null>(null);
   const [selection, setSelection] = useState<BoardSelection>(null);
   const [promotion, setPromotion] = useState<MoveSummary[] | null>(null);
   const [flipped, setFlipped] = useState(false);
@@ -196,8 +199,12 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
       nextMultiPv,
     );
   };
-  async function loadKifuFile(file: File): Promise<void> {
+  async function loadKifuFile(
+    file: File,
+    source: "file" | "rail-file",
+  ): Promise<void> {
     const generation = ++fileGeneration.current;
+    setInputError(null);
     try {
       if (file.size > MAX_KIFU_BYTES)
         throw new Error(
@@ -210,29 +217,46 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
       if (generation !== fileGeneration.current) return;
       const imported = await parseKifuBytes(bytes);
       if (generation !== fileGeneration.current) return;
-      setInputError(null);
       await sessionRef.current?.loadPosition(imported);
+      if (
+        generation === fileGeneration.current &&
+        sessionRef.current?.state.error
+      )
+        setInputError({ source, message: sessionRef.current.state.error });
     } catch (error) {
       if (generation === fileGeneration.current)
-        setInputError(
-          error instanceof Error
-            ? error.message
-            : t("読み込めませんでした。", "Could not load the file."),
-        );
+        setInputError({
+          source,
+          message:
+            error instanceof Error
+              ? error.message
+              : t("読み込めませんでした。", "Could not load the file."),
+        });
     }
   }
-  function loadText(text: string) {
-    fileGeneration.current++;
+  async function loadText(text: string): Promise<void> {
+    const generation = ++fileGeneration.current;
+    setInputError(null);
     try {
       const source = readAnalysisPosition(text);
-      setInputError(null);
-      void sessionRef.current?.loadPosition(source, "end");
+      await sessionRef.current?.loadPosition(source, "end");
+      if (
+        generation === fileGeneration.current &&
+        sessionRef.current?.state.error
+      )
+        setInputError({
+          source: "text",
+          message: sessionRef.current.state.error,
+        });
     } catch (error) {
-      setInputError(
-        error instanceof Error
-          ? error.message
-          : t("読み込めませんでした。", "Could not load the position."),
-      );
+      if (generation === fileGeneration.current)
+        setInputError({
+          source: "text",
+          message:
+            error instanceof Error
+              ? error.message
+              : t("読み込めませんでした。", "Could not load the position."),
+        });
     }
   }
   const resetRecord = () => {
@@ -314,9 +338,13 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
       <h1 id="analysis-title" className="visually-hidden">
         {t("局面解析", "Position analysis")}
       </h1>
-      {state.error || inputError ? (
+      {state.error || inputError?.source === "rail-file" ? (
         <div className="play-notice">
-          <p role="alert">{inputError ?? state.error}</p>
+          <p role="alert">
+            {inputError?.source === "rail-file"
+              ? inputError.message
+              : state.error}
+          </p>
           {state.phase === "error" ? (
             <button
               type="button"
@@ -345,7 +373,7 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
             onChange={async (event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
-              if (file) await loadKifuFile(file);
+              if (file) await loadKifuFile(file, "rail-file");
             }}
           />
           <button type="button" onClick={() => setFlipped((value) => !value)}>
@@ -918,6 +946,7 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
                 // A model switch supersedes a file read that has not reached
                 // the session yet, exactly like another load would.
                 fileGeneration.current++;
+                setInputError(null);
                 void sessionRef.current?.prepare(value);
               }}
             />
@@ -938,9 +967,20 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
                 value={recordText}
                 onChange={(event) => setRecordText(event.target.value)}
                 maxLength={12288}
+                aria-invalid={inputError?.source === "text" || undefined}
+                aria-describedby={
+                  inputError?.source === "text"
+                    ? "analysis-text-error"
+                    : undefined
+                }
               />
             </label>
-            <button type="button" onClick={() => loadText(recordText)}>
+            {inputError?.source === "text" ? (
+              <p id="analysis-text-error" className="play-notice" role="alert">
+                {inputError.message}
+              </p>
+            ) : null}
+            <button type="button" onClick={() => void loadText(recordText)}>
               {t("局面を読み込む", "Load position")}
             </button>
             <label>
@@ -951,13 +991,30 @@ export default function LearnedAnalysis({ locale }: { locale: Locale }) {
               <input
                 type="file"
                 accept=".kif,.kifu,.ki2,.ki2u,.csa,.usi,.sfen,.txt"
+                aria-invalid={
+                  inputError?.source === "file" ||
+                  inputError?.source === "rail-file" ||
+                  undefined
+                }
+                aria-describedby={
+                  inputError?.source === "file" ||
+                  inputError?.source === "rail-file"
+                    ? "analysis-file-error"
+                    : undefined
+                }
                 onChange={async (event) => {
                   const file = event.target.files?.[0];
                   event.target.value = "";
-                  if (file) await loadKifuFile(file);
+                  if (file) await loadKifuFile(file, "file");
                 }}
               />
             </label>
+            {inputError?.source === "file" ||
+            inputError?.source === "rail-file" ? (
+              <p id="analysis-file-error" className="play-notice" role="alert">
+                {inputError.message}
+              </p>
+            ) : null}
             <p>
               {t(
                 "読込内容は端末内だけで扱い、棋譜提供の対象にはしません。SFENの合法性と指し手の再現は既存Wasmで確認します。",
