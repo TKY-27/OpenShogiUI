@@ -9,6 +9,8 @@
 name: linux-build-smoke
 
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
   workflow_dispatch:
@@ -31,7 +33,7 @@ jobs:
           cache: npm
 
       - name: Clean install from the committed lockfile
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Load the Linux native bindings
         run: |
@@ -41,3 +43,11 @@ jobs:
 
       - name: Cloudflare build (model fetch + production build)
         run: npm run build:cloudflare
+
+      - name: Repository checks
+        run: npm run check
+        env:
+          OSUI_ISOLATED_MODELS: "1"
+
+      - name: Dependency security audit
+        run: npm audit --audit-level=moderate
