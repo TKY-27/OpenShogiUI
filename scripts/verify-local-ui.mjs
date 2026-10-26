@@ -81,7 +81,11 @@ try {
     "#/analysis",
   );
   // Settings live in a dialog; the model picker and imports run through it.
-  await page.getByRole("button", { name: "解析設定", exact: true }).click();
+  const settingsButton = page.getByRole("button", {
+    name: "解析設定",
+    exact: true,
+  });
+  await settingsButton.click();
   const settings = page.getByRole("dialog", {
     name: "解析設定",
     exact: true,
@@ -107,6 +111,99 @@ try {
     .selectOption("250");
   await ready();
   await page.evaluate(() => window.releaseFixture());
+  const recordLabel = await page.locator(".kifu-nav__label").textContent();
+  assert.match(recordLabel, /1/);
+  const recordInput = settings.getByRole("textbox", { name: "USI / SFEN" });
+  const fileInput = settings.locator('input[type="file"]');
+  await fileInput.setInputFiles({
+    name: "bad.usi",
+    mimeType: "text/plain",
+    buffer: Buffer.from("garbage"),
+  });
+  const fileError = settings.locator("#analysis-file-error");
+  await fileError.waitFor();
+  const invalidFileMessage =
+    "KIF・KI2・CSA・USI/SFENのいずれの形式でも読み取れませんでした。";
+  assert.equal(await fileError.textContent(), invalidFileMessage);
+  await fileError.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: resolve(output, "analysis-file-error.png") });
+  assert.equal(await fileInput.getAttribute("aria-invalid"), "true");
+  assert.equal(
+    await fileInput.getAttribute("aria-describedby"),
+    "analysis-file-error",
+  );
+  assert.equal(await recordInput.inputValue(), "position startpos moves 7g7f");
+  assert.equal(
+    await page.locator(".kifu-nav__label").textContent(),
+    recordLabel,
+  );
+  await recordInput.fill("position startpos moves garbage");
+  await settings
+    .getByRole("button", { name: "局面を読み込む", exact: true })
+    .click();
+  const textError = settings.locator("#analysis-text-error");
+  await textError.waitFor();
+  assert((await textError.textContent())?.trim());
+  assert.equal(await fileError.count(), 0);
+  assert.equal(await recordInput.getAttribute("aria-invalid"), "true");
+  assert.equal(
+    await recordInput.getAttribute("aria-describedby"),
+    "analysis-text-error",
+  );
+  assert.equal(
+    await recordInput.inputValue(),
+    "position startpos moves garbage",
+  );
+  assert.equal(
+    await page.locator(".kifu-nav__label").textContent(),
+    recordLabel,
+  );
+  await recordInput.fill("position startpos moves 7g7f 7g7f");
+  await settings
+    .getByRole("button", { name: "局面を読み込む", exact: true })
+    .click();
+  await textError.waitFor();
+  await page.waitForFunction(() => {
+    const globalError = document
+      .querySelector('.learned-analysis > .play-notice > [role="alert"]')
+      ?.textContent?.trim();
+    return (
+      !!globalError &&
+      globalError ===
+        document.querySelector("#analysis-text-error")?.textContent?.trim()
+    );
+  });
+  assert.equal(
+    await page.locator(".kifu-nav__label").textContent(),
+    recordLabel,
+  );
+  await page.keyboard.press("Escape");
+  await settings.waitFor({ state: "hidden" });
+  await page.locator('.analysis-rail input[type="file"]').setInputFiles({
+    name: "bad-after-replay.usi",
+    mimeType: "text/plain",
+    buffer: Buffer.from("garbage"),
+  });
+  await page.waitForFunction(
+    (message) =>
+      document.querySelector(
+        '.learned-analysis > .play-notice > [role="alert"]',
+      )?.textContent === message,
+    invalidFileMessage,
+  );
+  await settingsButton.click();
+  await recordInput.fill("position startpos moves 7g7f");
+  await settings
+    .getByRole("button", { name: "局面を読み込む", exact: true })
+    .click();
+  await ready();
+  await textError.waitFor({ state: "detached" });
+  assert.equal(await settings.locator('[role="alert"]').count(), 0);
+  assert.equal(await recordInput.getAttribute("aria-invalid"), null);
+  assert.equal(
+    await page.locator(".kifu-nav__label").textContent(),
+    recordLabel,
+  );
   // Redundant model presses must not rebuild the Worker or refetch the manifest.
   const workers = page.workers();
   const defense = settings.getByRole("button", {
@@ -116,7 +213,12 @@ try {
   await defense.dblclick();
   assert.deepEqual(page.workers(), workers);
   await page.keyboard.press("Escape");
-  await settings.waitFor({ state: "detached" });
+  await settings.waitFor({ state: "hidden" });
+  assert(
+    await settingsButton.evaluate(
+      (button) => document.activeElement === button,
+    ),
+  );
   await start.click();
   await page.waitForFunction(
     () =>
@@ -308,7 +410,7 @@ try {
   assert.deepEqual(posts, []);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: initial HTML/app, navigation, delayed import, repeated model press, analysis, Japanese/English privacy, refusal, resize, resignation, rematch; POST 0; Chromium viewport emulation only.",
+    "PASS: initial HTML/app, navigation, delayed import, invalid file/text/replay and recovery, repeated model press, analysis, Japanese/English privacy, refusal, resize, resignation, rematch; POST 0; Chromium viewport emulation only.",
   );
 } finally {
   await browser.close();
